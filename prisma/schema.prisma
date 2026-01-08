@@ -1,0 +1,124 @@
+generator client {
+    provider = "prisma-client-js"
+ }
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum UnitType {
+  PER_KG
+  PER_UNIT
+}
+
+enum DeliveryMethod {
+  PICKUP
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  EMPLOYEE
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Product {
+  id              String      @id @default(cuid())
+  name            String
+  slug            String      @unique
+  description     String?
+  image           String?
+  unitType        UnitType
+  price           Int         // precio 
+  stock           Int       @default(0)
+  isActive        Boolean     @default(true)
+  isFeatured      Boolean     @default(false)
+  categoryId      String
+  category        Category    @relation(fields: [categoryId], references: [id])
+  // Campos de oferta
+  isOnSale        Boolean     @default(false)
+  salePrice       Int?        // precio de oferta 
+  saleEndDate     DateTime?   // fecha de fin de la oferta
+  discountPercent Int?        // porcentaje de descuento
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  orderItems      OrderItem[]
+
+  @@index([categoryId])
+  @@index([slug])
+  @@index([isOnSale])
+  @@index([isFeatured])
+}
+
+model Order {
+  id             String         @id @default(cuid())
+  orderNumber    String         @unique @default(cuid())
+  customerName   String
+  phone          String
+  email          String?
+  status         OrderStatus    @default(PENDING)
+  deliveryMethod DeliveryMethod
+  address        String?
+  addressDetails String?
+  city           String?
+  postalCode     String?
+  notes          String?
+  subtotal       Int            // en centavos
+  deliveryCost   Int            @default(0) // en centavos
+  total          Int            // en centavos
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  items          OrderItem[]
+
+  @@index([orderNumber])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Int      // en centavos
+  lineTotal Int      // en centavos
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String   // hashed
+  name          String?
+  phone         String?
+  role          UserRole @default(CUSTOMER)
+  receiveOffers Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+}
