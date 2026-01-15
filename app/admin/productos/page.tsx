@@ -25,6 +25,7 @@ import { Plus, Edit, Trash2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { formatPrice } from '@/lib/utils-format';
+import { useRouter } from 'next/navigation';
 
 interface Product {
   id: string;
@@ -95,20 +96,27 @@ export default function ProductosAdmin() {
   const [formData, setFormData] = useState<ProductFormData>(emptyFormData);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const router = useRouter();
+
+  // ---------- fetch helpers (arriba de los useEffect para evitar rarezas) ----------
+  const fetchProducts = async () => {
+    const res = await fetch('/api/admin/products', { cache: 'no-store' });
+    if (!res.ok) throw new Error('No se pudieron cargar productos');
+    return res.json();
+  };
+
+  const fetchCategories = async () => {
+    const res = await fetch('/api/admin/categories', { cache: 'no-store' });
+    if (!res.ok) throw new Error('No se pudieron cargar categorías');
+    return res.json();
+  };
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes] = await Promise.all([
-        fetch('/api/admin/products'),
-        fetch('/api/admin/categories'),
+      const [productsData, categoriesData] = await Promise.all([
+        fetchProducts(),
+        fetchCategories(),
       ]);
-
-      const productsData = await productsRes.json();
-      const categoriesData = await categoriesRes.json();
-
       setProducts(productsData);
       setCategories(categoriesData);
     } catch (error) {
@@ -119,6 +127,41 @@ export default function ProductosAdmin() {
     }
   };
 
+  // ---------- navegación a crear categoría ----------
+  const goCreateCategory = () => {
+    sessionStorage.setItem('reopenProductModal', '1');
+    setDialogOpen(false);
+    router.push('/admin/categorias');
+  };
+
+  // ---------- efectos ----------
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const flag = sessionStorage.getItem('reopenProductModal');
+    if (flag === '1') {
+      sessionStorage.removeItem('reopenProductModal');
+
+      (async () => {
+        try {
+          const categoriesData = await fetchCategories();
+          setCategories(categoriesData);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setEditingProduct(null);
+          setFormData(emptyFormData);
+          setDialogOpen(true);
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- handlers ----------
   const handleOpenDialog = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
@@ -152,82 +195,6 @@ export default function ProductosAdmin() {
     setFormData(emptyFormData);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    try {
-      const payload = {
-        name: formData.name,
-        slug: formData.slug,
-        description: formData.description || null,
-        price: parseFloat(formData.price),
-        categoryId: formData.categoryId,
-        imageUrl: formData.imageUrl || null,
-        stock: parseInt(formData.stock),
-        unitType: formData.unitType,
-        isOnSale: formData.isOnSale,
-        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
-        saleEndDate: formData.saleEndDate || null,
-        isFeatured: formData.isFeatured,
-        isActive: formData.isActive,
-      };
-
-      let response;
-      if (editingProduct) {
-        response = await fetch(`/api/admin/products/${editingProduct.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        response = await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al guardar producto');
-      }
-
-      toast.success(
-        editingProduct ? 'Producto actualizado' : 'Producto creado'
-      );
-      handleCloseDialog();
-      fetchData();
-    } catch (error: any) {
-      console.error('Error saving product:', error);
-      toast.error(error.message || 'Error al guardar producto');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/products/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al eliminar producto');
-      }
-
-      toast.success('Producto eliminado');
-      fetchData();
-    } catch (error) {
-      console.error('Error deleting product:', error);
-      toast.error('Error al eliminar producto');
-    }
-  };
-
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -237,10 +204,89 @@ export default function ProductosAdmin() {
       .replace(/(^-|-$)/g, '');
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        name: formData.name,
+        slug: formData.slug,
+        description: formData.description || null,
+        // tu API suele manejar centavos; acá estás mandando ARS con decimales.
+        // Mantengo tu lógica para no romperte el backend.
+        price: parseFloat(formData.price),
+        categoryId: formData.categoryId,
+        imageUrl: formData.imageUrl || null,
+        stock: parseInt(formData.stock, 10),
+        unitType: formData.unitType,
+        isOnSale: formData.isOnSale,
+        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
+        saleEndDate: formData.saleEndDate || null,
+        isFeatured: formData.isFeatured,
+        isActive: formData.isActive,
+      };
+
+      let response: Response;
+
+      if (editingProduct) {
+        response = await fetch(`/api/admin/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // CONSISTENTE con el resto del admin
+        response = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Error al guardar producto');
+      }
+
+      toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
+      handleCloseDialog();
+      await fetchData();
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      toast.error(error?.message || 'Error al guardar producto');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+
+    try {
+      const response = await fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Error al eliminar producto');
+      }
+
+      toast.success('Producto eliminado');
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast.error('Error al eliminar producto');
+    }
+  };
+
+  // ---------- UI ----------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
       </div>
     );
   }
@@ -249,6 +295,7 @@ export default function ProductosAdmin() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Productos</h1>
+
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button
@@ -259,12 +306,14 @@ export default function ProductosAdmin() {
               Nuevo Producto
             </Button>
           </DialogTrigger>
+
           <DialogContent className="bg-zinc-900 text-white border-zinc-800 max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
               </DialogTitle>
             </DialogHeader>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -283,6 +332,7 @@ export default function ProductosAdmin() {
                     className="bg-zinc-800 border-zinc-700"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="slug">Slug *</Label>
                   <Input
@@ -325,6 +375,7 @@ export default function ProductosAdmin() {
                     className="bg-zinc-800 border-zinc-700"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="stock">Stock *</Label>
                   <Input
@@ -340,9 +391,21 @@ export default function ProductosAdmin() {
                 </div>
               </div>
 
+              {/* CATEGORÍA + BOTÓN CREAR */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="category">Categoría *</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="category">Categoría *</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={goCreateCategory}
+                      className="h-8 border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800"
+                    >
+                      Crear
+                    </Button>
+                  </div>
+
                   <Select
                     value={formData.categoryId}
                     onValueChange={(value) =>
@@ -361,6 +424,7 @@ export default function ProductosAdmin() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="unitType">Tipo de Unidad *</Label>
                   <Select
@@ -416,11 +480,15 @@ export default function ProductosAdmin() {
                         step="0.01"
                         value={formData.salePrice}
                         onChange={(e) =>
-                          setFormData({ ...formData, salePrice: e.target.value })
+                          setFormData({
+                            ...formData,
+                            salePrice: e.target.value,
+                          })
                         }
                         className="bg-zinc-800 border-zinc-700"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="saleEndDate">Fecha de Finalización</Label>
                       <Input
@@ -480,8 +548,8 @@ export default function ProductosAdmin() {
                   {submitting
                     ? 'Guardando...'
                     : editingProduct
-                    ? 'Actualizar'
-                    : 'Crear'}
+                      ? 'Actualizar'
+                      : 'Crear'}
                 </Button>
               </div>
             </form>
@@ -494,15 +562,30 @@ export default function ProductosAdmin() {
           <table className="w-full">
             <thead className="border-b border-zinc-800">
               <tr>
-                <th className="text-left p-4 text-zinc-400 font-medium">Imagen</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Producto</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Categoría</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Precio</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Stock</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Estado</th>
-                <th className="text-left p-4 text-zinc-400 font-medium">Acciones</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Imagen
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Producto
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Categoría
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Precio
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Stock
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Estado
+                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">
+                  Acciones
+                </th>
               </tr>
             </thead>
+
             <tbody>
               {products.map((product) => (
                 <tr
@@ -525,6 +608,7 @@ export default function ProductosAdmin() {
                       )}
                     </div>
                   </td>
+
                   <td className="p-4">
                     <div>
                       <p className="font-medium text-white flex items-center gap-2">
@@ -536,7 +620,9 @@ export default function ProductosAdmin() {
                       <p className="text-sm text-zinc-400">{product.slug}</p>
                     </div>
                   </td>
+
                   <td className="p-4 text-zinc-300">{product.category.name}</td>
+
                   <td className="p-4">
                     <div>
                       <p className="text-white font-medium">
@@ -549,9 +635,12 @@ export default function ProductosAdmin() {
                       )}
                     </div>
                   </td>
+
                   <td className="p-4 text-zinc-300">
-                    {product.stock} {product.unitType === 'KILOGRAM' ? 'kg' : 'un'}
+                    {product.stock}{' '}
+                    {product.unitType === 'KILOGRAM' ? 'kg' : 'un'}
                   </td>
+
                   <td className="p-4">
                     <div className="flex gap-2">
                       {product.isActive ? (
@@ -570,6 +659,7 @@ export default function ProductosAdmin() {
                       )}
                     </div>
                   </td>
+
                   <td className="p-4">
                     <div className="flex gap-2">
                       <Button
@@ -580,6 +670,7 @@ export default function ProductosAdmin() {
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
+
                       <Button
                         size="sm"
                         variant="ghost"
