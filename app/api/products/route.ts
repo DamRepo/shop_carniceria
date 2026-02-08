@@ -1,137 +1,74 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+const ALLOWED_SECTIONS = new Set([
+  "minimercado",
+  "carniceria",
+  "elaborados",
+  "fruteria-y-verduleria",
+]);
+
+export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(request?.url ?? '');
-    const categorySlug = searchParams?.get?.('category');
-    const onSale = searchParams?.get?.('onSale');
-    const featured = searchParams?.get?.('featured');
-    const limitParam = searchParams?.get?.('limit');
+    const { searchParams } = new URL(req.url);
 
-    const where = {
-      isActive: true,
-      ...(categorySlug && categorySlug !== 'todos'
-        ? {
-            category: {
-              slug: categorySlug,
-            },
-          }
-        : {}),
-      ...(onSale === 'true'
-        ? {
-            isOnSale: true,
-          }
-        : {}),
-      ...(featured === 'true'
-        ? {
-            isFeatured: true,
-          }
-        : {}),
-    };
+    const section = searchParams.get("section"); // minimercado | fruteria y carniceria | elaborados | carniceria
+    const categorySlug = searchParams.get("category"); // slug de categoría (hija o raíz)
+    const onlyActive = searchParams.get("active") !== "false"; // default true
 
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const onSale = searchParams.get("onSale") === "true";
+    const featured = searchParams.get("featured") === "true";
+    const limitParam = searchParams.get("limit");
 
-    const products = await prisma?.product?.findMany?.({
+    const where: any = {};
+    if (onlyActive) where.isActive = true;
+    if (onSale) where.isOnSale = true;
+    if (featured) where.isFeatured = true;
+
+    // 1) categorySlug tiene prioridad (filtro exacto)
+    if (categorySlug && categorySlug !== "todos") {
+      where.category = { slug: categorySlug };
+    }
+    // 2) si no hay categorySlug, filtramos por sección (raíz + hijas)
+    else if (section) {
+      if (!ALLOWED_SECTIONS.has(section)) {
+        return NextResponse.json([], { status: 200 });
+      }
+
+      const root = await prisma.category.findUnique({
+        where: { slug: section },
+        select: { id: true },
+      });
+
+      if (!root) return NextResponse.json([], { status: 200 });
+
+      const children = await prisma.category.findMany({
+        where: { parentId: root.id },
+        select: { id: true },
+      });
+
+      const categoryIds = [root.id, ...children.map((c) => c.id)];
+      where.categoryId = { in: categoryIds };
+    }
+
+    const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
+    const take = Number.isFinite(limit) && limit! > 0 ? limit : undefined;
+
+    const products = await prisma.product.findMany({
       where,
-      include: {
-        category: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-      ...(limit ? { take: limit } : {}),
+      include: { category: true },
+      orderBy: { createdAt: "desc" },
+      ...(take ? { take } : {}),
     });
 
     return NextResponse.json(products ?? []);
-  } catch (error) {
-    console.error('Error fetching products:', error);
+  } catch (e) {
+    console.error("GET /api/products error:", e);
     return NextResponse.json(
-      { error: 'Error al obtener productos' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const {
-      name,
-      slug,
-      description,
-      price,
-      categoryId,
-      imageUrl,
-      stock,
-      unitType,
-      isOnSale,
-      salePrice,
-      saleEndDate,
-      isFeatured
-    } = body;
-
-    // Validar datos requeridos
-    if (!name || !slug || !price || !categoryId || !unitType) {
-      return NextResponse.json(
-        { error: 'Faltan campos requeridos' },
-        { status: 400 }
-      );
-    }
-
-    // Verificar que el slug sea único
-    const existingProduct = await prisma.product.findUnique({
-      where: { slug }
-    });
-
-    if (existingProduct) {
-      return NextResponse.json(
-        { error: 'El slug ya existe' },
-        { status: 400 }
-      );
-    }
-
-    const product = await prisma.product.create({
-      data: {
-        name,
-        slug,
-        description,
-        price: Math.round(price * 100), // Convertir a centavos
-        categoryId,
-        image: imageUrl,
-        stock: stock || 0,
-        unitType,
-        isOnSale: isOnSale || false,
-        salePrice: salePrice ? Math.round(salePrice * 100) : null,
-        saleEndDate: saleEndDate ? new Date(saleEndDate) : null,
-        discountPercent: isOnSale && salePrice ? Math.round(((price - salePrice) / price) * 100) : null,
-        isFeatured: isFeatured || false,
-        isActive: true
-      },
-      include: {
-        category: true
-      }
-    });
-
-    return NextResponse.json(product, { status: 201 });
-  } catch (error) {
-    console.error('Error creating product:', error);
-    return NextResponse.json(
-      { error: 'Error al crear producto' },
-      { status: 500 }
+      { error: "Error al listar productos" },
+      { status: 500 },
     );
   }
 }

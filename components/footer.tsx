@@ -32,7 +32,7 @@ export function Footer() {
             <div>
               <h3 className="font-semibold mb-1">Teléfono</h3>
               <p className="text-sm text-muted-foreground">
-                +54 11 1234-5678
+                +54 93458556104
               </p>
             </div>
           </div>
@@ -88,3 +88,4 @@ export function Footer() {
     </footer>
   );
 }
+

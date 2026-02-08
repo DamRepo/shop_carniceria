@@ -59,3 +59,4 @@ export default function Split({ side, kicker, desc, bullets, image }: Props) {
     </section>
   );
 }
+

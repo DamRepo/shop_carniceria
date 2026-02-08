@@ -1,10 +1,10 @@
 generator client {
-    provider = "prisma-client-js"
- }
+  provider = "prisma-client-js"
+}
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UnitType {
@@ -33,13 +33,22 @@ enum UserRole {
 }
 
 model Category {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   name        String
-  slug        String    @unique
+  slug        String     @unique
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  imageUrl    String?
+
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
   products    Product[]
+
+  @@index([parentId])
 }
 
 model Product {
@@ -49,17 +58,18 @@ model Product {
   description     String?
   image           String?
   unitType        UnitType
-  price           Int         // precio 
-  stock           Int       @default(0)
+  price           Int
+  stock           Int         @default(0)
   isActive        Boolean     @default(true)
   isFeatured      Boolean     @default(false)
   categoryId      String
   category        Category    @relation(fields: [categoryId], references: [id])
-  // Campos de oferta
+
   isOnSale        Boolean     @default(false)
-  salePrice       Int?        // precio de oferta 
-  saleEndDate     DateTime?   // fecha de fin de la oferta
-  discountPercent Int?        // porcentaje de descuento
+  salePrice       Int?
+  saleEndDate     DateTime?
+  discountPercent Int?
+
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   orderItems      OrderItem[]
@@ -83,9 +93,9 @@ model Order {
   city           String?
   postalCode     String?
   notes          String?
-  subtotal       Int            // en centavos
-  deliveryCost   Int            @default(0) // en centavos
-  total          Int            // en centavos
+  subtotal       Int
+  deliveryCost   Int            @default(0)
+  total          Int
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   items          OrderItem[]
@@ -101,8 +111,8 @@ model OrderItem {
   productId String
   product   Product  @relation(fields: [productId], references: [id])
   quantity  Float
-  unitPrice Int      // en centavos
-  lineTotal Int      // en centavos
+  unitPrice Int
+  lineTotal Int
   createdAt DateTime @default(now())
 
   @@index([orderId])
@@ -112,7 +122,7 @@ model OrderItem {
 model User {
   id            String   @id @default(cuid())
   email         String   @unique
-  password      String   // hashed
+  password      String
   name          String?
   phone         String?
   role          UserRole @default(CUSTOMER)

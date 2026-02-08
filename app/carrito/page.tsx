@@ -104,7 +104,7 @@ export default function CartPage() {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => decrementQuantity(item?.id ?? '', item?.quantity ?? 0, item?.unitType ?? 'PER_UNIT')}
+                        onClick={() => decrementQuantity(item?.id ?? '', item?.quantity ?? 0, item?.unitType ?? 'PER_KG')}
                         className="h-8 w-8"
                       >
                         <Minus className="h-3 w-3" />
@@ -120,13 +120,13 @@ export default function CartPage() {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => incrementQuantity(item?.id ?? '', item?.quantity ?? 0, item?.unitType ?? 'PER_UNIT')}
+                        onClick={() => incrementQuantity(item?.id ?? '', item?.quantity ?? 0, item?.unitType ?? 'PER_KG')}
                         className="h-8 w-8"
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                       <span className="text-sm text-muted-foreground ml-2">
-                        {formatQuantity(item?.quantity ?? 0, item?.unitType ?? 'PER_UNIT')}
+                        {formatQuantity(item?.quantity ?? 0, item?.unitType ?? 'PER_KG')}
                       </span>
                     </div>
                   </div>
@@ -196,3 +196,4 @@ export default function CartPage() {
     </div>
   );
 }
+

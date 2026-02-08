@@ -1,21 +1,28 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import Link from 'next/link';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import Link from "next/link";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const searchParams = useSearchParams();
+
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,22 +30,28 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
+      const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
         redirect: false,
+        callbackUrl, // ✅ clave
       });
 
       if (result?.error) {
-        toast.error('Credenciales inválidas');
-      } else {
-        toast.success('¡Bienvenido!');
-        router.push('/');
-        router.refresh();
+        toast.error("Credenciales inválidas");
+        return;
       }
+
+      toast.success("¡Bienvenido!");
+
+      // ✅ Si NextAuth devuelve url, usala; sino usa callbackUrl
+      const target = result?.url || callbackUrl;
+
+      router.replace(target);
+      router.refresh();
     } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Error al iniciar sesión');
+      console.error("Login error:", error);
+      toast.error("Error al iniciar sesión");
     } finally {
       setLoading(false);
     }
@@ -73,6 +86,7 @@ export default function LoginPage() {
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password" className="text-white">
                 Contraseña
@@ -89,14 +103,16 @@ export default function LoginPage() {
                 className="bg-zinc-800 border-zinc-700 text-white"
               />
             </div>
+
             <Button
               type="submit"
               className="w-full bg-orange-500 hover:bg-orange-600 text-white"
               disabled={loading}
             >
-              {loading ? 'Iniciando...' : 'Iniciar Sesión'}
+              {loading ? "Iniciando..." : "Iniciar Sesión"}
             </Button>
           </form>
+
           <div className="mt-4 text-center text-sm">
             <span className="text-zinc-400">¿No tienes una cuenta? </span>
             <Link
@@ -106,6 +122,7 @@ export default function LoginPage() {
               Regístrate
             </Link>
           </div>
+
           <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
             <Link
               href="/"

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   ShoppingCart,
   Menu,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -42,6 +42,19 @@ type SearchProduct = {
   image: string | null;
 };
 
+type NavCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  children: {
+    id: string;
+    name: string;
+    slug: string;
+    imageUrl: string | null;
+  }[];
+};
+
 async function safeJson<T>(res: Response): Promise<T | null> {
   try {
     return (await res.json()) as T;
@@ -50,53 +63,96 @@ async function safeJson<T>(res: Response): Promise<T | null> {
   }
 }
 
+function getParamFromHref(href: string, key: string): string {
+  const i = href.indexOf("?");
+  if (i === -1) return "";
+  const qs = href.slice(i + 1);
+  const sp = new URLSearchParams(qs);
+  return sp.get(key) || "";
+}
+
+function getBoolParamFromHref(href: string, key: string): boolean {
+  return getParamFromHref(href, key) === "true";
+}
+
 export function Header() {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const totalItems = useCartStore((state) => state?.getTotalItems?.());
+  const totalItems = useCartStore((state) => state.getTotalItems());
   const pathname = usePathname();
+
+  const searchParams = useSearchParams();
+  const activeCategory = searchParams.get("category") || "";
+  const activeSection = searchParams.get("section") || "";
+  const activeOnSale = searchParams.get("onSale") === "true";
+
   const { data: session, status } = useSession();
 
   // -----------------------
-  // Submenús
+  // Categorías (padres + hijas) desde DB
   // -----------------------
-  const cortesSub = [
-    { href: "/cortes/carne", label: "Carne" },
-    { href: "/cortes/pollo", label: "Pollo" },
-    { href: "/cortes/cerdo", label: "Cerdo" },
-  ];
+  const [navCategories, setNavCategories] = useState<NavCategory[]>([]);
+  const [catsLoading, setCatsLoading] = useState(false);
 
-  const minimercadoSub = [
-    { href: "/minimercado/despensa", label: "Despensa" },
-    { href: "/minimercado/bebidas", label: "Bebidas" },
-    { href: "/minimercado/lacteos", label: "Lácteos" },
-  ];
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      setCatsLoading(true);
+      try {
+        const res = await fetch("/api/categories/tree", { cache: "no-store" });
+        const data = await safeJson<NavCategory[]>(res);
+        if (!alive) return;
+        setNavCategories(Array.isArray(data) ? data : []);
+      } catch {
+        if (!alive) return;
+        setNavCategories([]);
+      } finally {
+        if (alive) setCatsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // -----------------------
-  // Menú nuevo (sin Inicio)
+  // Menú (secciones + ofertas)
   // -----------------------
   const menuItems: MenuItem[] = [
-    { type: "dropdown", href: "/cortes", label: "Cortes", items: cortesSub },
-    {
-      type: "dropdown",
-      href: "/minimercado",
-      label: "Minimercado",
-      items: minimercadoSub,
-    },
-    { type: "link", href: "/ofertas", label: "Ofertas" },
-    { type: "link", href: "/embutidos", label: "Embutidos" },
-    { type: "link", href: "/sobre-nosotros", label: "Sobre nosotros" },
+    { type: "link", href: "/minimercado", label: "Minimercado" },
+    { type: "link", href: "/carniceria", label: "Carnicería" },
+    { type: "link", href: "/elaborados", label: "Elaborados" },
     {
       type: "link",
-      href: "/preguntas-frecuentes",
-      label: "Preguntas frecuentes",
+      href: "/fruteria-y-verduleria",
+      label: "Frutería y verdulería",
     },
+    { type: "link", href: "/ofertas", label: "Ofertas" },
+    { type: "link", href: "/sobre-nosotros", label: "Sobre nosotros" },
+    { type: "link", href: "/preguntas-frecuentes", label: "Preguntas frecuentes" },
   ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
-    return pathname?.startsWith(href);
+
+    if (href.startsWith("/productos")) {
+      if (pathname !== "/productos") return false;
+
+      const hrefCategory = getParamFromHref(href, "category");
+      const hrefSection = getParamFromHref(href, "section");
+      const hrefOnSale = getBoolParamFromHref(href, "onSale");
+
+      if (hrefOnSale) return activeOnSale;
+      if (hrefSection) return activeSection === hrefSection;
+      if (hrefCategory) return activeCategory === hrefCategory;
+
+      return !activeCategory && !activeSection && !activeOnSale;
+    }
+
+    return pathname.startsWith(href);
   };
 
   useEffect(() => {
@@ -129,10 +185,7 @@ export function Header() {
       try {
         const res = await fetch(
           `/api/search/products?q=${encodeURIComponent(query)}`,
-          {
-            cache: "no-store",
-            signal: ac.signal,
-          }
+          { cache: "no-store", signal: ac.signal }
         );
         const data = await safeJson<SearchProduct[]>(res);
         setResults(Array.isArray(data) ? data : []);
@@ -153,8 +206,7 @@ export function Header() {
   const showDropdown = searchOpen && q.trim().length >= 2;
 
   // Mobile dropdown toggles
-  const [mobileCortesOpen, setMobileCortesOpen] = useState(false);
-  const [mobileMiniOpen, setMobileMiniOpen] = useState(false);
+  const [mobileCatsOpen, setMobileCatsOpen] = useState(false);
 
   // Click afuera para cerrar dropdown (desktop)
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -182,7 +234,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/90">
-      {/* FILA 1: Negro (logo + search + auth/cart) */}
+      {/* FILA 1 */}
       <div className="border-b border-zinc-800 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
         <div className="container mx-auto max-w-7xl px-4">
           <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] items-center gap-3 py-2">
@@ -286,7 +338,7 @@ export function Header() {
               </div>
             </div>
 
-            {/* Derecha: Auth + Carrito + Mobile */}
+            {/* Derecha */}
             <div className="flex items-center justify-end gap-2">
               {/* Desktop Auth */}
               <div className="hidden md:flex items-center space-x-2">
@@ -334,8 +386,8 @@ export function Header() {
                       )}
 
                       <DropdownMenuItem
-                        onClick={() => signOut({ callbackUrl: "/" })}
-                        className="cursor-pointer text-red-400 focus:text-red-300 focus:bg-zinc-800"
+                        className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        onClick={() => signOut()}
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Cerrar Sesión
@@ -372,6 +424,7 @@ export function Header() {
                   variant="ghost"
                   size="icon"
                   className="relative hover:bg-zinc-900 text-zinc-200"
+                  type="button"
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {mounted && (totalItems ?? 0) > 0 && (
@@ -387,13 +440,13 @@ export function Header() {
                 variant="ghost"
                 size="icon"
                 className="lg:hidden hover:bg-zinc-900 text-zinc-200"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onClick={() => {
+                  setMobileMenuOpen((v) => !v);
+                  if (mobileMenuOpen) setMobileCatsOpen(false);
+                }}
+                type="button"
               >
-                {mobileMenuOpen ? (
-                  <X className="h-6 w-6" />
-                ) : (
-                  <Menu className="h-6 w-6" />
-                )}
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </Button>
             </div>
           </div>
@@ -436,21 +489,14 @@ export function Header() {
                       >
                         <div className="h-10 w-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden relative shrink-0">
                           {p.image ? (
-                            <Image
-                              src={p.image}
-                              alt={p.name}
-                              fill
-                              className="object-cover"
-                            />
+                            <Image src={p.image} alt={p.name} fill className="object-cover" />
                           ) : null}
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-zinc-100 truncate">
                             {p.name}
                           </div>
-                          <div className="text-xs text-zinc-400 truncate">
-                            {p.slug}
-                          </div>
+                          <div className="text-xs text-zinc-400 truncate">{p.slug}</div>
                         </div>
                       </Link>
                     ))}
@@ -474,10 +520,71 @@ export function Header() {
         </div>
       </div>
 
-      {/* FILA 2: Menú en franja gris FULL WIDTH */}
+      {/* FILA 2 */}
       <div className="bg-zinc-900/70 border-b border-zinc-800">
         <div className="container mx-auto max-w-7xl px-4">
           <nav className="hidden lg:flex items-center justify-center gap-2 py-2 flex-wrap">
+            {/* Categorías dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={[
+                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap",
+                    "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                  ].join(" ")}
+                >
+                  Categorías
+                  <span className="text-xs opacity-80">▾</span>
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                align="start"
+                className="w-72 bg-zinc-900 border-zinc-800"
+              >
+                {catsLoading ? (
+                  <div className="px-3 py-2 text-sm text-zinc-400">Cargando...</div>
+                ) : navCategories.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-zinc-400">Sin categorías</div>
+                ) : (
+                  <div className="max-h-96 overflow-auto py-1">
+                    {navCategories.map((parent) => (
+                      <div key={parent.id} className="px-1">
+                        <DropdownMenuItem
+                          asChild
+                          className="cursor-pointer text-zinc-200 focus:text-white focus:bg-zinc-800 hover:text-red-400 font-semibold"
+                        >
+                          <Link href={`/productos?category=${encodeURIComponent(parent.slug)}`}>
+                            {parent.name}
+                          </Link>
+                        </DropdownMenuItem>
+
+                        {parent.children?.length ? (
+                          <div className="ml-3 mb-2 border-l border-zinc-800">
+                            {parent.children.map((child) => (
+                              <DropdownMenuItem
+                                key={child.id}
+                                asChild
+                                className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                              >
+                                <Link href={`/productos?category=${encodeURIComponent(child.slug)}`}>
+                                  {child.name}
+                                </Link>
+                              </DropdownMenuItem>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <DropdownMenuSeparator className="bg-zinc-800" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Menú secciones/ofertas */}
             {menuItems.map((item) => {
               const active = isActive(item.href);
 
@@ -498,55 +605,102 @@ export function Header() {
                 );
               }
 
-              return (
-                <DropdownMenu key={item.href}>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className={[
-                        "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap",
-                        active
-                          ? "bg-red-500/10 text-red-400 border-b-2 border-red-500"
-                          : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
-                      ].join(" ")}
-                    >
-                      {item.label}
-                      <span className="text-xs opacity-80">▾</span>
-                    </button>
-                  </DropdownMenuTrigger>
-
-                  <DropdownMenuContent
-                    align="start"
-                    className="w-56 bg-zinc-900 border-zinc-800"
-                  >
-                    <DropdownMenuItem
-                      asChild
-                      className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
-                    >
-                      <Link href={item.href}>Ver todo</Link>
-                    </DropdownMenuItem>
-
-                    <DropdownMenuSeparator className="bg-zinc-800" />
-
-                    {item.items.map((sub) => (
-                      <DropdownMenuItem
-                        key={sub.href}
-                        asChild
-                        className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
-                      >
-                        <Link href={sub.href}>{sub.label}</Link>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
+              return null;
             })}
           </nav>
 
-          {/* Mobile menu (franja gris) */}
+          {/* Mobile menu */}
           {mobileMenuOpen && (
             <div className="lg:hidden border-t border-zinc-800 py-2">
-              {/* Poné acá tu mobile menu tal cual lo tenías */}
+              <nav className="flex flex-col gap-1">
+                {/* Categorías (mobile acordeón) */}
+                <div className="rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileCatsOpen((v) => !v)}
+                    className={[
+                      "w-full px-4 py-3 text-sm font-medium rounded-md transition-all flex items-center justify-between",
+                      mobileCatsOpen
+                        ? "bg-red-500/10 text-red-400"
+                        : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                    ].join(" ")}
+                  >
+                    <span>Categorías</span>
+                    <span className="text-xs opacity-80">{mobileCatsOpen ? "▴" : "▾"}</span>
+                  </button>
+
+                  {mobileCatsOpen && (
+                    <div className="mt-1 ml-3 mr-1 border-l border-zinc-800">
+                      {catsLoading ? (
+                        <div className="px-4 py-2 text-sm text-zinc-400">Cargando...</div>
+                      ) : navCategories.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-zinc-400">Sin categorías</div>
+                      ) : (
+                        navCategories.map((parent) => (
+                          <div key={parent.id} className="py-1">
+                            <Link
+                              href={`/productos?category=${encodeURIComponent(parent.slug)}`}
+                              onClick={() => {
+                                setMobileMenuOpen(false);
+                                setMobileCatsOpen(false);
+                              }}
+                              className="block px-4 py-2 text-sm rounded-md transition-colors text-zinc-200 hover:text-red-400 hover:bg-zinc-800/40 font-semibold"
+                            >
+                              {parent.name}
+                            </Link>
+
+                            {parent.children?.length ? (
+                              <div className="ml-3 border-l border-zinc-800">
+                                {parent.children.map((child) => (
+                                  <Link
+                                    key={child.id}
+                                    href={`/productos?category=${encodeURIComponent(child.slug)}`}
+                                    onClick={() => {
+                                      setMobileMenuOpen(false);
+                                      setMobileCatsOpen(false);
+                                    }}
+                                    className="block px-4 py-2 text-sm rounded-md transition-colors text-zinc-300 hover:text-red-400 hover:bg-zinc-800/40"
+                                  >
+                                    {child.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Links existentes */}
+                {menuItems.map((item) => {
+                  const active = isActive(item.href);
+
+                  if (item.type === "link") {
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setMobileCatsOpen(false);
+                        }}
+                        className={[
+                          "px-4 py-3 text-sm font-medium rounded-md transition-all",
+                          active
+                            ? "bg-red-500/10 text-red-400 border-l-2 border-red-500"
+                            : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  }
+
+                  return null;
+                })}
+              </nav>
             </div>
           )}
         </div>

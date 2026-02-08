@@ -21,7 +21,6 @@ function requireAdmin(session: any) {
 }
 
 export async function GET() {
-  // listar categorías: esto normalmente puede ser público
   const categories = await prisma.category.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -29,6 +28,7 @@ export async function GET() {
       name: true,
       slug: true,
       description: true,
+      parentId: true,
       createdAt: true,
       updatedAt: true,
       _count: { select: { products: true } },
@@ -45,18 +45,37 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+
   const name = String(body?.name ?? "").trim();
   const description =
     body?.description == null ? null : String(body.description).trim() || null;
+
+  // ✅ parentId opcional (para hijas)
+  const parentId =
+    body?.parentId == null ? null : String(body.parentId).trim() || null;
 
   if (!name) {
     return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
   }
 
+  // Si mandan parentId, validarlo
+  if (parentId) {
+    const parentExists = await prisma.category.findUnique({
+      where: { id: parentId },
+      select: { id: true },
+    });
+    if (!parentExists) {
+      return NextResponse.json(
+        { error: "parentId inválido (no existe la categoría madre)" },
+        { status: 400 }
+      );
+    }
+  }
+
   const baseSlug = slugify(name);
   let slug = baseSlug;
 
-  // si existe por slug, devolverla (idempotente)
+  // idempotente por slug
   const existing = await prisma.category.findUnique({ where: { slug } });
   if (existing) return NextResponse.json(existing);
 
@@ -68,7 +87,17 @@ export async function POST(req: Request) {
   }
 
   const created = await prisma.category.create({
-    data: { name, slug, description },
+    data: { name, slug, description, parentId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      parentId: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { products: true } },
+    },
   });
 
   return NextResponse.json(created, { status: 201 });

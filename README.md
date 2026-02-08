@@ -119,7 +119,7 @@ nextjs_space/
 - `slug`: Slug para URLs
 - `description`: Descripción
 - `image`: URL de la imagen
-- `unitType`: Tipo de unidad (PER_KG | PER_UNIT)
+- `unitType`: Tipo de unidad (PER_KG)
 - `price`: Precio en centavos
 - `stock`: Stock disponible
 - `isActive`: Producto activo

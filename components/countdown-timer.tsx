@@ -2,70 +2,69 @@
 
 import { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface CountdownTimerProps {
   endDate: Date | string;
-  className?: string;
 }
 
-interface TimeLeft {
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
+export function CountdownTimer({ endDate }: CountdownTimerProps) {
+  const calculateTimeLeft = () => {
+    const diff = +new Date(endDate) - +new Date();
+    if (diff <= 0) return null;
 
-export function CountdownTimer({ endDate, className = '' }: CountdownTimerProps) {
-  const [timeLeft, setTimeLeft] = useState<TimeLeft | null>(null);
-  const [mounted, setMounted] = useState(false);
+    return {
+      h: Math.floor((diff / (1000 * 60 * 60)) % 24),
+      m: Math.floor((diff / 1000 / 60) % 60),
+      s: Math.floor((diff / 1000) % 60),
+    };
+  };
+
+  const [time, setTime] = useState(calculateTimeLeft());
 
   useEffect(() => {
-    setMounted(true);
+    const t = setInterval(() => setTime(calculateTimeLeft()), 1000);
+    return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    const calculateTimeLeft = (): TimeLeft | null => {
-      const difference = +new Date(endDate) - +new Date();
-      
-      if (difference > 0) {
-        return {
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
-        };
-      }
-      return null;
-    };
-
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft());
-    }, 1000);
-
-    setTimeLeft(calculateTimeLeft());
-
-    return () => clearInterval(timer);
-  }, [endDate]);
-
-  if (!mounted || !timeLeft) {
-    return (
-      <div className={`flex items-center gap-2 text-sm text-zinc-500 ${className}`}>
-        <Clock className="h-4 w-4" />
-        <span>Cargando...</span>
-      </div>
-    );
-  }
+  if (!time) return null;
 
   return (
-    <div className={`flex items-center gap-2 text-sm font-semibold ${className}`}>
-      <Clock className="h-4 w-4 text-primary" />
-      <span className="text-primary">
-        Finaliza en:{' '}
-        {timeLeft.days > 0 && `${timeLeft.days}d `}
-        {String(timeLeft.hours).padStart(2, '0')}:
-        {String(timeLeft.minutes).padStart(2, '0')}:
-        {String(timeLeft.seconds).padStart(2, '0')}
-      </span>
-    </div>
+    <motion.div
+      animate={{
+        backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+        scale: [1, 1.03, 1],
+      }}
+      transition={{
+        duration: 2,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
+      className="
+        w-full
+        rounded-md
+        px-3
+        py-2
+        text-white
+        shadow-lg
+        bg-[length:200%_200%]
+        bg-gradient-to-r
+        from-red-600
+        via-orange-500
+        to-red-600
+        border border-red-700
+      "
+    >
+      <div className="flex items-center justify-center gap-1 text-[11px] font-bold uppercase tracking-wide">
+        <Clock className="h-3 w-3" />
+        Termina en
+      </div>
+
+      <div className="flex justify-center gap-1 text-lg font-extrabold tabular-nums leading-none">
+        <span>{String(time.h).padStart(2, '0')}</span>:
+        <span>{String(time.m).padStart(2, '0')}</span>:
+        <span>{String(time.s).padStart(2, '0')}</span>
+      </div>
+    </motion.div>
   );
 }

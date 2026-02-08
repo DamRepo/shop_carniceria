@@ -291,3 +291,4 @@ export function ProductFilters({ onFilterChange, totalProducts, filteredCount, a
     </>
   );
 }
+

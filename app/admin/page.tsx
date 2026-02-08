@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, ShoppingCart, Tag, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Package, ShoppingCart, Tag, TrendingUp } from "lucide-react";
 
 interface Stats {
   totalProducts: number;
@@ -22,32 +22,72 @@ export default function AdminDashboard() {
     onSaleProducts: 0,
     featuredProducts: 0,
   });
+
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchStats = async () => {
-    try {
-      // Obtener productos
-      const productsRes = await fetch('/api/admin/products');
-      const products = await productsRes.json();
+  const fetchJsonOrThrow = async (url: string) => {
+    const res = await fetch(url, { cache: "no-store" });
 
-      // Obtener órdenes
-      const ordersRes = await fetch('/api/admin/orders');
-      const orders = await ordersRes.json();
+    if (!res.ok) {
+      // Intentamos leer texto para loguear el error real (puede ser HTML/JSON)
+      const text = await res.text().catch(() => "");
+      throw new Error(`${url} -> ${res.status} ${res.statusText} ${text}`);
+    }
+
+    return res.json();
+  };
+
+  const fetchStats = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const [products, orders] = await Promise.all([
+        fetchJsonOrThrow("/api/admin/products"),
+        fetchJsonOrThrow("/api/admin/orders"),
+      ]);
+
+      if (!Array.isArray(products)) {
+        throw new Error(
+          `/api/admin/products no devolvió un array. Tipo: ${typeof products}`
+        );
+      }
+
+      if (!Array.isArray(orders)) {
+        throw new Error(
+          `/api/admin/orders no devolvió un array. Tipo: ${typeof orders}`
+        );
+      }
+
+      // Debug útil: mirá la forma real de los objetos
+      console.log("products sample:", products[0]);
+      console.log("orders sample:", orders[0]);
+
+      const totalProducts = products.length;
+      const activeProducts = products.filter((p: any) => !!p?.isActive).length;
+      const onSaleProducts = products.filter((p: any) => !!p?.isOnSale).length;
+      const featuredProducts = products.filter((p: any) => !!p?.isFeatured).length;
+
+      const totalOrders = orders.length;
+      const pendingOrders = orders.filter((o: any) => o?.status === "PENDING").length;
 
       setStats({
-        totalProducts: products.length,
-        activeProducts: products.filter((p: any) => p.isActive).length,
-        totalOrders: orders.length,
-        pendingOrders: orders.filter((o: any) => o.status === 'PENDING').length,
-        onSaleProducts: products.filter((p: any) => p.isOnSale).length,
-        featuredProducts: products.filter((p: any) => p.isFeatured).length,
+        totalProducts,
+        activeProducts,
+        totalOrders,
+        pendingOrders,
+        onSaleProducts,
+        featuredProducts,
       });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+    } catch (err: any) {
+      console.error("Error fetching stats:", err);
+      setErrorMsg(err?.message || "Error desconocido al cargar estadísticas");
     } finally {
       setLoading(false);
     }
@@ -56,39 +96,72 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white">Error cargando datos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-zinc-300">
+              El dashboard depende de:
+              <span className="text-zinc-200"> /api/admin/products</span> y{" "}
+              <span className="text-zinc-200">/api/admin/orders</span>.
+              Si alguno devuelve 401/403/500 o no devuelve un array, queda vacío.
+            </p>
+
+            <pre className="text-xs text-red-300 whitespace-pre-wrap break-words bg-zinc-950 border border-zinc-800 rounded p-3">
+              {errorMsg}
+            </pre>
+
+            <button
+              onClick={fetchStats}
+              className="px-4 py-2 rounded bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              Reintentar
+            </button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   const statCards = [
     {
-      title: 'Total Productos',
+      title: "Total Productos",
       value: stats.totalProducts,
       subtitle: `${stats.activeProducts} activos`,
       icon: Package,
-      color: 'text-blue-500',
+      color: "text-blue-500",
     },
     {
-      title: 'Órdenes',
+      title: "Órdenes",
       value: stats.totalOrders,
       subtitle: `${stats.pendingOrders} pendientes`,
       icon: ShoppingCart,
-      color: 'text-green-500',
+      color: "text-green-500",
     },
     {
-      title: 'Ofertas Activas',
+      title: "Ofertas Activas",
       value: stats.onSaleProducts,
-      subtitle: 'Productos en oferta',
+      subtitle: "Productos en oferta",
       icon: Tag,
-      color: 'text-orange-500',
+      color: "text-orange-500",
     },
     {
-      title: 'Destacados',
+      title: "Destacados",
       value: stats.featuredProducts,
-      subtitle: 'Productos destacados',
+      subtitle: "Productos destacados",
       icon: TrendingUp,
-      color: 'text-purple-500',
+      color: "text-purple-500",
     },
   ];
 
@@ -168,3 +241,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

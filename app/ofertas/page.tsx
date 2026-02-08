@@ -1,16 +1,22 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { ProductCard } from '@/components/product-card';
-import { CountdownTimer } from '@/components/countdown-timer';
-import { Loader2, Tag } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useInView } from 'react-intersection-observer';
-import type { Product, Category } from '@prisma/client';
+import { useEffect, useState } from "react";
+import { ProductCard } from "@/components/product-card";
+import { CountdownTimer } from "@/components/countdown-timer";
+import { Loader2, Tag } from "lucide-react";
+import { motion } from "framer-motion";
+import { useInView } from "react-intersection-observer";
+import type { Product, Category } from "@prisma/client";
 
 type ProductWithCategory = Product & {
   category: Category;
 };
+
+function isOfferActive(p: ProductWithCategory) {
+  if (!p.isOnSale) return false;
+  if (!p.saleEndDate) return true; // sin fecha => oferta activa
+  return new Date(p.saleEndDate).getTime() > Date.now(); // vigente
+}
 
 export default function OfertasPage() {
   const [offers, setOffers] = useState<ProductWithCategory[]>([]);
@@ -19,34 +25,44 @@ export default function OfertasPage() {
   const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.1 });
 
   useEffect(() => {
+    let alive = true;
+
     const fetchOffers = async () => {
       try {
-        const res = await fetch('/api/products?onSale=true');
-        if (res.ok) {
-          const data = await res.json();
-          setOffers(data);
-        }
+        const res = await fetch("/api/products?onSale=true", { cache: "no-store" });
+        if (!res.ok) return;
+
+        const data = (await res.json()) as ProductWithCategory[];
+        const active = Array.isArray(data) ? data.filter(isOfferActive) : [];
+
+        if (alive) setOffers(active);
       } catch (error) {
-        console.error('Error al cargar ofertas:', error);
+        console.error("Error al cargar ofertas:", error);
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     };
 
     const fetchRelatedProducts = async () => {
       try {
-        const res = await fetch('/api/products?limit=6');
-        if (res.ok) {
-          const data = await res.json();
-          setRelatedProducts(data.filter((p: ProductWithCategory) => !p.isOnSale));
-        }
+        const res = await fetch("/api/products?limit=12", { cache: "no-store" });
+        if (!res.ok) return;
+
+        const data = (await res.json()) as ProductWithCategory[];
+        const list = Array.isArray(data) ? data.filter((p) => !p.isOnSale) : [];
+
+        if (alive) setRelatedProducts(list);
       } catch (error) {
-        console.error('Error al cargar productos relacionados:', error);
+        console.error("Error al cargar productos relacionados:", error);
       }
     };
 
     fetchOffers();
     fetchRelatedProducts();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (loading) {
@@ -87,6 +103,7 @@ export default function OfertasPage() {
             <h2 className="text-2xl font-bold">Ofertas Activas</h2>
             <p className="text-muted-foreground">{offers.length} productos en oferta</p>
           </div>
+
           <motion.div
             ref={ref}
             initial={{ opacity: 0 }}
@@ -135,6 +152,7 @@ export default function OfertasPage() {
             <h2 className="text-3xl font-bold mb-2">También te puede interesar</h2>
             <p className="text-muted-foreground">Otros productos que podrían gustarte</p>
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {relatedProducts.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />

@@ -297,7 +297,7 @@ export default function CheckoutPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium line-clamp-1">{item?.name ?? 'Producto'}</p>
                         <p className="text-muted-foreground">
-                          {formatQuantity(item?.quantity ?? 0, item?.unitType ?? 'PER_UNIT')}
+                          {formatQuantity(item?.quantity ?? 0, item?.unitType ?? 'PER_KG')}
                         </p>
                       </div>
                       <p className="font-medium ml-2">
@@ -351,3 +351,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+

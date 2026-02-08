@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -13,13 +13,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Plus, Edit, Trash2, Star } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,18 +20,20 @@ import Image from 'next/image';
 import { formatPrice } from '@/lib/utils-format';
 import { useRouter } from 'next/navigation';
 
+type UnitType = 'PER_KG' | 'PER_UNIT';
+
 interface Product {
   id: string;
   name: string;
   slug: string;
   description: string | null;
-  price: number;
+  price: number; // centavos
   categoryId: string;
-  imageUrl: string | null;
+  image: string | null; // Prisma: image
   stock: number;
-  unitType: string;
+  unitType: UnitType;
   isOnSale: boolean;
-  salePrice: number | null;
+  salePrice: number | null; // centavos
   saleEndDate: Date | null;
   isFeatured: boolean;
   isActive: boolean;
@@ -59,14 +54,14 @@ interface ProductFormData {
   name: string;
   slug: string;
   description: string;
-  price: string;
+  price: string; // ARS decimal
   categoryId: string;
-  imageUrl: string;
+  imageFile: File | null;
   stock: string;
-  unitType: string;
+  unitType: UnitType;
   isOnSale: boolean;
-  salePrice: string;
-  saleEndDate: string;
+  salePrice: string; // ARS decimal
+  saleEndDate: string; // yyyy-mm-dd
   isFeatured: boolean;
   isActive: boolean;
 }
@@ -77,9 +72,9 @@ const emptyFormData: ProductFormData = {
   description: '',
   price: '',
   categoryId: '',
-  imageUrl: '',
+  imageFile: null,
   stock: '0',
-  unitType: 'UNIT',
+  unitType: 'PER_KG',
   isOnSale: false,
   salePrice: '',
   saleEndDate: '',
@@ -96,9 +91,11 @@ export default function ProductosAdmin() {
   const [formData, setFormData] = useState<ProductFormData>(emptyFormData);
   const [submitting, setSubmitting] = useState(false);
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   const router = useRouter();
 
-  // ---------- fetch helpers (arriba de los useEffect para evitar rarezas) ----------
+  // ---------- fetch helpers ----------
   const fetchProducts = async () => {
     const res = await fetch('/api/admin/products', { cache: 'no-store' });
     if (!res.ok) throw new Error('No se pudieron cargar productos');
@@ -154,6 +151,7 @@ export default function ProductosAdmin() {
         } finally {
           setEditingProduct(null);
           setFormData(emptyFormData);
+          setPreviewUrl(null);
           setDialogOpen(true);
         }
       })();
@@ -161,40 +159,14 @@ export default function ProductosAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- handlers ----------
-  const handleOpenDialog = (product?: Product) => {
-    if (product) {
-      setEditingProduct(product);
-      setFormData({
-        name: product.name,
-        slug: product.slug,
-        description: product.description || '',
-        price: (product.price / 100).toString(),
-        categoryId: product.categoryId,
-        imageUrl: product.imageUrl || '',
-        stock: product.stock.toString(),
-        unitType: product.unitType,
-        isOnSale: product.isOnSale,
-        salePrice: product.salePrice ? (product.salePrice / 100).toString() : '',
-        saleEndDate: product.saleEndDate
-          ? new Date(product.saleEndDate).toISOString().split('T')[0]
-          : '',
-        isFeatured: product.isFeatured,
-        isActive: product.isActive,
-      });
-    } else {
-      setEditingProduct(null);
-      setFormData(emptyFormData);
-    }
-    setDialogOpen(true);
-  };
+  // liberar objectURL
+  useEffect(() => {
+    return () => {
+      if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-    setEditingProduct(null);
-    setFormData(emptyFormData);
-  };
-
+  // ---------- helpers ----------
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -204,51 +176,107 @@ export default function ProductosAdmin() {
       .replace(/(^-|-$)/g, '');
   };
 
+  const unitLabelFor = (unitType: UnitType) => (unitType === 'PER_KG' ? 'kg' : 'unid.');
+
+  const handleOpenDialog = (product?: Product) => {
+    if (product) {
+      setEditingProduct(product);
+      setFormData({
+        name: product.name,
+        slug: product.slug,
+        description: product.description || '',
+        price: (product.price / 100).toString(),
+        categoryId: product.categoryId,
+        imageFile: null,
+        stock: product.stock.toString(),
+        unitType: product.unitType, // ✅ respetar
+        isOnSale: product.isOnSale,
+        salePrice: product.salePrice ? (product.salePrice / 100).toString() : '',
+        saleEndDate: product.saleEndDate
+          ? new Date(product.saleEndDate).toISOString().split('T')[0]
+          : '',
+        isFeatured: product.isFeatured,
+        isActive: product.isActive,
+      });
+      setPreviewUrl(product.image ?? null);
+    } else {
+      setEditingProduct(null);
+      setFormData(emptyFormData);
+      setPreviewUrl(null);
+    }
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingProduct(null);
+    setFormData(emptyFormData);
+    setPreviewUrl(null);
+  };
+
+  const onPickImage = (file: File | null) => {
+    setFormData((p) => ({ ...p, imageFile: file }));
+
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(editingProduct?.image ?? null);
+    }
+  };
+
+  const stockStep = useMemo(() => {
+    return formData.unitType === 'PER_KG' ? '0.01' : '1';
+  }, [formData.unitType]);
+
+  const stockLabel = useMemo(() => {
+    return formData.unitType === 'PER_KG' ? 'kg' : 'unidades';
+  }, [formData.unitType]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      const payload = {
-        name: formData.name,
-        slug: formData.slug,
-        description: formData.description || null,
-        // tu API suele manejar centavos; acá estás mandando ARS con decimales.
-        // Mantengo tu lógica para no romperte el backend.
-        price: parseFloat(formData.price),
-        categoryId: formData.categoryId,
-        imageUrl: formData.imageUrl || null,
-        stock: parseInt(formData.stock, 10),
-        unitType: formData.unitType,
-        isOnSale: formData.isOnSale,
-        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
-        saleEndDate: formData.saleEndDate || null,
-        isFeatured: formData.isFeatured,
-        isActive: formData.isActive,
-      };
+      const fd = new FormData();
+      fd.append('name', formData.name);
+      fd.append('slug', formData.slug);
+      fd.append('description', formData.description || '');
+      fd.append('price', formData.price || '0');
+      fd.append('categoryId', formData.categoryId);
+      fd.append('stock', formData.stock || '0');
+
+      // ✅ unitType real
+      fd.append('unitType', formData.unitType);
+
+      fd.append('isOnSale', String(formData.isOnSale));
+      fd.append('salePrice', formData.salePrice || '');
+      fd.append('saleEndDate', formData.saleEndDate || '');
+      fd.append('isFeatured', String(formData.isFeatured));
+      fd.append('isActive', String(formData.isActive));
+
+      if (formData.imageFile) {
+        fd.append('image', formData.imageFile); // backend espera "image"
+      }
 
       let response: Response;
 
       if (editingProduct) {
         response = await fetch(`/api/admin/products/${editingProduct.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: fd,
         });
       } else {
-        // CONSISTENTE con el resto del admin
         response = await fetch('/api/admin/products', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: fd,
         });
       }
 
       const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(data?.error || 'Error al guardar producto');
-      }
+      if (!response.ok) throw new Error(data?.error || 'Error al guardar producto');
 
       toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
       handleCloseDialog();
@@ -322,11 +350,12 @@ export default function ProductosAdmin() {
                     id="name"
                     value={formData.name}
                     onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        name: e.target.value,
-                        slug: generateSlug(e.target.value),
-                      });
+                      const v = e.target.value;
+                      setFormData((p) => ({
+                        ...p,
+                        name: v,
+                        slug: generateSlug(v),
+                      }));
                     }}
                     required
                     className="bg-zinc-800 border-zinc-700"
@@ -339,7 +368,7 @@ export default function ProductosAdmin() {
                     id="slug"
                     value={formData.slug}
                     onChange={(e) =>
-                      setFormData({ ...formData, slug: e.target.value })
+                      setFormData((p) => ({ ...p, slug: e.target.value }))
                     }
                     required
                     className="bg-zinc-800 border-zinc-700"
@@ -353,7 +382,7 @@ export default function ProductosAdmin() {
                   id="description"
                   value={formData.description}
                   onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
+                    setFormData((p) => ({ ...p, description: e.target.value }))
                   }
                   rows={3}
                   className="bg-zinc-800 border-zinc-700"
@@ -369,7 +398,7 @@ export default function ProductosAdmin() {
                     step="0.01"
                     value={formData.price}
                     onChange={(e) =>
-                      setFormData({ ...formData, price: e.target.value })
+                      setFormData((p) => ({ ...p, price: e.target.value }))
                     }
                     required
                     className="bg-zinc-800 border-zinc-700"
@@ -377,13 +406,16 @@ export default function ProductosAdmin() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stock *</Label>
+                  <Label htmlFor="stock">
+                    Stock ({stockLabel}) *
+                  </Label>
                   <Input
                     id="stock"
                     type="number"
+                    step={stockStep}
                     value={formData.stock}
                     onChange={(e) =>
-                      setFormData({ ...formData, stock: e.target.value })
+                      setFormData((p) => ({ ...p, stock: e.target.value }))
                     }
                     required
                     className="bg-zinc-800 border-zinc-700"
@@ -391,7 +423,7 @@ export default function ProductosAdmin() {
                 </div>
               </div>
 
-              {/* CATEGORÍA + BOTÓN CREAR */}
+              {/* CATEGORÍA + UNIDAD */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -406,56 +438,77 @@ export default function ProductosAdmin() {
                     </Button>
                   </div>
 
-                  <Select
+                  <select
+                    id="category"
+                    className="w-full h-10 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-white"
                     value={formData.categoryId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, categoryId: value })
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, categoryId: e.target.value }))
                     }
+                    required
                   >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="" disabled>
+                      Seleccionar categoría
+                    </option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="unitType">Tipo de Unidad *</Label>
-                  <Select
+                  <Label htmlFor="unitType">Unidad *</Label>
+                  <select
+                    id="unitType"
+                    className="w-full h-10 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-white"
                     value={formData.unitType}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, unitType: value })
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        unitType: e.target.value as UnitType,
+                      }))
                     }
+                    required
                   >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="UNIT">Unidad</SelectItem>
-                      <SelectItem value="KILOGRAM">Kilogramo</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="PER_KG">Por kilo (kg)</option>
+                    <option value="PER_UNIT">Por unidad</option>
+                  </select>
+
+                  <p className="text-xs text-zinc-400">
+                    En minimercado suele ser “por unidad”. En carnicería/cortes “por kilo”.
+                  </p>
                 </div>
               </div>
 
+              {/* IMAGEN */}
               <div className="space-y-2">
-                <Label htmlFor="imageUrl">URL de Imagen</Label>
+                <Label htmlFor="imageFile">Imagen (archivo)</Label>
                 <Input
-                  id="imageUrl"
-                  type="url"
-                  value={formData.imageUrl}
-                  onChange={(e) =>
-                    setFormData({ ...formData, imageUrl: e.target.value })
-                  }
-                  placeholder="https://wpforms.com/wp-content/uploads/2020/06/file-upload-form-template-2-1024x876.png"
+                  id="imageFile"
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp, image/avif"
                   className="bg-zinc-800 border-zinc-700"
+                  onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
                 />
+
+                {previewUrl ? (
+                  <div className="mt-3">
+                    <div className="relative w-full h-44 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                      <Image src={previewUrl} alt="Preview" fill className="object-cover" />
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-2">
+                      {formData.imageFile
+                        ? `Archivo seleccionado: ${formData.imageFile.name}`
+                        : 'Imagen actual del producto'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-500">
+                    Si no subís imagen, el producto queda “Sin imagen”.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-4 pt-4 border-t border-zinc-800">
@@ -465,7 +518,7 @@ export default function ProductosAdmin() {
                     id="isOnSale"
                     checked={formData.isOnSale}
                     onCheckedChange={(checked) =>
-                      setFormData({ ...formData, isOnSale: checked })
+                      setFormData((p) => ({ ...p, isOnSale: checked }))
                     }
                   />
                 </div>
@@ -480,10 +533,7 @@ export default function ProductosAdmin() {
                         step="0.01"
                         value={formData.salePrice}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            salePrice: e.target.value,
-                          })
+                          setFormData((p) => ({ ...p, salePrice: e.target.value }))
                         }
                         className="bg-zinc-800 border-zinc-700"
                       />
@@ -496,10 +546,7 @@ export default function ProductosAdmin() {
                         type="date"
                         value={formData.saleEndDate}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            saleEndDate: e.target.value,
-                          })
+                          setFormData((p) => ({ ...p, saleEndDate: e.target.value }))
                         }
                         className="bg-zinc-800 border-zinc-700"
                       />
@@ -514,7 +561,7 @@ export default function ProductosAdmin() {
                   id="isFeatured"
                   checked={formData.isFeatured}
                   onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isFeatured: checked })
+                    setFormData((p) => ({ ...p, isFeatured: checked }))
                   }
                 />
               </div>
@@ -525,7 +572,7 @@ export default function ProductosAdmin() {
                   id="isActive"
                   checked={formData.isActive}
                   onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isActive: checked })
+                    setFormData((p) => ({ ...p, isActive: checked }))
                   }
                 />
               </div>
@@ -545,11 +592,7 @@ export default function ProductosAdmin() {
                   className="flex-1 bg-orange-500 hover:bg-orange-600"
                   disabled={submitting}
                 >
-                  {submitting
-                    ? 'Guardando...'
-                    : editingProduct
-                      ? 'Actualizar'
-                      : 'Crear'}
+                  {submitting ? 'Guardando...' : editingProduct ? 'Actualizar' : 'Crear'}
                 </Button>
               </div>
             </form>
@@ -562,27 +605,13 @@ export default function ProductosAdmin() {
           <table className="w-full">
             <thead className="border-b border-zinc-800">
               <tr>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Imagen
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Producto
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Categoría
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Precio
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Stock
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Estado
-                </th>
-                <th className="text-left p-4 text-zinc-400 font-medium">
-                  Acciones
-                </th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Imagen</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Producto</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Categoría</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Precio</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Stock</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Estado</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">Acciones</th>
               </tr>
             </thead>
 
@@ -594,13 +623,8 @@ export default function ProductosAdmin() {
                 >
                   <td className="p-4">
                     <div className="relative w-16 h-16 bg-zinc-800 rounded-lg overflow-hidden">
-                      {product.imageUrl ? (
-                        <Image
-                          src={product.imageUrl}
-                          alt={product.name}
-                          fill
-                          className="object-cover"
-                        />
+                      {product.image ? (
+                        <Image src={product.image} alt={product.name} fill className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-zinc-600">
                           Sin imagen
@@ -625,9 +649,7 @@ export default function ProductosAdmin() {
 
                   <td className="p-4">
                     <div>
-                      <p className="text-white font-medium">
-                        {formatPrice(product.price)}
-                      </p>
+                      <p className="text-white font-medium">{formatPrice(product.price)}</p>
                       {product.isOnSale && product.salePrice && (
                         <p className="text-sm text-orange-500">
                           Oferta: {formatPrice(product.salePrice)}
@@ -637,8 +659,7 @@ export default function ProductosAdmin() {
                   </td>
 
                   <td className="p-4 text-zinc-300">
-                    {product.stock}{' '}
-                    {product.unitType === 'KILOGRAM' ? 'kg' : 'un'}
+                    {product.stock} {unitLabelFor(product.unitType)}
                   </td>
 
                   <td className="p-4">
