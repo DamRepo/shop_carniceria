@@ -22,7 +22,7 @@ export default function SobreNosotrosPage() {
           "Selección diaria y control de calidad en productos y elaborados.",
           "Mejoras constantes en el servicio para que comprar sea más simple.",
         ]}
-        image={{ src: "/gondola.jpeg", alt: "Carnicería El Negro - mostrador" }}
+        image={{ src: "/cortes.jpg", alt: "Carnicería El Negro - mostrador" }}
       />
 
       <Band
@@ -40,7 +40,7 @@ export default function SobreNosotrosPage() {
           "Adaptación a nuevas demandas sin perder nuestra identidad.",
         ]}
         image={{
-          src: "/river.jpg",
+          src: "/pagando.jpg",
           alt: "Visión a futuro - Carnicería El Negro",
         }}
       />

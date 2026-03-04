@@ -1,26 +1,26 @@
-﻿'use client';
+﻿"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Plus, Edit, Trash2, Star } from 'lucide-react';
-import { toast } from 'sonner';
-import Image from 'next/image';
-import { formatPrice } from '@/lib/utils-format';
-import { useRouter } from 'next/navigation';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Edit, Trash2, Star } from "lucide-react";
+import { toast } from "sonner";
+import Image from "next/image";
+import { formatPrice } from "@/lib/utils-format";
+import { useRouter } from "next/navigation";
 
-type UnitType = 'PER_KG' | 'PER_UNIT';
+type UnitType = "PER_KG" | "PER_UNIT";
 
 interface Product {
   id: string;
@@ -32,15 +32,22 @@ interface Product {
   image: string | null; // Prisma: image
   stock: number;
   unitType: UnitType;
+
+  // ✅ IVA opcional por producto (si pisa categoría)
+  vatRate?: number | null;
+
   isOnSale: boolean;
   salePrice: number | null; // centavos
-  saleEndDate: Date | null;
+  saleEndDate: string | null; // ✅ JSON devuelve string, no Date
   isFeatured: boolean;
   isActive: boolean;
   category: {
     id: string;
     name: string;
     slug: string;
+
+    // ✅ IVA de categoría
+    vatRate?: number | null;
   };
 }
 
@@ -48,6 +55,9 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+
+  // ✅ opcional: si tu endpoint admin/categories lo devuelve
+  vatRate?: number | null;
 }
 
 interface ProductFormData {
@@ -59,27 +69,54 @@ interface ProductFormData {
   imageFile: File | null;
   stock: string;
   unitType: UnitType;
+
+  // ✅ IVA del producto (opcional). "" => usa categoría
+  vatRate: "" | "0.21" | "0.105";
+
   isOnSale: boolean;
   salePrice: string; // ARS decimal
-  saleEndDate: string; // yyyy-mm-dd
+  saleEndDate: string; // ✅ yyyy-mm-ddTHH:mm (datetime-local)
   isFeatured: boolean;
   isActive: boolean;
 }
 
 const emptyFormData: ProductFormData = {
-  name: '',
-  slug: '',
-  description: '',
-  price: '',
-  categoryId: '',
+  name: "",
+  slug: "",
+  description: "",
+  price: "",
+  categoryId: "",
   imageFile: null,
-  stock: '0',
-  unitType: 'PER_KG',
+  stock: "0",
+  unitType: "PER_KG",
+
+  vatRate: "",
+
   isOnSale: false,
-  salePrice: '',
-  saleEndDate: '',
+  salePrice: "",
+  saleEndDate: "",
   isFeatured: false,
   isActive: true,
+};
+
+// ✅ helper: convierte Date/ISO a "YYYY-MM-DDTHH:mm" (hora local)
+function toDatetimeLocalValue(value: string | Date) {
+  const d = typeof value === "string" ? new Date(value) : value;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+const formatVatLabel = (vatRate?: number | null) => {
+  if (vatRate === 0.105) return "10,5%";
+  if (vatRate === 0.21) return "21%";
+  return "—";
 };
 
 export default function ProductosAdmin() {
@@ -97,14 +134,14 @@ export default function ProductosAdmin() {
 
   // ---------- fetch helpers ----------
   const fetchProducts = async () => {
-    const res = await fetch('/api/admin/products', { cache: 'no-store' });
-    if (!res.ok) throw new Error('No se pudieron cargar productos');
+    const res = await fetch("/api/admin/products", { cache: "no-store" });
+    if (!res.ok) throw new Error("No se pudieron cargar productos");
     return res.json();
   };
 
   const fetchCategories = async () => {
-    const res = await fetch('/api/admin/categories', { cache: 'no-store' });
-    if (!res.ok) throw new Error('No se pudieron cargar categorías');
+    const res = await fetch("/api/admin/categories", { cache: "no-store" });
+    if (!res.ok) throw new Error("No se pudieron cargar categorías");
     return res.json();
   };
 
@@ -117,8 +154,8 @@ export default function ProductosAdmin() {
       setProducts(productsData);
       setCategories(categoriesData);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar datos');
+      console.error("Error fetching data:", error);
+      toast.error("Error al cargar datos");
     } finally {
       setLoading(false);
     }
@@ -126,9 +163,9 @@ export default function ProductosAdmin() {
 
   // ---------- navegación a crear categoría ----------
   const goCreateCategory = () => {
-    sessionStorage.setItem('reopenProductModal', '1');
+    sessionStorage.setItem("reopenProductModal", "1");
     setDialogOpen(false);
-    router.push('/admin/categorias');
+    router.push("/admin/categorias");
   };
 
   // ---------- efectos ----------
@@ -138,9 +175,9 @@ export default function ProductosAdmin() {
   }, []);
 
   useEffect(() => {
-    const flag = sessionStorage.getItem('reopenProductModal');
-    if (flag === '1') {
-      sessionStorage.removeItem('reopenProductModal');
+    const flag = sessionStorage.getItem("reopenProductModal");
+    if (flag === "1") {
+      sessionStorage.removeItem("reopenProductModal");
 
       (async () => {
         try {
@@ -162,7 +199,7 @@ export default function ProductosAdmin() {
   // liberar objectURL
   useEffect(() => {
     return () => {
-      if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
@@ -170,34 +207,48 @@ export default function ProductosAdmin() {
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   };
 
-  const unitLabelFor = (unitType: UnitType) => (unitType === 'PER_KG' ? 'kg' : 'unid.');
+  const unitLabelFor = (unitType: UnitType) =>
+    unitType === "PER_KG" ? "kg" : "unid.";
 
   const handleOpenDialog = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
+
+      // ✅ vatRate del producto como string para select
+      const vatRateStr: ProductFormData["vatRate"] =
+        product.vatRate === 0.21
+          ? "0.21"
+          : product.vatRate === 0.105
+          ? "0.105"
+          : "";
+
       setFormData({
         name: product.name,
         slug: product.slug,
-        description: product.description || '',
+        description: product.description || "",
         price: (product.price / 100).toString(),
         categoryId: product.categoryId,
         imageFile: null,
         stock: product.stock.toString(),
-        unitType: product.unitType, // ✅ respetar
+        unitType: product.unitType,
+
+        vatRate: vatRateStr,
+
         isOnSale: product.isOnSale,
-        salePrice: product.salePrice ? (product.salePrice / 100).toString() : '',
+        salePrice: product.salePrice ? (product.salePrice / 100).toString() : "",
         saleEndDate: product.saleEndDate
-          ? new Date(product.saleEndDate).toISOString().split('T')[0]
-          : '',
+          ? toDatetimeLocalValue(product.saleEndDate)
+          : "",
         isFeatured: product.isFeatured,
         isActive: product.isActive,
       });
+
       setPreviewUrl(product.image ?? null);
     } else {
       setEditingProduct(null);
@@ -217,7 +268,7 @@ export default function ProductosAdmin() {
   const onPickImage = (file: File | null) => {
     setFormData((p) => ({ ...p, imageFile: file }));
 
-    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
 
     if (file) {
       const url = URL.createObjectURL(file);
@@ -228,12 +279,25 @@ export default function ProductosAdmin() {
   };
 
   const stockStep = useMemo(() => {
-    return formData.unitType === 'PER_KG' ? '0.01' : '1';
+    return formData.unitType === "PER_KG" ? "0.01" : "1";
   }, [formData.unitType]);
 
   const stockLabel = useMemo(() => {
-    return formData.unitType === 'PER_KG' ? 'kg' : 'unidades';
+    return formData.unitType === "PER_KG" ? "kg" : "unidades";
   }, [formData.unitType]);
+
+  // ✅ muestra IVA de la categoría seleccionada (solo info)
+  const selectedCategoryVat = useMemo(() => {
+    const cat = categories.find((c) => c.id === formData.categoryId);
+    return cat?.vatRate ?? null;
+  }, [categories, formData.categoryId]);
+
+  const effectiveVatPreview = useMemo(() => {
+    // producto pisa categoría; si está vacío => usa categoría
+    if (formData.vatRate === "0.21") return 0.21;
+    if (formData.vatRate === "0.105") return 0.105;
+    return selectedCategoryVat ?? null;
+  }, [formData.vatRate, selectedCategoryVat]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,72 +305,75 @@ export default function ProductosAdmin() {
 
     try {
       const fd = new FormData();
-      fd.append('name', formData.name);
-      fd.append('slug', formData.slug);
-      fd.append('description', formData.description || '');
-      fd.append('price', formData.price || '0');
-      fd.append('categoryId', formData.categoryId);
-      fd.append('stock', formData.stock || '0');
+      fd.append("name", formData.name);
+      fd.append("slug", formData.slug);
+      fd.append("description", formData.description || "");
+      fd.append("price", formData.price || "0");
+      fd.append("categoryId", formData.categoryId);
+      fd.append("stock", formData.stock || "0");
 
       // ✅ unitType real
-      fd.append('unitType', formData.unitType);
+      fd.append("unitType", formData.unitType);
 
-      fd.append('isOnSale', String(formData.isOnSale));
-      fd.append('salePrice', formData.salePrice || '');
-      fd.append('saleEndDate', formData.saleEndDate || '');
-      fd.append('isFeatured', String(formData.isFeatured));
-      fd.append('isActive', String(formData.isActive));
+      // ✅ IVA por producto (opcional). "" => backend puede setear null
+      fd.append("vatRate", formData.vatRate);
+
+      fd.append("isOnSale", String(formData.isOnSale));
+      fd.append("salePrice", formData.salePrice || "");
+      fd.append("saleEndDate", formData.saleEndDate || "");
+      fd.append("isFeatured", String(formData.isFeatured));
+      fd.append("isActive", String(formData.isActive));
 
       if (formData.imageFile) {
-        fd.append('image', formData.imageFile); // backend espera "image"
+        fd.append("image", formData.imageFile);
       }
 
       let response: Response;
 
       if (editingProduct) {
         response = await fetch(`/api/admin/products/${editingProduct.id}`, {
-          method: 'PUT',
+          method: "PUT",
           body: fd,
         });
       } else {
-        response = await fetch('/api/admin/products', {
-          method: 'POST',
+        response = await fetch("/api/admin/products", {
+          method: "POST",
           body: fd,
         });
       }
 
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Error al guardar producto');
+      if (!response.ok) throw new Error(data?.error || "Error al guardar producto");
 
-      toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
+      toast.success(editingProduct ? "Producto actualizado" : "Producto creado");
       handleCloseDialog();
       await fetchData();
     } catch (error: any) {
-      console.error('Error saving product:', error);
-      toast.error(error?.message || 'Error al guardar producto');
+      console.error("Error saving product:", error);
+      toast.error(error?.message || "Error al guardar producto");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+    if (!confirm("¿Estás seguro de eliminar este producto?")) return;
 
     try {
       const response = await fetch(`/api/admin/products/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => null);
-        throw new Error(data?.error || 'Error al eliminar producto');
+        throw new Error(data?.error || "Error al eliminar producto");
       }
 
-      toast.success('Producto eliminado');
+      toast.success("Producto eliminado");
       await fetchData();
     } catch (error) {
-      console.error('Error deleting product:', error);
-      toast.error('Error al eliminar producto');
+      console.error("Error deleting product:", error);
+      toast.error("Error al eliminar producto");
     }
   };
 
@@ -338,7 +405,7 @@ export default function ProductosAdmin() {
           <DialogContent className="bg-zinc-900 text-white border-zinc-800 max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+                {editingProduct ? "Editar Producto" : "Nuevo Producto"}
               </DialogTitle>
             </DialogHeader>
 
@@ -406,9 +473,7 @@ export default function ProductosAdmin() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="stock">
-                    Stock ({stockLabel}) *
-                  </Label>
+                  <Label htmlFor="stock">Stock ({stockLabel}) *</Label>
                   <Input
                     id="stock"
                     type="number"
@@ -456,6 +521,13 @@ export default function ProductosAdmin() {
                       </option>
                     ))}
                   </select>
+
+                  <p className="text-xs text-zinc-400">
+                    IVA de categoría:{" "}
+                    <span className="text-zinc-200">
+                      {formatVatLabel(selectedCategoryVat)}
+                    </span>
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -464,12 +536,13 @@ export default function ProductosAdmin() {
                     id="unitType"
                     className="w-full h-10 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-white"
                     value={formData.unitType}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const next = e.target.value as UnitType;
                       setFormData((p) => ({
                         ...p,
-                        unitType: e.target.value as UnitType,
-                      }))
-                    }
+                        unitType: next,
+                      }));
+                    }}
                     required
                   >
                     <option value="PER_KG">Por kilo (kg)</option>
@@ -480,6 +553,34 @@ export default function ProductosAdmin() {
                     En minimercado suele ser “por unidad”. En carnicería/cortes “por kilo”.
                   </p>
                 </div>
+              </div>
+
+              {/* ✅ IVA por producto (opcional) */}
+              <div className="space-y-2">
+                <Label htmlFor="vatRate">IVA del producto (opcional)</Label>
+                <select
+                  id="vatRate"
+                  className="w-full h-10 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-white"
+                  value={formData.vatRate}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      vatRate: e.target.value as ProductFormData["vatRate"],
+                    }))
+                  }
+                >
+                  <option value="">Usar IVA de la categoría</option>
+                  <option value="0.105">10,5%</option>
+                  <option value="0.21">21%</option>
+                </select>
+
+                <p className="text-xs text-zinc-400">
+                  IVA efectivo (preview):{" "}
+                  <span className="text-zinc-200">
+                    {formatVatLabel(effectiveVatPreview)}
+                  </span>
+                  {formData.vatRate ? " (pisado por producto)" : " (desde categoría)"}
+                </p>
               </div>
 
               {/* IMAGEN */}
@@ -496,12 +597,17 @@ export default function ProductosAdmin() {
                 {previewUrl ? (
                   <div className="mt-3">
                     <div className="relative w-full h-44 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
-                      <Image src={previewUrl} alt="Preview" fill className="object-cover" />
+                      <Image
+                        src={previewUrl}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
                     </div>
                     <p className="text-xs text-zinc-400 mt-2">
                       {formData.imageFile
                         ? `Archivo seleccionado: ${formData.imageFile.name}`
-                        : 'Imagen actual del producto'}
+                        : "Imagen actual del producto"}
                     </p>
                   </div>
                 ) : (
@@ -540,10 +646,10 @@ export default function ProductosAdmin() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="saleEndDate">Fecha de Finalización</Label>
+                      <Label htmlFor="saleEndDate">Fecha y Hora de Finalización</Label>
                       <Input
                         id="saleEndDate"
-                        type="date"
+                        type="datetime-local"
                         value={formData.saleEndDate}
                         onChange={(e) =>
                           setFormData((p) => ({ ...p, saleEndDate: e.target.value }))
@@ -592,7 +698,7 @@ export default function ProductosAdmin() {
                   className="flex-1 bg-orange-500 hover:bg-orange-600"
                   disabled={submitting}
                 >
-                  {submitting ? 'Guardando...' : editingProduct ? 'Actualizar' : 'Crear'}
+                  {submitting ? "Guardando..." : editingProduct ? "Actualizar" : "Crear"}
                 </Button>
               </div>
             </form>
@@ -610,100 +716,121 @@ export default function ProductosAdmin() {
                 <th className="text-left p-4 text-zinc-400 font-medium">Categoría</th>
                 <th className="text-left p-4 text-zinc-400 font-medium">Precio</th>
                 <th className="text-left p-4 text-zinc-400 font-medium">Stock</th>
+                <th className="text-left p-4 text-zinc-400 font-medium">IVA</th>
                 <th className="text-left p-4 text-zinc-400 font-medium">Estado</th>
                 <th className="text-left p-4 text-zinc-400 font-medium">Acciones</th>
               </tr>
             </thead>
 
             <tbody>
-              {products.map((product) => (
-                <tr
-                  key={product.id}
-                  className="border-b border-zinc-800 hover:bg-zinc-800/50"
-                >
-                  <td className="p-4">
-                    <div className="relative w-16 h-16 bg-zinc-800 rounded-lg overflow-hidden">
-                      {product.image ? (
-                        <Image src={product.image} alt={product.name} fill className="object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                          Sin imagen
-                        </div>
-                      )}
-                    </div>
-                  </td>
+              {products.map((product) => {
+                const effectiveVat = product.vatRate ?? product.category?.vatRate ?? null;
+                const vatText = formatVatLabel(effectiveVat);
+                const isOverride = product.vatRate != null;
 
-                  <td className="p-4">
-                    <div>
-                      <p className="font-medium text-white flex items-center gap-2">
-                        {product.name}
-                        {product.isFeatured && (
-                          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                return (
+                  <tr
+                    key={product.id}
+                    className="border-b border-zinc-800 hover:bg-zinc-800/50"
+                  >
+                    <td className="p-4">
+                      <div className="relative w-16 h-16 bg-zinc-800 rounded-lg overflow-hidden">
+                        {product.image ? (
+                          <Image
+                            src={product.image}
+                            alt={product.name}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                            Sin imagen
+                          </div>
                         )}
-                      </p>
-                      <p className="text-sm text-zinc-400">{product.slug}</p>
-                    </div>
-                  </td>
+                      </div>
+                    </td>
 
-                  <td className="p-4 text-zinc-300">{product.category.name}</td>
-
-                  <td className="p-4">
-                    <div>
-                      <p className="text-white font-medium">{formatPrice(product.price)}</p>
-                      {product.isOnSale && product.salePrice && (
-                        <p className="text-sm text-orange-500">
-                          Oferta: {formatPrice(product.salePrice)}
+                    <td className="p-4">
+                      <div>
+                        <p className="font-medium text-white flex items-center gap-2">
+                          {product.name}
+                          {product.isFeatured && (
+                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                          )}
                         </p>
-                      )}
-                    </div>
-                  </td>
+                        <p className="text-sm text-zinc-400">{product.slug}</p>
+                      </div>
+                    </td>
 
-                  <td className="p-4 text-zinc-300">
-                    {product.stock} {unitLabelFor(product.unitType)}
-                  </td>
+                    <td className="p-4 text-zinc-300">{product.category.name}</td>
 
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      {product.isActive ? (
-                        <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-500">
-                          Activo
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 text-xs rounded-full bg-zinc-700 text-zinc-400">
-                          Inactivo
-                        </span>
-                      )}
-                      {product.isOnSale && (
-                        <span className="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-500">
-                          Oferta
-                        </span>
-                      )}
-                    </div>
-                  </td>
+                    <td className="p-4">
+                      <div>
+                        <p className="text-white font-medium">{formatPrice(product.price)}</p>
+                        {product.isOnSale && product.salePrice && (
+                          <p className="text-sm text-orange-500">
+                            Oferta: {formatPrice(product.salePrice)}
+                          </p>
+                        )}
+                      </div>
+                    </td>
 
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleOpenDialog(product)}
-                        className="text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
+                    <td className="p-4 text-zinc-300">
+                      {product.stock} {unitLabelFor(product.unitType)}
+                    </td>
 
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(product.id)}
-                        className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="p-4">
+                      <div className="text-zinc-200">
+                        {vatText}
+                        {isOverride && (
+                          <span className="ml-2 text-xs text-orange-400">(pisado)</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        {product.isActive ? (
+                          <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-500">
+                            Activo
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs rounded-full bg-zinc-700 text-zinc-400">
+                            Inactivo
+                          </span>
+                        )}
+                        {product.isOnSale && (
+                          <span className="px-2 py-1 text-xs rounded-full bg-orange-500/20 text-orange-500">
+                            Oferta
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenDialog(product)}
+                          className="text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(product.id)}
+                          className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 

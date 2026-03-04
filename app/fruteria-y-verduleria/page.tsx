@@ -1,45 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card";
 import { Loader2, Leaf } from "lucide-react";
 import { motion } from "framer-motion";
-import type { Product, Category } from "@prisma/client";
 
-type ProductWithCategory = Product & { category: Category };
+// DTOs (tipos del JSON que viene desde /api/products)
+type CategoryDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId?: string | null;
+};
+
+type ProductDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: string | null;
+
+  unitType: "PER_KG" | "PER_UNIT";
+  price: number;
+  stock: number;
+
+  isActive: boolean;
+  isFeatured: boolean;
+  isOnSale: boolean;
+  salePrice?: number | null;
+  saleEndDate?: string | null;
+  discountPercent?: number | null;
+
+  categoryId: string;
+  category: CategoryDTO;
+};
 
 export default function FruteriaYVerduleriaPage() {
-  const [products, setProducts] = useState<ProductWithCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [all, setAll] = useState<ProductDTO[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let alive = true;
 
-    (async () => {
-      setLoading(true);
+    const loadProducts = async () => {
       try {
-        // ✅ SOLO frutería y verdulería (raíz + hijas) según tu /api/products
-        const res = await fetch(
-          "/api/products?section=fruteria-y-verduleria",
-          { cache: "no-store" }
-        );
+        setLoading(true);
 
-        const data = res.ok ? ((await res.json()) as ProductWithCategory[]) : [];
+        const res = await fetch("/api/products?section=fruteria-y-verduleria");
+        if (!res.ok) throw new Error("Fetch failed");
+
+        const data = (await res.json()) as unknown;
+
         if (!alive) return;
-
-        setProducts(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error fetching fruteria products:", error);
-        if (alive) setProducts([]);
+        setAll(Array.isArray(data) ? (data as ProductDTO[]) : []);
+      } catch (e) {
+        console.error("Error fetching fruteria-y-verduleria products:", e);
+        if (alive) setAll([]);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
+
+    loadProducts();
 
     return () => {
       alive = false;
     };
   }, []);
+
+  // Agrupar productos por categoría
+  const groups = useMemo(() => {
+    const map = new Map<string, { label: string; items: ProductDTO[] }>();
+
+    for (const p of all) {
+      const slug = p.category?.slug ?? "fruteria-y-verduleria";
+      const label = p.category?.name ?? "Frutería y Verdulería";
+
+      const group = map.get(slug) ?? { label, items: [] };
+      group.items.push(p);
+      map.set(slug, group);
+    }
+
+    return Array.from(map.entries())
+      .map(([slug, v]) => ({
+        slug,
+        label: v.label,
+        items: v.items,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [all]);
 
   if (loading) {
     return (
@@ -54,25 +103,17 @@ export default function FruteriaYVerduleriaPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-12 text-center"
-      >
-        <div className="inline-flex items-center gap-2 bg-green-600/10 border border-green-600/20 rounded-full px-6 py-2 mb-4">
-          <Leaf className="h-5 w-5 text-green-600" />
-          <span className="text-green-600 font-semibold">Fresco del día</span>
+      <div className="mb-8 text-center">
+        <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-6 py-2 mb-4">
+          <Leaf className="h-5 w-5 text-primary" />
+          <span className="text-primary font-semibold">Frutería y Verdulería</span>
         </div>
 
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          Frutería y verdulería
-        </h1>
-
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">Frutería y Verdulería</h1>
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Frutas y verduras seleccionadas, frescas y listas para tu mesa.
+          Frutas y verduras frescas todos los días.
         </p>
-      </motion.div>
+      </div>
 
       {/* Beneficios */}
       <motion.div
@@ -82,62 +123,50 @@ export default function FruteriaYVerduleriaPage() {
         className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12"
       >
         <div className="bg-muted/50 rounded-lg p-6 text-center">
-          <div className="text-3xl mb-2">🍎</div>
-          <h3 className="font-semibold mb-2">Frutas de temporada</h3>
-          <p className="text-sm text-muted-foreground">
-            Variedad según estación y disponibilidad
-          </p>
-        </div>
-
-        <div className="bg-muted/50 rounded-lg p-6 text-center">
           <div className="text-3xl mb-2">🥬</div>
-          <h3 className="font-semibold mb-2">Verduras frescas</h3>
+          <h3 className="font-semibold mb-2">Frescura</h3>
           <p className="text-sm text-muted-foreground">
-            Selección para ensaladas y cocina diaria
+            Selección diaria de temporada
           </p>
         </div>
 
         <div className="bg-muted/50 rounded-lg p-6 text-center">
-          <div className="text-3xl mb-2">🚚</div>
-          <h3 className="font-semibold mb-2">Listo para llevar</h3>
+          <div className="text-3xl mb-2">🍎</div>
+          <h3 className="font-semibold mb-2">Calidad</h3>
           <p className="text-sm text-muted-foreground">
-            Pedí online y retirás en nuestro local 
+            Productos cuidados y bien elegidos
+          </p>
+        </div>
+
+        <div className="bg-muted/50 rounded-lg p-6 text-center">
+          <div className="text-3xl mb-2">🌱</div>
+          <h3 className="font-semibold mb-2">Variedad</h3>
+          <p className="text-sm text-muted-foreground">
+            Lo clásico y lo que está de moda
           </p>
         </div>
       </motion.div>
 
-      {/* Productos */}
-      {products.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
-        >
-          <h2 className="text-2xl font-bold mb-6">Productos frescos</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.05 * index }}
-              >
-                <ProductCard product={product} />
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      ) : (
+      {groups.length === 0 ? (
         <div className="text-center py-20">
-          <Leaf className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-xl font-semibold mb-2">
-            No hay productos disponibles
-          </h3>
-          <p className="text-muted-foreground">
-            Volvé pronto para ver frutas y verduras frescas
+          <p className="text-muted-foreground text-lg">
+            No hay productos cargados en Frutería y Verdulería
           </p>
         </div>
+      ) : (
+        groups.map((group) => (
+          <section key={group.slug} className="mb-12">
+            <h2 className="text-2xl font-semibold mb-6">
+              {group.label} ({group.items.length})
+            </h2>
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+              {group.items.map((product) => (
+                <ProductCard key={product.id} product={product as any} />
+              ))}
+            </div>
+          </section>
+        ))
       )}
     </div>
   );

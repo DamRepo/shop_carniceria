@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HeroSlider } from "@/components/hero-slider";
 import { CountdownTimer } from "@/components/countdown-timer";
+import { ProductRowSlider } from "@/components/product-row-slider";
 
 import {
   ShoppingCart,
@@ -24,12 +25,21 @@ import { useInView } from "react-intersection-observer";
 import { toast } from "sonner";
 
 import { useCartStore } from "@/lib/store";
-import { formatPrice } from "@/lib/utils-format";
+import { formatPrice, getVatRate, netFromGrossCents } from "@/lib/utils-format";
 import type { Product } from "@/lib/types";
 
 type ProductWithSale = Product & {
   saleEndDate?: string | Date | null;
   isOnSale?: boolean | null;
+
+  // Campos típicos de oferta (opcionales para no romper)
+  salePrice?: number | null;
+  originalPrice?: number | null;
+  discountPercent?: number | null;
+
+  // ✅ para IVA (viene por API con include category)
+  vatRate?: number | null;
+  category?: { vatRate?: number | null } | null;
 };
 
 const features = [
@@ -51,12 +61,66 @@ const features = [
   },
 ];
 
+function getPriceInfo(p: ProductWithSale | Product) {
+  const anyP = p as Partial<ProductWithSale> & { price?: number };
+
+  const unitLabel = (anyP.unitType as any) === "PER_KG" ? "kg" : "unidad";
+
+  const price = typeof anyP.price === "number" ? anyP.price : null;
+
+  const originalPrice =
+    typeof anyP.originalPrice === "number" ? anyP.originalPrice : price;
+
+  const salePrice = typeof anyP.salePrice === "number" ? anyP.salePrice : null;
+
+  const discountPercent =
+    typeof anyP.discountPercent === "number" ? anyP.discountPercent : null;
+
+  // Si hay % de descuento y tenemos originalPrice, calculamos salePrice.
+  const computedSalePrice =
+    salePrice === null && discountPercent !== null && originalPrice !== null
+      ? Math.round(originalPrice * (1 - discountPercent / 100))
+      : salePrice;
+
+  const isOnSaleFlag = (anyP.isOnSale ?? false) === true;
+
+  const hasSale =
+    isOnSaleFlag &&
+    originalPrice !== null &&
+    computedSalePrice !== null &&
+    computedSalePrice < originalPrice;
+
+  return {
+    unitLabel,
+    hasSale,
+    originalPrice,
+    salePrice: computedSalePrice,
+    normalPrice: price,
+  };
+}
+
+/**
+ * Precio que debe ir al carrito:
+ * - si está en oferta y hay salePrice válido => salePrice
+ * - si no => price
+ */
+function getEffectivePrice(p: ProductWithSale | Product): number {
+  const info = getPriceInfo(p);
+  if (info.hasSale && typeof info.salePrice === "number") return info.salePrice;
+  if (typeof info.normalPrice === "number") return info.normalPrice;
+
+  // Fallback ultra defensivo: si por algún motivo no hay price.
+  return 0;
+}
+
 export default function HomePage() {
   const [ref1, inView1] = useInView({ triggerOnce: true, threshold: 0.1 });
   const [ref2, inView2] = useInView({ triggerOnce: true, threshold: 0.1 });
   const [ref3, inView3] = useInView({ triggerOnce: true, threshold: 0.1 });
 
-  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<ProductWithSale[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
 
   const [offers, setOffers] = useState<ProductWithSale[]>([]);
@@ -96,20 +160,30 @@ export default function HomePage() {
     fetchOffers();
   }, []);
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = (product: ProductWithSale) => {
     if (product.stock <= 0) {
       toast.error("Producto sin stock");
       return;
     }
 
+    const priceToCart = getEffectivePrice(product);
+
+    if (!priceToCart || priceToCart <= 0) {
+      toast.error("No se pudo determinar el precio del producto");
+      return;
+    }
+
+    const vatRate = getVatRate(product);
+
     addToCart({
       id: product.id,
       name: product.name,
       slug: product.slug,
-      price: product.price,
-      quantity: product.unitType === "PER_KG" ? 0.5 : 1,
+      price: priceToCart,
+      quantity: product.unitType === "PER_KG" ? 1 : 1, // ✅ arranca en 1kg / 1 unidad
       unitType: product.unitType,
       image: product.image || undefined,
+      vatRate, // ✅
     });
 
     toast.success(`${product.name} agregado al carrito`);
@@ -136,8 +210,9 @@ export default function HomePage() {
             </h1>
 
             <p className="max-w-2xl text-lg text-zinc-300">
-              La mejor selección de carnes rojas, pollo, embutidos caseros y productos congelados.
-              Calidad garantizada y precios que cuidan tu bolsillo.
+              La mejor selección de carnes rojas, pollo, embutidos caseros y
+              productos congelados. Calidad garantizada y precios que cuidan tu
+              bolsillo.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
@@ -151,7 +226,7 @@ export default function HomePage() {
                 </Button>
               </Link>
 
-              <Link href="/cortes">
+              <Link href="/carniceria">
                 <Button
                   size="lg"
                   variant="outline"
@@ -184,7 +259,8 @@ export default function HomePage() {
             </div>
 
             <p className="text-muted-foreground text-lg">
-              Nuestros mejores cortes y productos seleccionados especialmente para vos
+              Nuestros mejores cortes y productos seleccionados especialmente
+              para vos
             </p>
           </motion.div>
 
@@ -201,87 +277,121 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredProducts.map((product, index) => (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={
-                    inView3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
-                  }
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className="bg-card rounded-lg border overflow-hidden hover:shadow-lg transition-shadow group"
-                >
-                  <div className="relative aspect-square bg-muted">
-                    {product.image ? (
-                      <Image
-                        src={product.image}
-                        alt={product.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Beef className="h-16 w-16 text-muted-foreground" />
-                      </div>
-                    )}
+          ) : featuredProducts.length > 0 ? (
+            <ProductRowSlider
+              items={featuredProducts}
+              renderItem={(product, index) => {
+                const priceInfo = getPriceInfo(product);
 
-                    <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground">
-                      <Star className="h-3 w-3 mr-1" fill="currentColor" />
-                      Destacado
-                    </Badge>
-                  </div>
+                const effectivePrice = getEffectivePrice(product);
+                const vatRate = getVatRate(product);
+                const netPrice = netFromGrossCents(effectivePrice, vatRate);
 
-                  <div className="p-4 space-y-3">
-                    <Link href={`/productos/${product.slug}`}>
-                      <h3 className="font-semibold text-lg hover:text-primary transition-colors line-clamp-2">
-                        {product.name}
-                      </h3>
-                    </Link>
+                return (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={
+                      inView3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
+                    }
+                    transition={{ duration: 0.6, delay: index * 0.05 }}
+                    className="bg-card rounded-lg border overflow-hidden hover:shadow-lg transition-shadow group h-full"
+                  >
+                    <div className="relative aspect-square bg-muted">
+                      {product.image ? (
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Beef className="h-16 w-16 text-muted-foreground" />
+                        </div>
+                      )}
 
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-primary">
-                        {formatPrice(product.price)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        / {product.unitType === "PER_KG" ? "kg" : "unidad"}
-                      </span>
+                      <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground">
+                        <Star className="h-3 w-3 mr-1" fill="currentColor" />
+                        Destacado
+                      </Badge>
+
+                      {priceInfo.hasSale ? (
+                        <Badge className="absolute top-2 left-2 bg-red-600 text-white">
+                          <Tag className="h-3 w-3 mr-1" />
+                          Oferta
+                        </Badge>
+                      ) : null}
                     </div>
 
-                    {product.stock > 0 && product.stock < 10 && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-orange-500 text-orange-500"
-                      >
-                        ¡Últimas unidades!
-                      </Badge>
-                    )}
-                    {product.stock === 0 && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-red-500 text-red-500"
-                      >
-                        Sin stock
-                      </Badge>
-                    )}
+                    <div className="p-4 space-y-3">
+                      <Link href={`/productos/${product.slug}`}>
+                        <h3 className="font-semibold text-lg hover:text-primary transition-colors line-clamp-2">
+                          {product.name}
+                        </h3>
+                      </Link>
 
-                    <Button
-                      onClick={() => handleAddToCart(product)}
-                      disabled={product.stock === 0}
-                      className="w-full"
-                      size="sm"
-                    >
-                      <ShoppingCart className="mr-2 h-4 w-4" />
-                      Agregar
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                      <div className="flex items-baseline gap-2">
+                        {priceInfo.hasSale &&
+                          typeof priceInfo.salePrice === "number" ? (
+                          <>
+                            <span className="text-sm text-muted-foreground line-through">
+                              {formatPrice(
+                                priceInfo.originalPrice ?? product.price
+                              )}
+                            </span>
+                            <span className="text-2xl font-bold text-primary">
+                              {formatPrice(priceInfo.salePrice)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-2xl font-bold text-primary">
+                            {formatPrice(product.price)}
+                          </span>
+                        )}
 
-          {!loading && featuredProducts.length === 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          / {priceInfo.unitLabel}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground">
+                        precio sin impuestos nacionales: {formatPrice(netPrice)}
+                      </p>
+
+                      {product.stock > 0 && product.stock < 10 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-orange-500 text-orange-500"
+                        >
+                          ¡Últimas unidades!
+                        </Badge>
+                      )}
+                      {product.stock === 0 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-red-500 text-red-500"
+                        >
+                          Sin stock
+                        </Badge>
+                      )}
+
+                      <Button
+                        onClick={() => handleAddToCart(product)}
+                        disabled={product.stock === 0}
+                        className="w-full"
+                        size="sm"
+                        type="button"
+                      >
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        Agregar
+                      </Button>
+                    </div>
+                  </motion.div>
+                );
+              }}
+            />
+          ) : (
             <div className="text-center text-muted-foreground py-12">
               <p>No hay productos destacados en este momento</p>
             </div>
@@ -289,150 +399,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* OFERTAS (✅ corregido: container + sin div extra) */}
-      <section className="w-full py-16 bg-background">
-        <div className="container mx-auto max-w-7xl px-4">
-          <div className="relative mb-8">
-            {/* Botón a la derecha (desktop) */}
-            <Link
-              href="/ofertas"
-              className="absolute right-0 top-1/2 -translate-y-1/2 hidden sm:block"
-            >
-              <Button
-                variant="outline"
-                className="border-zinc-700 hover:bg-zinc-900"
-              >
-                Ver todas
-              </Button>
-            </Link>
-
-            {/* Título centrado */}
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 bg-red-600/10 border border-red-600/20 rounded-full px-4 py-2 mb-3 mx-auto">
-                <Tag className="h-4 w-4 text-red-500" />
-                <span className="text-red-500 font-semibold">
-                  Ofertas por tiempo limitado
-                </span>
-              </div>
-
-              <h2 className="text-3xl md:text-4xl font-bold">
-                🔥 Ofertas de la semana
-              </h2>
-
-              <p className="text-center text-muted-foreground mt-2">
-                Aprovechá precios especiales antes de que se terminen.
-              </p>
-
-              {/* Botón abajo (mobile) */}
-              <div className="mt-4 sm:hidden">
-                <Link href="/ofertas">
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 hover:bg-zinc-900"
-                  >
-                    Ver todas
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {offersLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-card rounded-lg border p-4 animate-pulse"
-                >
-                  <div className="aspect-square bg-muted rounded-lg mb-4" />
-                  <div className="h-6 bg-muted rounded mb-2" />
-                  <div className="h-4 bg-muted rounded w-2/3" />
-                </div>
-              ))}
-            </div>
-          ) : offers.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {offers.map((product, index) => (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.08 }}
-                  className="bg-card rounded-lg border overflow-hidden hover:shadow-lg transition-shadow group"
-                >
-                  <div className="relative aspect-square bg-muted">
-                    {product.image ? (
-                      <Image
-                        src={product.image}
-                        alt={product.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Beef className="h-16 w-16 text-muted-foreground" />
-                      </div>
-                    )}
-
-                    <Badge className="absolute top-2 right-2 bg-red-600 text-white">
-                      <Tag className="h-3 w-3 mr-1" />
-                      Oferta
-                    </Badge>
-
-                    {product.saleEndDate ? (
-                      <div className="absolute top-2 left-2 z-10 w-[70%] max-w-[220px]">
-                        <CountdownTimer endDate={product.saleEndDate} />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    <Link href={`/productos/${product.slug}`}>
-                      <h3 className="font-semibold text-lg hover:text-primary transition-colors line-clamp-2">
-                        {product.name}
-                      </h3>
-                    </Link>
-
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-primary">
-                        {formatPrice(product.price)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        / {product.unitType === "PER_KG" ? "kg" : "unidad"}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        onClick={() => handleAddToCart(product)}
-                        disabled={product.stock === 0}
-                        size="sm"
-                        className="w-full"
-                      >
-                        <ShoppingCart className="mr-2 h-4 w-4" />
-                        Agregar
-                      </Button>
-
-                      <Link href={`/productos/${product.slug}`}>
-                        <Button size="sm" variant="secondary" className="w-full">
-                          Ver
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-muted-foreground py-10 border rounded-xl bg-muted/20">
-              <p className="font-medium">Hoy no hay ofertas activas.</p>
-              <p className="text-sm">Volvé más tarde: las promos cambian seguido.</p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Features */}
+      {/* ✅ FEATURES ENCIMA DE OFERTAS */}
       <section ref={ref1} className="w-full py-16 bg-background">
         <div className="container mx-auto max-w-7xl px-4">
           <motion.div
@@ -456,12 +423,16 @@ export default function HomePage() {
                 <motion.div
                   key={feature.title}
                   initial={{ opacity: 0, y: 20 }}
-                  animate={inView1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+                  animate={
+                    inView1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
+                  }
                   transition={{ duration: 0.6, delay: index * 0.1 }}
                   className="flex flex-col items-center text-center p-6 rounded-lg bg-card border shadow-sm hover:shadow-md transition-shadow"
                 >
                   <Icon className="h-12 w-12 text-primary mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
+                  <h3 className="text-xl font-semibold mb-2">
+                    {feature.title}
+                  </h3>
                   <p className="text-muted-foreground">{feature.description}</p>
                 </motion.div>
               );
@@ -470,12 +441,206 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* OFERTAS */}
+      {/* OFERTAS */}
+      <section className="w-full py-16 bg-background">
+        <div className="container mx-auto max-w-7xl px-4">
+
+          {/* HEADER CENTRADO */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-red-600/10 border border-red-600/20 rounded-full px-4 py-2 mb-4">
+              <Tag className="h-4 w-4 text-red-500" />
+              <span className="text-red-500 font-semibold">
+                Ofertas por tiempo limitado
+              </span>
+            </div>
+
+            <h2 className="text-3xl md:text-4xl font-bold">
+              🔥 Ofertas de la semana
+            </h2>
+
+            <p className="text-muted-foreground mt-2">
+              Aprovechá precios especiales antes de que se terminen.
+            </p>
+
+            <div className="mt-4">
+              <Link href="/ofertas">
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 hover:bg-zinc-900"
+                  type="button"
+                >
+                  Ver todas
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {offersLoading ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
+                  <div className="aspect-square bg-muted rounded-lg mb-4" />
+                  <div className="h-6 bg-muted rounded mb-2" />
+                  <div className="h-4 bg-muted rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          ) : offers.length > 0 ? (
+            <ProductRowSlider
+              items={offers}
+              renderItem={(product, index) => {
+                const priceInfo = getPriceInfo(product);
+
+                const effectivePrice = getEffectivePrice(product);
+                const vatRate = getVatRate(product);
+                const netPrice = netFromGrossCents(effectivePrice, vatRate);
+
+                const discount =
+                  priceInfo.hasSale &&
+                    typeof priceInfo.originalPrice === "number" &&
+                    typeof priceInfo.salePrice === "number" &&
+                    priceInfo.salePrice < priceInfo.originalPrice
+                    ? Math.round(
+                      ((priceInfo.originalPrice - priceInfo.salePrice) /
+                        priceInfo.originalPrice) *
+                      100
+                    )
+                    : null;
+
+                return (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.05 }}
+                    className="bg-card rounded-lg border overflow-hidden hover:shadow-lg transition-shadow group h-full"
+                  >
+                    <div className="relative aspect-square bg-muted">
+                      {product.image ? (
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Beef className="h-16 w-16 text-muted-foreground" />
+                        </div>
+                      )}
+
+                      {/* OFERTA*/}
+                      <Badge className="absolute top-2 right-2 z-20 bg-red-600 text-white">
+                        <Tag className="h-3 w-3 mr-1" />
+                        Oferta
+                      </Badge>
+
+                      {/* % DESCUENTO */}
+                      {discount !== null && (
+                        <Badge className="absolute top-10 right-2 z-20 bg-black text-white font-bold">
+                          -{discount}%
+                        </Badge>
+                      )}
+
+                      {/* COUNTDOWN */}
+                      {product.saleEndDate ? (
+                        <div className="absolute top-2 left-2 z-10 w-[70%] max-w-[220px]">
+                          <CountdownTimer
+                            endDate={
+                              product.saleEndDate instanceof Date
+                                ? product.saleEndDate.toISOString()
+                                : String(product.saleEndDate)
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      <Link href={`/productos/${product.slug}`}>
+                        <h3 className="font-semibold text-lg hover:text-primary transition-colors line-clamp-2">
+                          {product.name}
+                        </h3>
+                      </Link>
+
+                      <div className="flex items-baseline gap-2">
+                        {priceInfo.hasSale &&
+                          typeof priceInfo.salePrice === "number" ? (
+                          <>
+                            <span className="text-sm text-muted-foreground line-through">
+                              {formatPrice(
+                                priceInfo.originalPrice ?? product.price
+                              )}
+                            </span>
+                            <span className="text-2xl font-bold text-primary">
+                              {formatPrice(priceInfo.salePrice)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-2xl font-bold text-primary">
+                            {formatPrice(product.price)}
+                          </span>
+                        )}
+
+                        <span className="text-sm text-muted-foreground">
+                          / {priceInfo.unitLabel}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground">
+                        precio sin impuestos nacionales: {formatPrice(netPrice)}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          onClick={() => handleAddToCart(product)}
+                          disabled={product.stock === 0}
+                          size="sm"
+                          className="w-full"
+                          type="button"
+                        >
+                          <ShoppingCart className="mr-2 h-4 w-4" />
+                          Agregar
+                        </Button>
+
+                        <Link href={`/productos/${product.slug}`}>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="w-full"
+                            type="button"
+                          >
+                            Ver
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }}
+            />
+          ) : (
+            <div className="text-center text-muted-foreground py-10 border rounded-xl bg-muted/20">
+              <p className="font-medium">Hoy no hay ofertas activas.</p>
+              <p className="text-sm">
+                Volvé más tarde: las promos cambian seguido.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* CTA */}
       <section ref={ref2} className="w-full py-16 bg-muted/50">
         <div className="container mx-auto max-w-7xl px-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
-            animate={inView2 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
+            animate={
+              inView2
+                ? { opacity: 1, scale: 1 }
+                : { opacity: 0, scale: 0.95 }
+            }
             transition={{ duration: 0.6 }}
             className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-2xl p-8 md:p-12 text-center border"
           >
@@ -483,7 +648,8 @@ export default function HomePage() {
               Pedí ahora y retirá en el día
             </h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Hacé tu pedido online y retiralo en nuestro local en cualquier momento. 
+              Hacé tu pedido online y retiralo en nuestro local en cualquier
+              momento.
             </p>
             <Link href="/productos">
               <Button size="lg" variant="default" className="text-lg px-8">

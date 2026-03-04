@@ -7,7 +7,7 @@ export default function Hero() {
         <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
           <div className="relative h-[240px] sm:h-[320px] lg:h-[380px]">
             <Image
-              src="/inicio.jpeg"
+              src="/carniceria-frente.jpeg"
               alt="Carnicería El Negro"
               fill
               className="object-cover"

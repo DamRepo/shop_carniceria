@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import bcrypt from 'bcryptjs';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { sendWelcomeEmail } from "@/lib/mail/actions";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,21 +11,18 @@ export async function POST(request: NextRequest) {
     // Validar datos
     if (!email || !password || !name) {
       return NextResponse.json(
-        { error: 'Todos los campos son requeridos' },
+        { error: "Todos los campos son requeridos" },
         { status: 400 }
       );
     }
 
     // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'El usuario ya existe' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "El usuario ya existe" }, { status: 400 });
     }
 
     // Hash de la contraseña
@@ -37,27 +35,30 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name,
         phone: phone || null,
-        receiveOffers: receiveOffers || false,
-        role: 'CUSTOMER' // Por defecto es cliente
+        receiveOffers: receiveOffers ?? false,
+        role: "CUSTOMER",
       },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true
-      }
+        role: true,
+      },
     });
 
+    // Email bienvenida (no debe romper el registro si falla)
+    try {
+      await sendWelcomeEmail({ to: user.email, name: user.name ?? undefined });
+    } catch (err) {
+      console.error("Error enviando email de bienvenida:", err);
+    }
+
     return NextResponse.json(
-      { message: 'Usuario creado exitosamente', user },
+      { message: "Usuario creado exitosamente", user },
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error en registro:', error);
-    return NextResponse.json(
-      { error: 'Error al crear usuario' },
-      { status: 500 }
-    );
+    console.error("Error en registro:", error);
+    return NextResponse.json({ error: "Error al crear usuario" }, { status: 500 });
   }
 }
-

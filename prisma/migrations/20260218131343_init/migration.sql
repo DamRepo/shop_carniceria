@@ -10,6 +10,15 @@ CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'CONFIRMED', 'PREPARING', 'READY',
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('CUSTOMER', 'ADMIN', 'EMPLOYEE');
 
+-- CreateEnum
+CREATE TYPE "PaymentMethod" AS ENUM ('MERCADO_PAGO', 'CASH');
+
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PENDING_LOCAL', 'PAID', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "CheckoutSessionStatus" AS ENUM ('WAITING_MP', 'PENDING', 'APPROVED', 'FAILED');
+
 -- CreateTable
 CREATE TABLE "Category" (
     "id" TEXT NOT NULL,
@@ -18,6 +27,8 @@ CREATE TABLE "Category" (
     "description" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "parentId" TEXT,
+    "imageUrl" TEXT,
 
     CONSTRAINT "Category_pkey" PRIMARY KEY ("id")
 );
@@ -46,14 +57,35 @@ CREATE TABLE "Product" (
 );
 
 -- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "name" TEXT,
+    "phone" TEXT,
+    "role" "UserRole" NOT NULL DEFAULT 'CUSTOMER',
+    "receiveOffers" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Order" (
     "id" TEXT NOT NULL,
     "orderNumber" TEXT NOT NULL,
+    "userId" TEXT,
     "customerName" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
     "email" TEXT,
     "status" "OrderStatus" NOT NULL DEFAULT 'PENDING',
     "deliveryMethod" "DeliveryMethod" NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "paidAt" TIMESTAMP(3),
+    "mpPaymentId" TEXT,
+    "mpStatus" TEXT,
     "address" TEXT,
     "addressDetails" TEXT,
     "city" TEXT,
@@ -64,6 +96,7 @@ CREATE TABLE "Order" (
     "total" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "confirmedAt" TIMESTAMP(3),
 
     CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
 );
@@ -82,22 +115,39 @@ CREATE TABLE "OrderItem" (
 );
 
 -- CreateTable
-CREATE TABLE "User" (
+CREATE TABLE "CheckoutSession" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "password" TEXT NOT NULL,
-    "name" TEXT,
-    "phone" TEXT,
-    "role" "UserRole" NOT NULL DEFAULT 'CUSTOMER',
-    "receiveOffers" BOOLEAN NOT NULL DEFAULT true,
+    "userId" TEXT,
+    "customerName" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
+    "email" TEXT,
+    "deliveryMethod" "DeliveryMethod" NOT NULL,
+    "address" TEXT,
+    "addressDetails" TEXT,
+    "city" TEXT,
+    "postalCode" TEXT,
+    "notes" TEXT,
+    "itemsSnapshot" JSONB NOT NULL,
+    "subtotal" INTEGER NOT NULL,
+    "deliveryCost" INTEGER NOT NULL,
+    "total" INTEGER NOT NULL,
+    "status" "CheckoutSessionStatus" NOT NULL DEFAULT 'WAITING_MP',
+    "mpPreferenceId" TEXT,
+    "mpPaymentId" TEXT,
+    "mpStatus" TEXT,
+    "approvedAt" TIMESTAMP(3),
+    "orderId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "CheckoutSession_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Category_slug_key" ON "Category"("slug");
+
+-- CreateIndex
+CREATE INDEX "Category_parentId_idx" ON "Category"("parentId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Product_slug_key" ON "Product"("slug");
@@ -115,7 +165,19 @@ CREATE INDEX "Product_isOnSale_idx" ON "Product"("isOnSale");
 CREATE INDEX "Product_isFeatured_idx" ON "Product"("isFeatured");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE INDEX "User_email_idx" ON "User"("email");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Order_orderNumber_key" ON "Order"("orderNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Order_mpPaymentId_key" ON "Order"("mpPaymentId");
+
+-- CreateIndex
+CREATE INDEX "Order_userId_idx" ON "Order"("userId");
 
 -- CreateIndex
 CREATE INDEX "Order_orderNumber_idx" ON "Order"("orderNumber");
@@ -124,22 +186,40 @@ CREATE INDEX "Order_orderNumber_idx" ON "Order"("orderNumber");
 CREATE INDEX "Order_createdAt_idx" ON "Order"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "Order_paymentStatus_idx" ON "Order"("paymentStatus");
+
+-- CreateIndex
 CREATE INDEX "OrderItem_orderId_idx" ON "OrderItem"("orderId");
 
 -- CreateIndex
 CREATE INDEX "OrderItem_productId_idx" ON "OrderItem"("productId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX "CheckoutSession_mpPaymentId_key" ON "CheckoutSession"("mpPaymentId");
 
 -- CreateIndex
-CREATE INDEX "User_email_idx" ON "User"("email");
+CREATE INDEX "CheckoutSession_userId_idx" ON "CheckoutSession"("userId");
+
+-- CreateIndex
+CREATE INDEX "CheckoutSession_status_idx" ON "CheckoutSession"("status");
+
+-- AddForeignKey
+ALTER TABLE "Category" ADD CONSTRAINT "Category_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CheckoutSession" ADD CONSTRAINT "CheckoutSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CheckoutSession" ADD CONSTRAINT "CheckoutSession_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;

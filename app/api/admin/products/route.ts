@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { uploadImages } from "@/lib/uploads/upload-images";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /* =========================
    GET /api/admin/products
@@ -33,10 +34,46 @@ export async function GET(request: Request) {
       where.isActive = isActive === "true";
     }
 
+    // ✅ SELECT explícito
     const products = await prisma.product.findMany({
       where,
-      include: { category: true },
       orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        price: true,
+        categoryId: true,
+        image: true,
+        stock: true,
+        unitType: true,
+
+        // ✅ NUEVO: contenido neto
+        netWeightGr: true,
+        netVolumeMl: true,
+
+        // ✅ IVA opcional por producto
+        vatRate: true,
+
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+        isFeatured: true,
+        isActive: true,
+
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+
+            // ✅ IVA por categoría
+            vatRate: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json(products ?? []);
@@ -57,7 +94,13 @@ function boolVal(v: FormDataEntryValue | null) {
 }
 
 function numVal(v: FormDataEntryValue | null) {
-  const n = Number(String(v ?? ""));
+  const s0 = String(v ?? "").trim();
+  if (!s0) return 0;
+
+  // "1.234,56" => "1234.56"
+  const s = s0.includes(",") ? s0.replace(/\./g, "").replace(",", ".") : s0;
+
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -78,6 +121,55 @@ function normalizeStock(stockRaw: number, unitType: UnitType) {
   if (unitType === "PER_UNIT") return Math.max(0, Math.floor(stockRaw));
   // PER_KG: permitir decimales
   return Math.max(0, stockRaw);
+}
+
+/** ✅ Parse robusto para datetime-local / ISO */
+function parseOptionalDateTime(raw: string): { date: Date | null; error?: string } {
+  const s = raw.trim();
+  if (!s) return { date: null };
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) {
+    return { date: null, error: "saleEndDate inválida" };
+  }
+  return { date: d };
+}
+
+/**
+ * ✅ IVA opcional por producto:
+ * - "" => null (usa categoría)
+ * - "0.21" => 0.21
+ * - "0.105" => 0.105
+ */
+function parseVatRate(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+
+  if (n === 0.21 || n === 0.105) return n;
+
+  return null;
+}
+
+/**
+ * ✅ Parse opcional para int positivo (gramos/ml)
+ * - "" => null
+ * - "0" o negativo => null
+ * - "250.7" => 250
+ */
+function parseOptionalPositiveInt(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+
+  const int = Math.floor(n);
+  if (int <= 0) return null;
+
+  return int;
 }
 
 /* =========================
@@ -110,6 +202,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // ✅ contenido neto (solo PER_UNIT; PER_KG lo dejamos null)
+    const netWeightGrRaw = parseOptionalPositiveInt(form.get("netWeightGr"));
+    const netVolumeMlRaw = parseOptionalPositiveInt(form.get("netVolumeMl"));
+
+    const netWeightGr = unitType === "PER_UNIT" ? netWeightGrRaw : null;
+    const netVolumeMl = unitType === "PER_UNIT" ? netVolumeMlRaw : null;
+
+    if (unitType === "PER_UNIT" && netWeightGr && netVolumeMl) {
+      return NextResponse.json(
+        { error: "Cargá solo uno: netWeightGr (gramos) o netVolumeMl (ml), no ambos." },
+        { status: 400 }
+      );
+    }
+
+    // ✅ vatRate opcional por producto
+    const vatRate = parseVatRate(form.get("vatRate"));
+
     const priceARS = numVal(form.get("price")); // ARS decimal
     const stockRaw = numVal(form.get("stock"));
     const stock = normalizeStock(stockRaw, unitType);
@@ -119,7 +228,10 @@ export async function POST(request: Request) {
     const salePriceARS = salePriceStr ? Number(salePriceStr) : null;
 
     const saleEndDateStr = strVal(form.get("saleEndDate"));
-    const saleEndDate = saleEndDateStr ? new Date(saleEndDateStr) : null;
+    const parsed = parseOptionalDateTime(saleEndDateStr);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
 
     const isFeatured = boolVal(form.get("isFeatured"));
     const isActive = boolVal(form.get("isActive"));
@@ -133,10 +245,7 @@ export async function POST(request: Request) {
     }
 
     if (!Number.isFinite(priceARS) || priceARS <= 0) {
-      return NextResponse.json(
-        { error: "Precio inválido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Precio inválido" }, { status: 400 });
     }
 
     // Unicidad slug
@@ -149,15 +258,23 @@ export async function POST(request: Request) {
     let image: string | null = null;
     const imageEntry = form.get("image");
     if (imageEntry instanceof File && imageEntry.size > 0) {
-      // Si Cloudinary no está configurado, esto puede tirar error -> lo capturamos
       const [uploaded] = await uploadImages([imageEntry]);
       image = uploaded.secureUrl;
     }
 
-    // Oferta
+    // ✅ Oferta (si isOnSale false => limpiamos todo)
+    const safeSaleEndDate = isOnSale ? parsed.date : null;
+
+    const safeSalePriceCents =
+      isOnSale && salePriceARS !== null && Number.isFinite(salePriceARS) && salePriceARS > 0
+        ? Math.round(salePriceARS * 100)
+        : null;
+
+    const priceCents = Math.round(priceARS * 100);
+
     const discountPercent =
-      isOnSale && salePriceARS !== null && priceARS > 0
-        ? Math.round(((priceARS - salePriceARS) / priceARS) * 100)
+      isOnSale && safeSalePriceCents !== null && priceCents > 0 && safeSalePriceCents < priceCents
+        ? Math.round(((priceCents - safeSalePriceCents) / priceCents) * 100)
         : null;
 
     const created = await prisma.product.create({
@@ -170,21 +287,55 @@ export async function POST(request: Request) {
         unitType: unitType as any,
         stock,
 
-        price: Math.round(priceARS * 100),
+        price: priceCents,
         image,
 
+        // ✅ NUEVO: contenido neto
+        netWeightGr,
+        netVolumeMl,
+
+        // ✅ IVA opcional por producto
+        vatRate,
+
         isOnSale,
-        salePrice:
-          salePriceARS !== null && Number.isFinite(salePriceARS)
-            ? Math.round(salePriceARS * 100)
-            : null,
-        saleEndDate,
+        salePrice: safeSalePriceCents,
+        saleEndDate: safeSaleEndDate,
         discountPercent,
 
         isFeatured,
         isActive,
       },
-      include: { category: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        price: true,
+        categoryId: true,
+        image: true,
+        stock: true,
+        unitType: true,
+
+        // ✅ NUEVO
+        netWeightGr: true,
+        netVolumeMl: true,
+
+        vatRate: true,
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+        isFeatured: true,
+        isActive: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            vatRate: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json(created, { status: 201 });

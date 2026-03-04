@@ -4,12 +4,39 @@ import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card";
 import { Loader2, ChefHat } from "lucide-react";
 import { motion } from "framer-motion";
-import type { Product, Category } from "@prisma/client";
 
-type ProductWithCategory = Product & { category: Category };
+// Tipos DTO (lo que viene por JSON desde tu API)
+type CategoryDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId?: string | null;
+};
+
+type ProductDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: string | null;
+
+  unitType: "PER_KG" | "PER_UNIT";
+  price: number;
+  stock: number;
+
+  isActive: boolean;
+  isFeatured: boolean;
+  isOnSale: boolean;
+  salePrice?: number | null;
+  saleEndDate?: string | null;
+  discountPercent?: number | null;
+
+  categoryId: string;
+  category: CategoryDTO;
+};
 
 export default function CarniceriaPage() {
-  const [all, setAll] = useState<ProductWithCategory[]>([]);
+  const [all, setAll] = useState<ProductDTO[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -25,7 +52,7 @@ export default function CarniceriaPage() {
         const data = (await res.json()) as unknown;
 
         if (!alive) return;
-        setAll(Array.isArray(data) ? (data as ProductWithCategory[]) : []);
+        setAll(Array.isArray(data) ? (data as ProductDTO[]) : []);
       } catch (e) {
         console.error("Error fetching carniceria products:", e);
         if (alive) setAll([]);
@@ -41,12 +68,8 @@ export default function CarniceriaPage() {
     };
   }, []);
 
-  // Agrupar productos por categoría
   const groups = useMemo(() => {
-    const map = new Map<
-      string,
-      { label: string; items: ProductWithCategory[] }
-    >();
+    const map = new Map<string, { label: string; items: ProductDTO[] }>();
 
     for (const p of all) {
       const slug = p.category?.slug ?? "carniceria";
@@ -78,7 +101,6 @@ export default function CarniceriaPage() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
-      {/* Header */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-6 py-2 mb-4">
           <ChefHat className="h-5 w-5 text-primary" />
@@ -91,7 +113,6 @@ export default function CarniceriaPage() {
         </p>
       </div>
 
-      {/* Beneficios */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -136,9 +157,9 @@ export default function CarniceriaPage() {
               {group.label} ({group.items.length})
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
               {group.items.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product as any} />
               ))}
             </div>
           </section>

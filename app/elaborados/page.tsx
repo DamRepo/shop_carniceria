@@ -1,44 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/components/product-card";
 import { Loader2, Award } from "lucide-react";
 import { motion } from "framer-motion";
-import type { Product, Category } from "@prisma/client";
 
-type ProductWithCategory = Product & { category: Category };
+// DTOs (tipos del JSON que viene desde /api/products)
+type CategoryDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId?: string | null;
+};
+
+type ProductDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: string | null;
+
+  unitType: "PER_KG" | "PER_UNIT";
+  price: number;
+  stock: number;
+
+  isActive: boolean;
+  isFeatured: boolean;
+  isOnSale: boolean;
+  salePrice?: number | null;
+  saleEndDate?: string | null;
+  discountPercent?: number | null;
+
+  categoryId: string;
+  category: CategoryDTO;
+};
 
 export default function ElaboradosPage() {
-  const [products, setProducts] = useState<ProductWithCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [all, setAll] = useState<ProductDTO[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let alive = true;
 
-    (async () => {
-      setLoading(true);
+    const loadProducts = async () => {
       try {
-        // ✅ SOLO elaborados (raíz + hijas) según tu /api/products
-        const res = await fetch("/api/products?section=elaborados", {
-          cache: "no-store",
-        });
+        setLoading(true);
 
-        const data = res.ok ? ((await res.json()) as ProductWithCategory[]) : [];
+        const res = await fetch("/api/products?section=elaborados");
+        if (!res.ok) throw new Error("Fetch failed");
+
+        const data = (await res.json()) as unknown;
+
         if (!alive) return;
-
-        setProducts(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error fetching elaborados products:", error);
-        if (alive) setProducts([]);
+        setAll(Array.isArray(data) ? (data as ProductDTO[]) : []);
+      } catch (e) {
+        console.error("Error fetching elaborados products:", e);
+        if (alive) setAll([]);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
+
+    loadProducts();
 
     return () => {
       alive = false;
     };
   }, []);
+
+  // Agrupar productos por categoría
+  const groups = useMemo(() => {
+    const map = new Map<string, { label: string; items: ProductDTO[] }>();
+
+    for (const p of all) {
+      const slug = p.category?.slug ?? "elaborados";
+      const label = p.category?.name ?? "Elaborados";
+
+      const group = map.get(slug) ?? { label, items: [] };
+      group.items.push(p);
+      map.set(slug, group);
+    }
+
+    return Array.from(map.entries())
+      .map(([slug, v]) => ({
+        slug,
+        label: v.label,
+        items: v.items,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [all]);
 
   if (loading) {
     return (
@@ -53,26 +103,17 @@ export default function ElaboradosPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-12 text-center"
-      >
-        <div className="inline-flex items-center gap-2 bg-amber-600/10 border border-amber-600/20 rounded-full px-6 py-2 mb-4">
-          <Award className="h-5 w-5 text-amber-600" />
-          <span className="text-amber-600 font-semibold">
-            Elaboración artesanal
-          </span>
+      <div className="mb-8 text-center">
+        <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-6 py-2 mb-4">
+          <Award className="h-5 w-5 text-primary" />
+          <span className="text-primary font-semibold">Elaborados</span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Elaborados</h1>
-
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Productos elaborados en casa, con recetas tradicionales y materia prima
-          de calidad.
+          Productos listos para cocinar. Ricos, prácticos y frescos.
         </p>
-      </motion.div>
+      </div>
 
       {/* Beneficios */}
       <motion.div
@@ -82,62 +123,50 @@ export default function ElaboradosPage() {
         className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12"
       >
         <div className="bg-muted/50 rounded-lg p-6 text-center">
-          <div className="text-3xl mb-2">🥩</div>
-          <h3 className="font-semibold mb-2">Hechos en casa</h3>
+          <div className="text-3xl mb-2">🍽️</div>
+          <h3 className="font-semibold mb-2">Listos para cocinar</h3>
           <p className="text-sm text-muted-foreground">
-            Preparados con recetas propias y atención al detalle
+            Ahorrá tiempo con productos preparados
           </p>
         </div>
 
         <div className="bg-muted/50 rounded-lg p-6 text-center">
-          <div className="text-3xl mb-2">✅</div>
-          <h3 className="font-semibold mb-2">Frescos</h3>
+          <div className="text-3xl mb-2">⭐</div>
+          <h3 className="font-semibold mb-2">Recetas probadas</h3>
           <p className="text-sm text-muted-foreground">
-            Producción chica, rotación rápida
+            Sabores que salen bien siempre
           </p>
         </div>
 
         <div className="bg-muted/50 rounded-lg p-6 text-center">
-          <div className="text-3xl mb-2">👌</div>
-          <h3 className="font-semibold mb-2">Calidad premium</h3>
+          <div className="text-3xl mb-2">🧊</div>
+          <h3 className="font-semibold mb-2">Frescura</h3>
           <p className="text-sm text-muted-foreground">
-            Selección de materias primas y buena mano
+            Conservación y calidad garantizada
           </p>
         </div>
       </motion.div>
 
-      {/* Productos */}
-      {products.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
-        >
-          <h2 className="text-2xl font-bold mb-6">Nuestros elaborados</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.05 * index }}
-              >
-                <ProductCard product={product} />
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      ) : (
+      {groups.length === 0 ? (
         <div className="text-center py-20">
-          <Award className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-xl font-semibold mb-2">
-            No hay elaborados disponibles
-          </h3>
-          <p className="text-muted-foreground">
-            Volvé pronto para ver nuestros productos frescos
+          <p className="text-muted-foreground text-lg">
+            No hay productos cargados en Elaborados
           </p>
         </div>
+      ) : (
+        groups.map((group) => (
+          <section key={group.slug} className="mb-12">
+            <h2 className="text-2xl font-semibold mb-6">
+              {group.label} ({group.items.length})
+            </h2>
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+              {group.items.map((product) => (
+                <ProductCard key={product.id} product={product as any} />
+              ))}
+            </div>
+          </section>
+        ))
       )}
     </div>
   );

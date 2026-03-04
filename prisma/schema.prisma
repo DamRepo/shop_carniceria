@@ -7,6 +7,201 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  parentId    String?
+  imageUrl    String?
+
+  // ✅ IVA por categoría (regla general)
+  // 0.21 = 21%
+  // 0.105 = 10,5%
+  vatRate     Float    @default(0.21)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  name            String
+  slug            String    @unique
+  description     String?
+  image           String?
+  unitType        UnitType
+  price           Int
+
+  // ✅ Contenido neto (solo para PER_UNIT, opcional)
+  // Sólidos: 250g, 354g, 700g, etc.
+  netWeightGr     Int?
+  // Bebidas: 473ml, 2000ml, etc.
+  netVolumeMl     Int?
+
+  stock           Int       @default(0)
+  isActive        Boolean   @default(true)
+  isFeatured      Boolean   @default(false)
+  categoryId      String
+  isOnSale        Boolean   @default(false)
+  salePrice       Int?
+  saleEndDate     DateTime?
+  discountPercent Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // ✅ IVA opcional por producto (si necesitás excepciones)
+  // Si es null, se usa category.vatRate
+  vatRate         Float?
+
+  orderItems OrderItem[]
+  category   Category    @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([slug])
+  @@index([isOnSale])
+  @@index([isFeatured])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  name          String?
+  phone         String?
+  role          UserRole @default(CUSTOMER)
+  receiveOffers Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders           Order[]
+  checkoutSessions CheckoutSession[]
+
+  // ✅ lado inverso para reset password
+  resetTokens PasswordResetToken[]
+
+  @@index([email])
+}
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber String @unique @default(cuid())
+
+  // Dueño (para mis-compras)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  customerName String
+  phone        String
+  email        String?
+
+  status         OrderStatus    @default(PENDING)
+  deliveryMethod DeliveryMethod
+
+  // Pago
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  mpPaymentId   String?       @unique
+  mpStatus      String?
+
+  address        String?
+  addressDetails String?
+  city           String?
+  postalCode     String?
+  notes          String?
+
+  subtotal     Int
+  deliveryCost Int @default(0)
+  total        Int
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+
+  items OrderItem[]
+
+  checkoutSessions CheckoutSession[]
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([createdAt])
+  @@index([paymentStatus])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Float
+  unitPrice Int
+  lineTotal Int
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model CheckoutSession {
+  id String @id @default(cuid())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  customerName   String
+  phone          String
+  email          String?
+  deliveryMethod DeliveryMethod
+  address        String?
+  addressDetails String?
+  city           String?
+  postalCode     String?
+  notes          String?
+
+  itemsSnapshot Json
+  subtotal      Int
+  deliveryCost  Int
+  total         Int
+
+  status CheckoutSessionStatus @default(WAITING_MP)
+
+  mpPreferenceId String?
+  mpPaymentId    String?   @unique
+  mpStatus       String?
+  approvedAt     DateTime?
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
 enum UnitType {
   PER_KG
   PER_UNIT
@@ -32,103 +227,21 @@ enum UserRole {
   EMPLOYEE
 }
 
-model Category {
-  id          String     @id @default(cuid())
-  name        String
-  slug        String     @unique
-  description String?
-  imageUrl    String?
-
-  parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Category[] @relation("CategoryTree")
-
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  products    Product[]
-
-  @@index([parentId])
+enum PaymentMethod {
+  MERCADO_PAGO
+  CASH
 }
 
-model Product {
-  id              String      @id @default(cuid())
-  name            String
-  slug            String      @unique
-  description     String?
-  image           String?
-  unitType        UnitType
-  price           Int
-  stock           Int         @default(0)
-  isActive        Boolean     @default(true)
-  isFeatured      Boolean     @default(false)
-  categoryId      String
-  category        Category    @relation(fields: [categoryId], references: [id])
-
-  isOnSale        Boolean     @default(false)
-  salePrice       Int?
-  saleEndDate     DateTime?
-  discountPercent Int?
-
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  orderItems      OrderItem[]
-
-  @@index([categoryId])
-  @@index([slug])
-  @@index([isOnSale])
-  @@index([isFeatured])
+enum PaymentStatus {
+  PENDING
+  PENDING_LOCAL
+  PAID
+  FAILED
 }
 
-model Order {
-  id             String         @id @default(cuid())
-  orderNumber    String         @unique @default(cuid())
-  customerName   String
-  phone          String
-  email          String?
-  status         OrderStatus    @default(PENDING)
-  deliveryMethod DeliveryMethod
-  address        String?
-  addressDetails String?
-  city           String?
-  postalCode     String?
-  notes          String?
-  subtotal       Int
-  deliveryCost   Int            @default(0)
-  total          Int
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  items          OrderItem[]
-
-  @@index([orderNumber])
-  @@index([createdAt])
-}
-
-model OrderItem {
-  id        String   @id @default(cuid())
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product  @relation(fields: [productId], references: [id])
-  quantity  Float
-  unitPrice Int
-  lineTotal Int
-  createdAt DateTime @default(now())
-
-  @@index([orderId])
-  @@index([productId])
-}
-
-model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  password      String
-  name          String?
-  phone         String?
-  role          UserRole @default(CUSTOMER)
-  receiveOffers Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([email])
+enum CheckoutSessionStatus {
+  WAITING_MP
+  PENDING
+  APPROVED
+  FAILED
 }

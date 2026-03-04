@@ -11,6 +11,7 @@ import {
   LogOut,
   LayoutDashboard,
   Search,
+  Package,
 } from "lucide-react";
 import { useCartStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -132,7 +133,11 @@ export function Header() {
     },
     { type: "link", href: "/ofertas", label: "Ofertas" },
     { type: "link", href: "/sobre-nosotros", label: "Sobre nosotros" },
-    { type: "link", href: "/preguntas-frecuentes", label: "Preguntas frecuentes" },
+    {
+      type: "link",
+      href: "/preguntas-frecuentes",
+      label: "Preguntas frecuentes",
+    },
   ];
 
   const isActive = (href: string) => {
@@ -208,13 +213,19 @@ export function Header() {
   // Mobile dropdown toggles
   const [mobileCatsOpen, setMobileCatsOpen] = useState(false);
 
-  // Click afuera para cerrar dropdown (desktop)
-  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  // Click afuera para cerrar dropdown (refs separados)
+  const searchBoxDesktopRef = useRef<HTMLDivElement | null>(null);
+  const searchBoxMobileRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      const el = searchBoxRef.current;
-      if (!el) return;
-      if (el.contains(e.target as Node)) return;
+      const d = searchBoxDesktopRef.current;
+      const m = searchBoxMobileRef.current;
+      const target = e.target as Node;
+
+      if (d && d.contains(target)) return;
+      if (m && m.contains(target)) return;
+
       closeSearch();
     }
     if (!showDropdown) return;
@@ -234,10 +245,133 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/90">
-      {/* FILA 1 */}
+      {/* ===================== FILA 1 ===================== */}
       <div className="border-b border-zinc-800 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
-        <div className="container mx-auto max-w-7xl px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] items-center gap-3 py-2">
+        <div className="container mx-auto max-w-7xl px-4 py-2">
+
+          {/* ✅ MOBILE TOP BAR (estilo Meli) */}
+          <div className="lg:hidden">
+            <div className="flex items-center gap-2">
+              {/* Logo solo */}
+              <Link href="/" className="shrink-0">
+                <div className="relative h-10 w-10">
+                  <Image
+                    src="/logo-el-negro.png"
+                    alt="Carnicería El Negro"
+                    fill
+                    className="object-contain"
+                    priority
+                  />
+                </div>
+              </Link>
+
+              {/* Buscador inline */}
+              <div className="relative flex-1" ref={searchBoxMobileRef}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                <Input
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setSearchOpen(true);
+                  }}
+                  onFocus={() => setSearchOpen(true)}
+                  placeholder="Buscar productos..."
+                  className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
+                />
+
+                {showDropdown && (
+                  <div
+                    className="absolute mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl overflow-hidden z-50"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <div className="px-3 py-2 text-xs text-zinc-400 border-b border-zinc-800">
+                      {searchLoading
+                        ? "Buscando..."
+                        : results.length > 0
+                        ? `${results.length} resultado(s)`
+                        : "Sin resultados"}
+                    </div>
+
+                    <div className="max-h-80 overflow-auto">
+                      {results.map((p) => (
+                        <Link
+                          key={p.id}
+                          href={`/productos/${p.slug}`}
+                          onClick={closeSearch}
+                          className="flex items-center gap-3 px-3 py-3 hover:bg-zinc-900 transition-colors"
+                        >
+                          <div className="h-10 w-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden relative shrink-0">
+                            {p.image ? (
+                              <Image
+                                src={p.image}
+                                alt={p.name}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-zinc-100 truncate">
+                              {p.name}
+                            </div>
+                            <div className="text-xs text-zinc-400 truncate">
+                              {p.slug}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    <div className="px-3 py-2 border-t border-zinc-800 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400"
+                        onClick={closeSearch}
+                        type="button"
+                      >
+                        Cerrar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Carrito */}
+              <Link href="/carrito" className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative hover:bg-zinc-900 text-zinc-200"
+                  type="button"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {mounted && (totalItems ?? 0) > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center">
+                      {totalItems}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+
+              {/* Mobile Menu Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 hover:bg-zinc-900 text-zinc-200"
+                onClick={() => {
+                  setMobileMenuOpen((v) => !v);
+                  if (mobileMenuOpen) setMobileCatsOpen(false);
+                }}
+                type="button"
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* ✅ DESKTOP (TU GRID ORIGINAL) */}
+          <div className="hidden lg:grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] items-center gap-3">
             {/* Marca */}
             <Link
               href="/"
@@ -264,7 +398,7 @@ export function Header() {
             </Link>
 
             {/* Buscador (desktop) */}
-            <div className="hidden lg:block" ref={searchBoxRef}>
+            <div className="hidden lg:block" ref={searchBoxDesktopRef}>
               <div className="relative max-w-3xl mx-auto">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <Input
@@ -338,7 +472,7 @@ export function Header() {
               </div>
             </div>
 
-            {/* Derecha */}
+            {/* Derecha (desktop) */}
             <div className="flex items-center justify-end gap-2">
               {/* Desktop Auth */}
               <div className="hidden md:flex items-center space-x-2">
@@ -370,20 +504,31 @@ export function Header() {
 
                       <DropdownMenuSeparator className="bg-zinc-800" />
 
-                      {session.user?.role === "ADMIN" && (
-                        <>
-                          <DropdownMenuItem
-                            asChild
-                            className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
-                          >
-                            <Link href="/admin" className="flex items-center">
-                              <LayoutDashboard className="h-4 w-4 mr-2" />
-                              Dashboard Admin
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-zinc-800" />
-                        </>
+                      {session.user?.role !== "ADMIN" && (
+                        <DropdownMenuItem
+                          asChild
+                          className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        >
+                          <Link href="/mis-compras" className="flex items-center">
+                            <Package className="h-4 w-4 mr-2" />
+                            Mis compras
+                          </Link>
+                        </DropdownMenuItem>
                       )}
+
+                      {session.user?.role === "ADMIN" && (
+                        <DropdownMenuItem
+                          asChild
+                          className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        >
+                          <Link href="/admin" className="flex items-center">
+                            <LayoutDashboard className="h-4 w-4 mr-2" />
+                            Dashboard Admin
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator className="bg-zinc-800" />
 
                       <DropdownMenuItem
                         className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
@@ -418,7 +563,7 @@ export function Header() {
                 )}
               </div>
 
-              {/* Carrito */}
+              {/* Carrito (desktop) */}
               <Link href="/carrito">
                 <Button
                   variant="ghost"
@@ -434,97 +579,16 @@ export function Header() {
                   )}
                 </Button>
               </Link>
-
-              {/* Mobile Menu Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden hover:bg-zinc-900 text-zinc-200"
-                onClick={() => {
-                  setMobileMenuOpen((v) => !v);
-                  if (mobileMenuOpen) setMobileCatsOpen(false);
-                }}
-                type="button"
-              >
-                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Buscador (mobile / tablet) */}
-          <div className="lg:hidden pb-2" ref={searchBoxRef}>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-              <Input
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setSearchOpen(true);
-                }}
-                onFocus={() => setSearchOpen(true)}
-                placeholder="Buscar productos..."
-                className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
-              />
-
-              {showDropdown && (
-                <div
-                  className="absolute mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl overflow-hidden z-50"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <div className="px-3 py-2 text-xs text-zinc-400 border-b border-zinc-800">
-                    {searchLoading
-                      ? "Buscando..."
-                      : results.length > 0
-                      ? `${results.length} resultado(s)`
-                      : "Sin resultados"}
-                  </div>
-
-                  <div className="max-h-80 overflow-auto">
-                    {results.map((p) => (
-                      <Link
-                        key={p.id}
-                        href={`/productos/${p.slug}`}
-                        onClick={closeSearch}
-                        className="flex items-center gap-3 px-3 py-3 hover:bg-zinc-900 transition-colors"
-                      >
-                        <div className="h-10 w-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden relative shrink-0">
-                          {p.image ? (
-                            <Image src={p.image} alt={p.name} fill className="object-cover" />
-                          ) : null}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-zinc-100 truncate">
-                            {p.name}
-                          </div>
-                          <div className="text-xs text-zinc-400 truncate">{p.slug}</div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-
-                  <div className="px-3 py-2 border-t border-zinc-800 flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400"
-                      onClick={closeSearch}
-                      type="button"
-                    >
-                      Cerrar
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* FILA 2 */}
+      {/* ===================== FILA 2 (TU MENÚ DE ABAJO EN PC) ===================== */}
       <div className="bg-zinc-900/70 border-b border-zinc-800">
         <div className="container mx-auto max-w-7xl px-4">
+          {/* Desktop nav */}
           <nav className="hidden lg:flex items-center justify-center gap-2 py-2 flex-wrap">
-            {/* Categorías dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -584,7 +648,6 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Menú secciones/ofertas */}
             {menuItems.map((item) => {
               const active = isActive(item.href);
 
@@ -609,10 +672,84 @@ export function Header() {
             })}
           </nav>
 
-          {/* Mobile menu */}
+          {/* Mobile menu (hamburguesa) */}
           {mobileMenuOpen && (
             <div className="lg:hidden border-t border-zinc-800 py-2">
               <nav className="flex flex-col gap-1">
+
+                {/* ✅ Cuenta arriba del menú */}
+                <div className="px-2 pb-2">
+                  {status === "authenticated" && session ? (
+                    <div className="rounded-md border border-zinc-800 bg-zinc-950/40 overflow-hidden">
+                      <div className="px-3 py-2 text-xs text-zinc-400">
+                        {session.user?.name || "Usuario"}
+                      </div>
+
+                      {session.user?.role !== "ADMIN" && (
+                        <Link
+                          href="/mis-compras"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            setMobileCatsOpen(false);
+                          }}
+                          className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                        >
+                          Mis compras
+                        </Link>
+                      )}
+
+                      {session.user?.role === "ADMIN" && (
+                        <Link
+                          href="/admin"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            setMobileCatsOpen(false);
+                          }}
+                          className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                        >
+                          Dashboard Admin
+                        </Link>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setMobileCatsOpen(false);
+                          signOut();
+                        }}
+                        className="w-full text-left px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                      >
+                        Cerrar sesión
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href="/auth/login"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setMobileCatsOpen(false);
+                        }}
+                        className="text-center px-3 py-2 text-sm font-medium rounded-md border border-zinc-800 text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                      >
+                        Login
+                      </Link>
+
+                      <Link
+                        href="/auth/register"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setMobileCatsOpen(false);
+                        }}
+                        className="text-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700"
+                      >
+                        Registrarse
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
                 {/* Categorías (mobile acordeón) */}
                 <div className="rounded-md overflow-hidden">
                   <button
@@ -660,7 +797,7 @@ export function Header() {
                                       setMobileCatsOpen(false);
                                     }}
                                     className="block px-4 py-2 text-sm rounded-md transition-colors text-zinc-300 hover:text-red-400 hover:bg-zinc-800/40"
-                                  >
+                                    >
                                     {child.name}
                                   </Link>
                                 ))}

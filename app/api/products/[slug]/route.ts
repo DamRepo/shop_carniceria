@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type IdRow = { id: string };
 
 export async function GET(
   _request: Request,
@@ -14,10 +17,40 @@ export async function GET(
       return NextResponse.json({ error: "Slug es requerido" }, { status: 400 });
     }
 
-    // 1) Producto base
+    // ✅ SELECT explícito: asegura category.vatRate SIEMPRE
     const product = await prisma.product.findUnique({
       where: { slug },
-      include: { category: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        image: true,
+
+        unitType: true,
+        price: true,
+        stock: true,
+
+        vatRate: true,
+
+        isActive: true,
+        isFeatured: true,
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            parentId: true,
+            vatRate: true, // ✅ CLAVE
+          },
+        },
+      },
     });
 
     if (!product || !product.isActive) {
@@ -33,11 +66,12 @@ export async function GET(
     // 2) Si tiene madre, buscamos categorías hermanas (misma madre)
     let siblingCategoryIds: string[] = [];
     if (parentId) {
-      const siblings = await prisma.category.findMany({
+      const siblings = (await prisma.category.findMany({
         where: { parentId },
         select: { id: true },
-      });
-      siblingCategoryIds = siblings.map((c) => c.id);
+      })) as IdRow[];
+
+      siblingCategoryIds = siblings.map((c: IdRow) => c.id);
     }
 
     // 3) Relacionados: misma categoría + (opcional) hermanas
@@ -52,9 +86,41 @@ export async function GET(
             : []),
         ],
       },
-      include: { category: true },
       orderBy: { createdAt: "desc" },
       take: 8,
+
+      // ✅ SELECT explícito: asegura related[].category.vatRate
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        image: true,
+
+        unitType: true,
+        price: true,
+        stock: true,
+
+        vatRate: true,
+
+        isActive: true,
+        isFeatured: true,
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            parentId: true,
+            vatRate: true, // ✅ CLAVE
+          },
+        },
+      },
     });
 
     return NextResponse.json({ product, related });

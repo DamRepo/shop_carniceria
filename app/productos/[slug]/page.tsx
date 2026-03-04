@@ -16,13 +16,55 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProductCard } from "@/components/product-card";
-import { formatPrice, getUnitLabel } from "@/lib/utils-format";
+import {
+  formatPrice,
+  getUnitLabel,
+  formatQuantity,
+  stepUpKg,
+  stepDownKg,
+  getVatRate,
+  netFromGrossCents,
+} from "@/lib/utils-format";
 import { useCartStore } from "@/lib/store";
 import { toast } from "sonner";
-import type { Product, Category } from "@prisma/client";
 
-type ProductWithCategory = Product & {
-  category: Category;
+/* =======================
+   DTO TYPES (sin Prisma)
+======================= */
+
+type UnitType = "PER_KG" | "PER_UNIT";
+
+type CategoryDTO = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId?: string | null;
+  vatRate?: number | null; // ✅ nuevo
+};
+
+type ProductWithCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: string | null;
+
+  unitType: UnitType;
+  price: number;
+  stock: number;
+
+  // ✅ IVA opcional por producto
+  vatRate?: number | null;
+
+  isActive: boolean;
+  isFeatured: boolean;
+  isOnSale: boolean;
+  salePrice?: number | null;
+  saleEndDate?: string | null;
+  discountPercent?: number | null;
+
+  categoryId: string;
+  category: CategoryDTO;
 };
 
 type ProductDetailResponse = {
@@ -36,6 +78,34 @@ function normalizeSlug(value: unknown): string {
   return "";
 }
 
+function hasActiveOffer(p: ProductWithCategory) {
+  if (!p.isOnSale) return false;
+  if (!p.saleEndDate) return true;
+
+  const t = new Date(p.saleEndDate).getTime();
+  if (!Number.isFinite(t)) return true;
+  return t > Date.now();
+}
+
+// Para PER_UNIT: siempre entero mínimo 1
+const normalizeUnitQty = (q: unknown) => {
+  const n = Math.floor(Number(q));
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+};
+
+// Para PER_KG: mínimo 0.1kg, permitimos decimales
+const normalizeKgQty = (q: unknown) => {
+  const n = Number(q);
+  if (!Number.isFinite(n)) return 1;
+  const clamped = Math.max(0.1, n);
+  // redondeo para evitar flotantes
+  return +clamped.toFixed(3);
+};
+
+// ✅ dedupe por id (por si la API devuelve repetidos)
+const uniqueById = (arr: ProductWithCategory[]) =>
+  Array.from(new Map(arr.map((x) => [x.id, x])).values());
+
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -46,6 +116,8 @@ export default function ProductDetailPage() {
     []
   );
   const [loading, setLoading] = useState(true);
+
+  // arranca en 1 (1kg o 1 unidad)
   const [quantity, setQuantity] = useState<number>(1);
 
   const addItem = useCartStore((state) => state.addItem);
@@ -74,11 +146,16 @@ export default function ProductDetailPage() {
       const p = data?.product ?? null;
       setProduct(p);
 
-      setRelatedProducts(Array.isArray(data?.related) ? data.related : []);
+      // ✅ EXCLUIR el producto actual de "related"
+      const relatedRaw = Array.isArray(data?.related) ? data.related : [];
+      const relatedFiltered = p
+        ? relatedRaw.filter((rp) => rp.id !== p.id && rp.slug !== p.slug)
+        : relatedRaw;
 
-      // Cantidad inicial: por kilo 0.5, por unidad 1
-      const isKg = (p?.unitType ?? "PER_KG") === "PER_KG";
-      setQuantity(isKg ? 0.5 : 1);
+      setRelatedProducts(uniqueById(relatedFiltered));
+
+      // ✅ por defecto: 1 (para kg y unidad)
+      setQuantity(1);
     } catch (error) {
       console.error("Error fetching product:", error);
       toast.error("Error al cargar el producto");
@@ -87,55 +164,87 @@ export default function ProductDetailPage() {
     }
   };
 
-  // unitType real (fallback solo si viene vacío)
-  const unitType = (product?.unitType ?? "PER_KG") as Product["unitType"];
-  const isKg = unitType === "PER_KG";
+  const unitType: UnitType = product?.unitType ?? "PER_KG";
+  const canBuy = (product?.stock ?? 0) > 0;
 
-  const step = isKg ? 0.5 : 1;
-  const minQty = isKg ? 0.5 : 1;
+  // ✅ oferta / precio final
+  const offerActive = product ? hasActiveOffer(product) : false;
+  const finalUnitPrice =
+    product && offerActive && product.salePrice != null && product.salePrice > 0
+      ? product.salePrice
+      : product?.price ?? 0;
 
-  // Para PER_UNIT, el máximo debería ser entero
+  // ✅ IVA efectivo
+  const vatRate = product ? getVatRate(product) : 0.21;
+
+  // ✅ cantidad normalizada según unidad
+  const safeQty =
+    unitType === "PER_KG"
+      ? normalizeKgQty(quantity)
+      : normalizeUnitQty(quantity);
+
+  // stock máximo (mantenemos tu stock int; para KG permitimos hasta stock como entero kg)
   const rawMax = product?.stock ?? 0;
-  const maxQty = isKg ? rawMax : Math.floor(rawMax);
+  const maxQty =
+    unitType === "PER_KG"
+      ? Math.max(0.1, Number(rawMax) || 0) // si stock fuera 50 => 50kg
+      : Math.max(0, Math.floor(Number(rawMax) || 0)); // unidades enteras
 
   const handleQuantityChange = (value: string) => {
     if (value === "" || value === ".") return;
 
     const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    if (!Number.isFinite(parsed)) return;
 
-    // ✅ Fuerza entero si es por unidad
-    const q = isKg ? parsed : Math.round(parsed);
+    if (unitType === "PER_KG") {
+      const q = normalizeKgQty(parsed);
+      const clamped = maxQty > 0 ? Math.min(maxQty, q) : q;
+      setQuantity(clamped);
+      return;
+    }
 
-    // Clamp al stock
-    const clamped = Math.min(maxQty, Math.max(minQty, q));
+    const q = normalizeUnitQty(parsed);
+    const clamped = Math.min(maxQty > 0 ? maxQty : q, Math.max(1, q));
     setQuantity(clamped);
   };
 
   const incrementQuantity = () => {
     if (!product) return;
     if (maxQty <= 0) return;
-    setQuantity((prev) => Math.min(maxQty, (prev ?? 0) + step));
+
+    if (unitType === "PER_KG") {
+      setQuantity((prev) => {
+        const next = stepUpKg(normalizeKgQty(prev));
+        return Math.min(maxQty, next);
+      });
+      return;
+    }
+
+    setQuantity((prev) => Math.min(maxQty, normalizeUnitQty(prev) + 1));
   };
 
   const decrementQuantity = () => {
     if (!product) return;
-    setQuantity((prev) => Math.max(minQty, (prev ?? 0) - step));
-  };
 
-  const canBuy = (product?.stock ?? 0) > 0;
+    if (unitType === "PER_KG") {
+      setQuantity((prev) => stepDownKg(normalizeKgQty(prev)));
+      return;
+    }
+
+    setQuantity((prev) => Math.max(1, normalizeUnitQty(prev) - 1));
+  };
 
   const addToCart = (goTo: "/carrito" | "/checkout") => {
     if (!product) return;
 
-    const q = isKg ? quantity : Math.round(quantity);
+    const q = safeQty;
 
-    if ((q ?? 0) <= 0) {
+    if (q <= 0) {
       toast.error("La cantidad debe ser mayor a 0");
       return;
     }
 
-    if ((product.stock ?? 0) < (q ?? 0)) {
+    if (maxQty > 0 && q > maxQty) {
       toast.error("Stock insuficiente");
       return;
     }
@@ -144,10 +253,13 @@ export default function ProductDetailPage() {
       id: product.id,
       name: product.name,
       slug: product.slug,
-      price: product.price ?? 0,
+      price: finalUnitPrice, // ✅ respeta oferta
       quantity: q,
-      unitType: (product.unitType ?? "PER_KG") as Product["unitType"],
+      unitType: product.unitType ?? "PER_KG",
       image: product.image ?? undefined,
+
+      // ✅ NUEVO: guardamos IVA en el carrito
+      vatRate,
     });
 
     if (goTo === "/carrito") {
@@ -180,6 +292,17 @@ export default function ProductDetailPage() {
       ? product.stock <= 5 && product.stock > 0
       : false;
 
+  const total = finalUnitPrice * safeQty;
+
+  // ✅ netos (sin impuestos nacionales)
+  const netUnit = netFromGrossCents(finalUnitPrice, vatRate);
+  const netTotal = netFromGrossCents(total, vatRate);
+
+  const stockLabel =
+    unitType === "PER_KG"
+      ? `${Math.floor(product.stock ?? 0)} kg`
+      : `${Math.floor(product.stock ?? 0)} ${getUnitLabel(unitType)}`;
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <Button variant="ghost" onClick={() => router.back()} className="mb-6">
@@ -188,7 +311,6 @@ export default function ProductDetailPage() {
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Imagen */}
         <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
           {product.image ? (
             <Image
@@ -206,7 +328,6 @@ export default function ProductDetailPage() {
           )}
         </div>
 
-        {/* Detalles */}
         <div className="flex flex-col space-y-6">
           <div>
             <Badge variant="secondary" className="mb-2">
@@ -226,11 +347,29 @@ export default function ProductDetailPage() {
             <CardContent className="p-6">
               <div className="flex items-baseline justify-between mb-4">
                 <div>
-                  <p className="text-4xl font-bold text-primary">
-                    {formatPrice(product.price ?? 0)}
-                  </p>
+                  {offerActive && finalUnitPrice !== product.price ? (
+                    <>
+                      <p className="text-sm text-muted-foreground line-through">
+                        {formatPrice(product.price ?? 0)}
+                      </p>
+                      <p className="text-4xl font-bold text-primary">
+                        {formatPrice(finalUnitPrice)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-4xl font-bold text-primary">
+                      {formatPrice(finalUnitPrice)}
+                    </p>
+                  )}
+
                   <p className="text-sm text-muted-foreground">
                     por {getUnitLabel(unitType)}
+                  </p>
+
+                  {/* ✅ NUEVO: neto unitario */}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Precio sin impuestos Nacionales: {formatPrice(netUnit)} por{" "}
+                    {getUnitLabel(unitType)}
                   </p>
                 </div>
 
@@ -250,7 +389,12 @@ export default function ProductDetailPage() {
                       variant="outline"
                       size="icon"
                       onClick={decrementQuantity}
-                      disabled={!canBuy}
+                      disabled={
+                        !canBuy ||
+                        (unitType === "PER_KG"
+                          ? safeQty <= 0.1
+                          : safeQty <= 1)
+                      }
                       type="button"
                     >
                       <Minus className="h-4 w-4" />
@@ -258,11 +402,11 @@ export default function ProductDetailPage() {
 
                     <Input
                       type="number"
-                      value={Number.isFinite(quantity) ? quantity : minQty}
+                      value={safeQty}
                       onChange={(e) => handleQuantityChange(e.target.value)}
-                      step={step}
-                      min={minQty}
-                      max={maxQty}
+                      step={unitType === "PER_KG" ? (safeQty < 1 ? 0.1 : 0.5) : 1}
+                      min={unitType === "PER_KG" ? 0.1 : 1}
+                      max={maxQty > 0 ? maxQty : undefined}
                       className="text-center"
                       disabled={!canBuy}
                     />
@@ -271,29 +415,32 @@ export default function ProductDetailPage() {
                       variant="outline"
                       size="icon"
                       onClick={incrementQuantity}
-                      disabled={!canBuy || (quantity ?? 0) >= maxQty}
+                      disabled={!canBuy || (maxQty > 0 && safeQty >= maxQty)}
                       type="button"
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
 
+                  {/* ✅ mostrar cantidad “humana” */}
+                  
                   <p className="text-xs text-muted-foreground mt-1">
-                    Stock disponible:{" "}
-                    {typeof product.stock === "number"
-                      ? product.stock.toFixed(isKg ? 2 : 0)
-                      : 0}{" "}
-                    {getUnitLabel(unitType)}
+                    Stock disponible: {stockLabel}
                   </p>
                 </div>
 
                 <div className="pt-4 border-t">
-                  <div className="flex items-center justify-between text-lg font-semibold mb-4">
+                  <div className="flex items-center justify-between text-lg font-semibold mb-1">
                     <span>Total:</span>
                     <span className="text-2xl text-primary">
-                      {formatPrice((product.price ?? 0) * (quantity ?? 0))}
+                      {formatPrice(total)}
                     </span>
                   </div>
+
+                  {/* ✅ neto del total */}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Total sin impuestos Nacionales: {formatPrice(netTotal)}
+                  </p>
 
                   <div className="flex flex-col gap-3">
                     <Button
@@ -326,16 +473,15 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Relacionados */}
       {relatedProducts.length > 0 && (
         <div className="mt-16">
           <h2 className="text-3xl font-bold mb-6 text-center">
             Productos que te pueden interesar
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
             {relatedProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={p.id} product={p as any} />
             ))}
           </div>
         </div>
