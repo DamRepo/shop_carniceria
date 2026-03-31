@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  if (!token || password.length < 6) { 
+  if (!token || password.length < 6 || password.length > 100) {
     return NextResponse.json({ ok: false, error: "Datos inválidos" }, { status: 400 });
   }
 
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Token expirado" }, { status: 400 });
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await bcrypt.hash(password, 10);
 
   await prisma.$transaction([
     prisma.user.update({

@@ -4,9 +4,13 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sendOrderConfirmationEmail } from "@/lib/mail/actions";
+import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const DELIVERY_COST_CENTS = 120000;
 
 class HttpError extends Error {
   status: number;
@@ -18,7 +22,7 @@ class HttpError extends Error {
 
 type IncomingItem = {
   productId: string;
-  quantity: number; // PER_UNIT: unidades (int). PER_KG: kg (float)
+  quantity: number;
 };
 
 function safeNumber(value: unknown): number {
@@ -26,250 +30,308 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
-function computeStockDecrement(unitType: "PER_UNIT" | "PER_KG", qty: number): number {
+function computeStockDecrement(
+  unitType: "PER_UNIT" | "PER_KG",
+  qty: number
+): number {
   if (unitType === "PER_UNIT") {
-    // unidades
-    return Math.max(1, Math.round(qty));
+    return Math.round(qty);
   }
-  // PER_KG (mínimo seguro)
-  return Math.max(1, Math.ceil(qty));
+
+  const grams = Math.round(qty * 1000);
+
+  // 🚨 VALIDACIÓN REAL (NO FORZAR A 1)
+  if (grams <= 0) {
+    throw new HttpError(400, "Cantidad inválida en gramos");
+  }
+
+  return grams;
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isSaleActive(p: any) {
+  if (!p.isOnSale || p.salePrice == null) return false;
+  if (!p.saleEndDate) return true;
+  return p.saleEndDate.getTime() > Date.now();
+}
+
+function getEffectivePrice(p: any) {
+  return isSaleActive(p) ? Number(p.salePrice) : Number(p.price);
+}
+
+function nearlyInteger(n: number) {
+  return Math.abs(n - Math.round(n)) < 1e-9;
+}
+
+function validateProductQuantity(p: any, qty: number) {
+  if (!Number.isFinite(qty) || qty <= 0) {
+    throw new HttpError(400, `Cantidad inválida para ${p.name}`);
+  }
+
+  if (p.unitType === "PER_UNIT" && !nearlyInteger(qty)) {
+    throw new HttpError(400, `${p.name} solo permite unidades enteras`);
+  }
+  if (p.unitType === "PER_KG") {
+  if (qty < 0.01) {
+    throw new HttpError(400, `${p.name} mínimo 10 gramos`);
+  }
+}
 }
 
 export async function POST(request: Request) {
   try {
+    // Rate limiting: 5 órdenes / 10 min por IP (evita spam y descuentos de stock falsos)
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "unknown";
+    const rl = rateLimit(`orders:${ip}`, 5, 10 * 60 * 1000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Esperá unos minutos e intentá de nuevo." },
+        { status: 429 }
+      );
+    }
+
     const session = await getServerSession(authOptions).catch(() => null);
     const sessionUserId = (session?.user as any)?.id as string | undefined;
 
-    // ✅ Evita FK: solo guardamos userId si existe en DB
     let safeUserId: string | null = null;
+
     if (sessionUserId) {
       const exists = await prisma.user.findUnique({
         where: { id: sessionUserId },
         select: { id: true },
       });
+
       if (exists) safeUserId = sessionUserId;
     }
 
     const body = await request.json().catch(() => null);
 
-    const {
-      customerName,
-      phone,
-      email,
-      deliveryMethod,
-      address,
-      addressDetails,
-      city,
-      postalCode,
-      notes,
-      items,
-    } = body ?? {};
+    const customerName = normalizeString(body?.customerName);
+    const phone = normalizeString(body?.phone);
+    const email = normalizeString(body?.email)?.toLowerCase();
+    const deliveryMethod = body?.deliveryMethod;
 
-    // Validaciones básicas
-    if (!customerName || !phone || !deliveryMethod || !items || (items?.length ?? 0) === 0) {
+    if (deliveryMethod !== "PICKUP" && deliveryMethod !== "DELIVERY") {
+      throw new HttpError(400, "Método de entrega inválido");
+    }
+
+    const address = normalizeString(body?.address);
+    const addressDetails = normalizeString(body?.addressDetails);
+    const city = normalizeString(body?.city);
+    const postalCode = normalizeString(body?.postalCode);
+    const notes = normalizeString(body?.notes);
+
+    const pickupDateRaw = normalizeString(body?.pickupDate);
+    const pickupTimeSlot = normalizeString(body?.pickupTimeSlot);
+    const pickupNotes = normalizeString(body?.pickupNotes);
+
+    const items = body?.items as IncomingItem[] | undefined;
+
+    // VALIDACIONES
+    if (!customerName || !phone || !items || items.length === 0) {
       throw new HttpError(400, "Datos incompletos");
     }
 
-    if (deliveryMethod === "DELIVERY" && !address) {
-      throw new HttpError(400, "Dirección requerida para delivery");
+    if (items.length > 100) {
+      throw new HttpError(400, "Demasiados productos en la orden");
     }
 
-    const incomingItems = items as IncomingItem[];
-
-    // Sanitizar items
-    const normalizedItems: IncomingItem[] = incomingItems.map((i) => ({
-      productId: String((i as any)?.productId ?? ""),
-      quantity: safeNumber((i as any)?.quantity),
-    }));
-
-    for (const it of normalizedItems) {
-      if (!it.productId) throw new HttpError(400, "Item sin productId");
-      if (!Number.isFinite(it.quantity) || it.quantity <= 0) {
-        throw new HttpError(400, `Cantidad inválida para producto ${it.productId}`);
+    if (deliveryMethod === "DELIVERY") {
+      if (!address || !city) {
+        throw new HttpError(400, "Falta dirección de envío");
       }
     }
 
-    // 1) Traer productos activos
+    if (deliveryMethod === "PICKUP") {
+      if (!pickupDateRaw || !pickupTimeSlot) {
+        throw new HttpError(400, "Falta fecha y horario de retiro");
+      }
+    }
+
+    let pickupDate: Date | undefined = undefined;
+
+    if (deliveryMethod === "PICKUP") {
+      pickupDate = new Date(`${pickupDateRaw}T12:00:00`);
+    }
+
+    const normalizedItems: IncomingItem[] = items.map((i) => ({
+      productId: String(i.productId),
+      quantity: safeNumber(i.quantity),
+    }));
+
     const ids = Array.from(new Set(normalizedItems.map((i) => i.productId)));
 
     const products = await prisma.product.findMany({
       where: { id: { in: ids }, isActive: true },
-      select: { id: true, name: true, price: true, stock: true, unitType: true },
     });
 
-    const byId = new Map(products.map((p) => [p.id, p]));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const byId = new Map<string, any>((products as any[]).map((p: any) => [p.id, p]));
 
-    // Si falta algún producto (inactivo o inexistente), lo cortamos como 400
-    if (products.length !== ids.length) {
-      const missing = ids.filter((id) => !byId.has(id));
-      throw new HttpError(400, `Producto no encontrado o inactivo: ${missing.join(", ")}`);
-    }
-
-    // 2) Recalcular precios desde DB (NO confiar en frontend)
     let subtotalCents = 0;
 
     const orderItems = normalizedItems.map((i) => {
-      const p = byId.get(i.productId)!;
+      const p = byId.get(i.productId);
 
-      const qty = i.quantity;
-      const priceCents = Number(p.price ?? 0);
-
-      if (!Number.isFinite(priceCents) || priceCents < 0) {
-        throw new HttpError(500, `Precio inválido en DB para ${p.name}`);
+      if (!p) {
+        throw new HttpError(400, "Producto no encontrado");
       }
+
+      validateProductQuantity(p, i.quantity);
+
+      const priceCents = getEffectivePrice(p);
 
       let lineTotalCents = 0;
 
       if (p.unitType === "PER_KG") {
-        // qty en kg, priceCents = centavos por kg
-        const grams = Math.round(qty * 1000);
-        if (grams <= 0) throw new HttpError(400, `Cantidad inválida para ${p.name}`);
-        lineTotalCents = Math.round((priceCents * grams) / 1000);
+        // Multiplicar directamente en kg evita el error acumulado de la conversión a gramos
+        lineTotalCents = Math.round(priceCents * i.quantity);
       } else {
-        // PER_UNIT
-        const units = Math.round(qty);
-        if (units <= 0) throw new HttpError(400, `Cantidad inválida para ${p.name}`);
-        lineTotalCents = Math.round(priceCents * units);
+        lineTotalCents = Math.round(priceCents * i.quantity);
       }
 
       subtotalCents += lineTotalCents;
 
       return {
         productId: p.id,
-        quantity: qty,
+        // PER_UNIT siempre entero — evitar que un float como 2.0000000001 se guarde en DB
+        quantity: p.unitType === "PER_UNIT" ? Math.round(i.quantity) : i.quantity,
         unitPrice: priceCents,
         lineTotal: lineTotalCents,
       };
     });
 
-    const deliveryCostCents = deliveryMethod === "DELIVERY" ? 50000 : 0;
+    const deliveryCostCents =
+      deliveryMethod === "DELIVERY" ? DELIVERY_COST_CENTS : 0;
+
     const totalCents = subtotalCents + deliveryCostCents;
 
-    // 3) Decrementos de stock (agregado por productoId para evitar doble decrement si vienen repetidos)
+    // 🔥 FIX CLAVE: AGRUPAR STOCK
     const decByProductId = new Map<string, number>();
+
     for (const it of normalizedItems) {
       const p = byId.get(it.productId)!;
       const dec = computeStockDecrement(p.unitType, it.quantity);
-      decByProductId.set(it.productId, (decByProductId.get(it.productId) ?? 0) + dec);
+
+      decByProductId.set(
+        it.productId,
+        (decByProductId.get(it.productId) ?? 0) + dec
+      );
     }
 
-    // 4) Crear Order + items y descontar stock ATÓMICO
-    const created = await prisma.$transaction(async (tx) => {
-      // Descontar stock primero (o después) da igual si está todo dentro de transacción,
-      // pero descontarlo ANTES evita crear una Order si no hay stock.
+    const created = await prisma.$transaction(async (tx: any) => {
       for (const [productId, dec] of decByProductId.entries()) {
+        const p = byId.get(productId)!;
+
         const updated = await tx.product.updateMany({
           where: {
             id: productId,
-            isActive: true,
             stock: { gte: dec },
           },
-          data: { stock: { decrement: dec } },
+          data: {
+            stock: { decrement: dec },
+          },
         });
 
         if (updated.count === 0) {
-          const p = byId.get(productId);
-          throw new HttpError(400, `Stock insuficiente para ${p?.name ?? "producto"} (${productId})`);
+          throw new HttpError(400, `Stock insuficiente para ${p.name}`);
         }
       }
 
-      const order = await tx.order.create({
+      return await tx.order.create({
         data: {
           userId: safeUserId,
-
           customerName,
           phone,
-          email: email ?? undefined,
+          email,
           deliveryMethod,
-          address: address ?? undefined,
-          addressDetails: addressDetails ?? undefined,
-          city: city ?? undefined,
-          postalCode: postalCode ?? undefined,
-          notes: notes ?? undefined,
-
+          address,
+          addressDetails,
+          city,
+          postalCode,
+          notes,
+          pickupDate,
+          pickupTimeSlot,
+          pickupNotes,
           paymentMethod: "CASH",
-          paymentStatus: "PENDING_LOCAL",
+          paymentStatus: "PENDING",
           status: "PENDING",
-
           subtotal: subtotalCents,
           deliveryCost: deliveryCostCents,
           total: totalCents,
-
           items: { create: orderItems },
         },
-        select: { id: true, orderNumber: true },
       });
-
-      return order;
     });
 
-    // 5) Enviar email (si hay email) — no debe tumbar el checkout
+    // EMAIL (no bloquea)
     if (email) {
-      const totalText = `$${(totalCents / 100).toFixed(2)}`;
-
-      const emailItems = orderItems.map((it) => {
-        const p = byId.get(it.productId);
-        return {
-          name: p?.name ?? "Producto",
-          quantity: Number(it.quantity),
-          // ✅ En el email, la columna "Precio" mostrará el total de la línea (cantidad incluida)
-          unitPrice: Number(it.lineTotal) / 100,
-        };
-      });
-
       try {
         await sendOrderConfirmationEmail({
           to: email,
           customerName,
           orderId: created.orderNumber,
-          items: emailItems,
-          totalText,
+          items: orderItems.map((it) => ({
+            name: byId.get(it.productId)?.name ?? "",
+            quantity: it.quantity,
+            unitPrice: it.unitPrice / 100,
+          })),
+          totalText: `$${(totalCents / 100).toFixed(2)}`,
         });
-      } catch (err) {
-        console.error("Order created but confirmation email failed:", err);
+      } catch (e) {
+        console.log("Email falló:", e);
       }
     }
+
+    // TELEGRAM (no bloquea)
+    sendTelegramMessage({
+      text: buildTelegramOrderMessage({
+        orderNumber: created.orderNumber,
+        customerName,
+        phone,
+        email,
+        deliveryMethod: deliveryMethod as "PICKUP" | "DELIVERY",
+        address,
+        city,
+        pickupDate: created.pickupDate,
+        pickupTimeSlot,
+        subtotalCents,
+        deliveryCostCents,
+        totalCents,
+        items: orderItems.map((it) => ({
+          name: byId.get(it.productId)?.name ?? "",
+          quantity: it.quantity,
+          unitType: (byId.get(it.productId)?.unitType ?? "PER_UNIT") as "PER_KG" | "PER_UNIT",
+          lineTotalCents: it.lineTotal,
+        })),
+      }),
+    }).catch((e) => console.error("Telegram falló:", e));
 
     return NextResponse.json(
       { orderId: created.id, orderNumber: created.orderNumber },
       { status: 201 }
     );
-  } catch (e: any) {
-    console.error("CASH order error:", e);
+  } catch (e: unknown) {
+    console.error("ORDER ERROR:", e);
 
-    const status = typeof e?.status === "number" ? e.status : 500;
-    const message = status >= 500 ? "Error creando orden" : (e?.message ?? "Error creando orden");
-
-    return NextResponse.json({ error: message }, { status });
-  }
-}
-
-/**
- * GET /api/orders (ADMIN)
- */
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions).catch(() => null);
-    const role = (session?.user as any)?.role as string | undefined;
-
-    if (!session?.user || !role) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    if (e instanceof HttpError) {
+      return NextResponse.json(
+        { error: e.message },
+        { status: e.status }
+      );
     }
 
-    const orders = await prisma.order.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        items: { include: { product: true } },
-      },
-    });
-
-    return NextResponse.json(orders);
-  } catch (e) {
-    console.error("GET /api/orders error:", e);
-    return NextResponse.json({ error: "Error cargando órdenes" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error creando orden" },
+      { status: 500 }
+    );
   }
 }

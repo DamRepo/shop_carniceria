@@ -3,6 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "./db";
 import bcrypt from "bcryptjs";
+import { normalizeEmail } from "./normalize";
+import { rateLimit } from "./rate-limit";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -22,23 +24,41 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+      async authorize(credentials, req) {
+        const email = normalizeEmail(credentials?.email);
+        const password =
+          typeof credentials?.password === "string"
+            ? credentials.password
+            : "";
+
+        if (!email || !password) {
           return null;
         }
 
+        const forwardedFor =
+          req?.headers?.["x-forwarded-for"] ||
+          req?.headers?.["x-real-ip"] ||
+          "unknown";
+
+        const ip = Array.isArray(forwardedFor)
+          ? forwardedFor[0]
+          : String(forwardedFor).split(",")[0].trim();
+
+        const rl = rateLimit(`login:${ip}`, 5, 15 * 60 * 1000);
+
+        if (!rl.success) {
+          throw new Error("Demasiados intentos. Probá más tarde.");
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
         });
 
         if (!user || !user.password) {
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
           return null;
@@ -49,7 +69,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-          phone: user.phone, // ✅ agregado
+          phone: user.phone,
         } as any;
       },
     }),
@@ -60,7 +80,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.id = (user as any).id;
-        (token as any).phone = (user as any).phone ?? null; // ✅ agregado
+        (token as any).phone = (user as any).phone ?? null;
       }
       return token;
     },
@@ -68,7 +88,7 @@ export const authOptions: NextAuthOptions = {
       if (session?.user) {
         (session.user as any).role = (token as any).role as string | undefined;
         (session.user as any).id = (token as any).id as string | undefined;
-        (session.user as any).phone = (token as any).phone ?? null; // ✅ agregado
+        (session.user as any).phone = (token as any).phone ?? null;
       }
       return session;
     },

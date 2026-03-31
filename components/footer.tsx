@@ -1,12 +1,14 @@
 import Image from "next/image";
+import Link from "next/link";
 import {
   MapPin,
   Phone,
   Clock,
-  CreditCard,
   MessageCircle,
   Instagram,
   Facebook,
+  RotateCcw,
+  CreditCard,
 } from "lucide-react";
 
 const paymentMethods = [
@@ -17,144 +19,180 @@ const paymentMethods = [
   { name: "Naranja", logo: "/payments/naranja.png" },
 ];
 
-// 🔹 URLs
-const WHATSAPP_URL =
-  "https://wa.me/5493458556104?text=Hola%20quiero%20hacer%20una%20consulta";
-const INSTAGRAM_URL = "https://instagram.com/TU_USUARIO";
-const FACEBOOK_URL = "https://facebook.com/TU_PAGINA";
-
 export function Footer() {
   return (
-    <footer className="w-full border-t bg-muted/50 mt-16">
-      {/* ✅ CAMBIO: contenedor más ancho (antes: container + max-w-7xl) */}
-      <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-10 py-8">
-        {/* ✅ CAMBIO: gap más amplio en desktop */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
-          {/* Dirección */}
-          <div className="flex items-start gap-3 w-full">
-            <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-            <div className="min-w-0">
-              <h3 className="font-semibold mb-1">Dirección</h3>
-              <p className="text-sm text-muted-foreground">
-                Calle Sarmiento N°403
-                <br />
-                San Jose de Feliciano, Entre Rios
-              </p>
+    <footer className="mt-20 w-full bg-zinc-950 text-zinc-300">
+      <div className="mx-auto max-w-screen-2xl px-6 py-14">
+
+        {/* columnas */}
+        <div className="grid gap-12 md:grid-cols-3">
+
+          {/* marca */}
+          <div className="space-y-5">
+            <h2 className="text-xl font-semibold text-white">
+              Carnicería El Negro
+            </h2>
+
+            <p className="text-sm leading-6 text-zinc-400 max-w-xs">
+              Compra online de forma simple y segura. Elegí tus productos y
+              coordiná retiro o entrega.
+            </p>
+
+            <div className="space-y-3 text-sm">
+
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-red-500 mt-1" />
+                <p>
+                  Calle Sarmiento N°403
+                  <br />
+                  San José de Feliciano, Entre Ríos
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-red-500" />
+                <a
+                  href="tel:+5493458556104"
+                  className="hover:text-white transition"
+                >
+                  +54 9 3458 556104
+                </a>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <Clock className="h-4 w-4 text-red-500 mt-1" />
+                <p>
+                  Lunes a Sábado: 7:30 - 13:00 / 17:00 - 22:00
+                  <br />
+                  Domingos: 8:00 - 12:00
+                </p>
+              </div>
+
             </div>
           </div>
 
-          {/* Teléfono */}
-          <div className="flex items-start gap-3 w-full">
-            <Phone className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-            <div className="min-w-0">
-              <h3 className="font-semibold mb-1">Teléfono</h3>
+          {/* links */}
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">
+              Información
+            </h3>
 
-              {/* ✅ CAMBIO: teléfono clickeable */}
+            <ul className="space-y-3 text-sm">
+              <li>
+                <Link
+                  href="/terminos-y-condiciones"
+                  className="hover:text-white transition"
+                >
+                  Términos y condiciones
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/politica-de-privacidad"
+                  className="hover:text-white transition"
+                >
+                  Política de privacidad
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/soporte"
+                  className="hover:text-white transition"
+                >
+                  Soporte
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* arrepentimiento */}
+          <div className="space-y-6">
+
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+              Atención al cliente
+            </h3>
+
+            <p className="text-sm text-zinc-400 leading-6">
+              Si tuviste un problema con tu compra online podés comunicarte con
+              nosotros o solicitar la cancelación.
+            </p>
+
+            <Link
+              href="/arrepentimiento"
+              className="inline-flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white hover:bg-red-700 transition"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Botón de arrepentimiento
+            </Link>
+
+            {/* redes */}
+            <div className="flex gap-3 pt-2">
+
               <a
-                href="tel:+5493458556104"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Llamar por teléfono"
-              >
-                +54 9 3458 556104
-              </a>
-            </div>
-          </div>
-
-          {/* Horarios */}
-          <div className="flex items-start gap-3 w-full">
-            <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-            <div className="min-w-0">
-              <h3 className="font-semibold mb-1">Horarios</h3>
-              <p className="text-sm text-muted-foreground">
-                Lunes a Sábado: 7:30 - 13:00 y 17:00 - 22:00
-                <br />
-                Domingos: 8:00 - 12:00
-              </p>
-            </div>
-          </div>
-
-          {/* Redes y Contacto */}
-          <div className="w-full">
-            <h3 className="font-semibold mb-3">Contacto y Redes</h3>
-
-            {/* ✅ CAMBIO: redes en fila + wrap para ocupar más ancho */}
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
-              <a
-                href={"https://l.instagram.com/?u=http%3A%2F%2Fwa.me%2F%2B543458556104%3Futm_source%3Dig%26utm_medium%3Dsocial%26utm_content%3Dlink_in_bio%26fbclid%3DPAZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQMMjU2MjgxMDQwNTU4AAGn9x3xQyT-xr5Niml8d1D5n0mqJzaDuRQjW1qp-4mUoAo4ykIaQ04PEJhM1Y0_aem_PDb3zSgMIZ3r9W3kz8RYIw&e=AT67j8zVGAcPfe4W1Jhv6bqiZ7HmGlzXDrq8JbHZ67OOUfZMSx2WtBZk53LcizcMg2h2MFjap8em6Bb6IEclXKj-aO5TjWx53nZusM9HBw"}
+                href="https://wa.me/5493458556104"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-green-500 transition-colors"
-                aria-label="Abrir WhatsApp"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-green-500 transition"
               >
                 <MessageCircle className="h-4 w-4" />
-                WhatsApp
               </a>
 
               <a
-                href={"https://www.instagram.com/elnegrocarniceria/"}
+                href="https://www.instagram.com/elnegrocarniceria/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-pink-500 transition-colors"
-                aria-label="Abrir Instagram"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-pink-500 transition"
               >
                 <Instagram className="h-4 w-4" />
-                Instagram
               </a>
 
               <a
-                href={"https://www.facebook.com/sergio744470"}
+                href="https://www.facebook.com/sergio744470"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-blue-500 transition-colors"
-                aria-label="Abrir Facebook"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-blue-500 transition"
               >
                 <Facebook className="h-4 w-4" />
-                Facebook
               </a>
+
             </div>
 
-            {/* ✅ CAMBIO: mini nota */}
-            <p className="text-xs text-muted-foreground mt-3">
-              * WhatsApp se abre en una pestaña nueva.
-              </p>
-            <p className="text-xs text-muted-foreground mt-3">
-                * En celular, abre la app.
-            </p>
           </div>
         </div>
 
-        {/* Medios de Pago */}
-        <div className="mt-8 pt-8 border-t">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <CreditCard className="h-5 w-5" />
-              <h3 className="font-semibold text-sm">Medios de pago aceptados</h3>
-            </div>
+        {/* separador */}
+        <div className="border-t border-zinc-800 my-10"></div>
 
-            <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
-              {paymentMethods.map((method) => (
-                <div
-                  key={method.name}
-                  className="relative h-10 w-16 md:h-12 md:w-20 flex items-center justify-center bg-white/5 rounded-lg p-2 hover:bg-white/10 transition-colors"
-                >
-                  <Image
-                    src={method.logo}
-                    alt={method.name}
-                    fill
-                    className="object-contain p-1"
-                  />
-                </div>
-              ))}
-            </div>
+        {/* pagos centrados */}
+        <div className="flex flex-col items-center gap-4">
+
+          <div className="flex items-center gap-2 text-sm text-zinc-400">
+            <CreditCard className="h-4 w-4" />
+            Medios de pago aceptados
           </div>
-        </div>
 
-        {/* Copyright */}
-        <div className="mt-8 pt-6 border-t space-y-2">
-          <p className="text-center text-sm text-muted-foreground">
-            © {new Date()?.getFullYear?.()} Carnicería El Negro. Todos los
-            derechos reservados.
+          <div className="flex flex-wrap justify-center gap-4">
+            {paymentMethods.map((method) => (
+              <div
+                key={method.name}
+                className="relative h-10 w-16 rounded-md bg-white p-1"
+              >
+                <Image
+                  src={method.logo}
+                  alt={method.name}
+                  fill
+                  className="object-contain"
+                />
+              </div>
+            ))}
+          </div>
+
+          <p className="text-sm text-zinc-500 pt-4 text-center">
+            © {new Date().getFullYear()} Carnicería El Negro. Todos los derechos reservados.
           </p>
+
         </div>
       </div>
     </footer>

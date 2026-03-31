@@ -7,84 +7,7 @@ import { uploadImages } from "@/lib/uploads/upload-images";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/* =========================
-   GET /api/admin/products
-   ========================= */
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const categorySlug = searchParams.get("category");
-    const isActive = searchParams.get("isActive");
-
-    const where: any = {};
-
-    // Filtrar por categoría (opcional)
-    if (categorySlug && categorySlug !== "todos") {
-      where.category = { slug: categorySlug };
-    }
-
-    // Solo filtrar si viene explícitamente "true" o "false"
-    if (isActive === "true" || isActive === "false") {
-      where.isActive = isActive === "true";
-    }
-
-    // ✅ SELECT explícito
-    const products = await prisma.product.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        description: true,
-        price: true,
-        categoryId: true,
-        image: true,
-        stock: true,
-        unitType: true,
-
-        // ✅ NUEVO: contenido neto
-        netWeightGr: true,
-        netVolumeMl: true,
-
-        // ✅ IVA opcional por producto
-        vatRate: true,
-
-        isOnSale: true,
-        salePrice: true,
-        saleEndDate: true,
-        discountPercent: true,
-        isFeatured: true,
-        isActive: true,
-
-        category: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-
-            // ✅ IVA por categoría
-            vatRate: true,
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(products ?? []);
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    return NextResponse.json(
-      { error: "Error al obtener productos" },
-      { status: 500 }
-    );
-  }
-}
+type UnitType = "PER_KG" | "PER_UNIT";
 
 /* =========================
    Helpers
@@ -108,22 +31,40 @@ function strVal(v: FormDataEntryValue | null) {
   return String(v ?? "").trim();
 }
 
-type UnitType = "PER_KG" | "PER_UNIT";
-
 function parseUnitType(v: FormDataEntryValue | null): UnitType | null {
   const s = String(v ?? "").trim();
   if (s === "PER_KG" || s === "PER_UNIT") return s;
   return null;
 }
 
+/**
+ * Modelo consistente:
+ * - PER_UNIT => stock en unidades enteras
+ * - PER_KG   => stock en gramos enteros en DB
+ */
 function normalizeStock(stockRaw: number, unitType: UnitType) {
-  if (!Number.isFinite(stockRaw)) return 0;
-  if (unitType === "PER_UNIT") return Math.max(0, Math.floor(stockRaw));
-  // PER_KG: permitir decimales
-  return Math.max(0, stockRaw);
+  if (!Number.isFinite(stockRaw) || stockRaw < 0) return 0;
+
+  if (unitType === "PER_UNIT") {
+    return Math.max(0, Math.floor(stockRaw));
+  }
+
+  // El admin carga kg; en DB guardamos gramos enteros
+  return Math.max(0, Math.round(stockRaw * 1000));
 }
 
-/** ✅ Parse robusto para datetime-local / ISO */
+function stockFromDb(unitType: UnitType, stock: number) {
+  if (!Number.isFinite(stock) || stock < 0) return 0;
+
+  if (unitType === "PER_UNIT") {
+    return stock;
+  }
+
+  // En DB está en gramos; al admin le devolvemos kg
+  return stock / 1000;
+}
+
+/** Parse robusto para datetime-local / ISO */
 function parseOptionalDateTime(raw: string): { date: Date | null; error?: string } {
   const s = raw.trim();
   if (!s) return { date: null };
@@ -132,11 +73,12 @@ function parseOptionalDateTime(raw: string): { date: Date | null; error?: string
   if (Number.isNaN(d.getTime())) {
     return { date: null, error: "saleEndDate inválida" };
   }
+
   return { date: d };
 }
 
 /**
- * ✅ IVA opcional por producto:
+ * IVA opcional por producto:
  * - "" => null (usa categoría)
  * - "0.21" => 0.21
  * - "0.105" => 0.105
@@ -154,7 +96,7 @@ function parseVatRate(v: FormDataEntryValue | null): number | null {
 }
 
 /**
- * ✅ Parse opcional para int positivo (gramos/ml)
+ * Parse opcional para int positivo (gramos/ml)
  * - "" => null
  * - "0" o negativo => null
  * - "250.7" => 250
@@ -170,6 +112,86 @@ function parseOptionalPositiveInt(v: FormDataEntryValue | null): number | null {
   if (int <= 0) return null;
 
   return int;
+}
+
+/* =========================
+   GET /api/admin/products
+   ========================= */
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const categorySlug = searchParams.get("category");
+    const isActive = searchParams.get("isActive");
+
+    const where: {
+      category?: { slug: string };
+      isActive?: boolean;
+    } = {};
+
+    if (categorySlug && categorySlug !== "todos") {
+      where.category = { slug: categorySlug };
+    }
+
+    if (isActive === "true" || isActive === "false") {
+      where.isActive = isActive === "true";
+    }
+
+    const products = await prisma.product.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        price: true,
+        categoryId: true,
+        image: true,
+        stock: true,
+        unitType: true,
+        netWeightGr: true,
+        netVolumeMl: true,
+        vatRate: true,
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+        isFeatured: true,
+        isActive: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            vatRate: true,
+          },
+        },
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizedProducts = (products as any[]).map((product: any) => ({
+      ...product,
+      stock: stockFromDb(product.unitType as UnitType, product.stock),
+    }));
+
+    return NextResponse.json(normalizedProducts);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    return NextResponse.json(
+      { error: "Error al obtener productos" },
+      { status: 500 }
+    );
+  }
 }
 
 /* =========================
@@ -193,7 +215,6 @@ export async function POST(request: Request) {
 
     const categoryId = strVal(form.get("categoryId"));
 
-    // ✅ unitType viene del form
     const unitType = parseUnitType(form.get("unitType"));
     if (!unitType) {
       return NextResponse.json(
@@ -202,7 +223,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ contenido neto (solo PER_UNIT; PER_KG lo dejamos null)
+    const measurementUnit = strVal(form.get("measurementUnit")) || "un";
+    const unitMultiplierRaw = numVal(form.get("unitMultiplier"));
+    const unitMultiplier =
+      Number.isFinite(unitMultiplierRaw) && unitMultiplierRaw > 0
+        ? unitMultiplierRaw
+        : 1;
+
+    const brandRaw = strVal(form.get("brand"));
+    const brand = brandRaw || null;
+
     const netWeightGrRaw = parseOptionalPositiveInt(form.get("netWeightGr"));
     const netVolumeMlRaw = parseOptionalPositiveInt(form.get("netVolumeMl"));
 
@@ -211,21 +241,31 @@ export async function POST(request: Request) {
 
     if (unitType === "PER_UNIT" && netWeightGr && netVolumeMl) {
       return NextResponse.json(
-        { error: "Cargá solo uno: netWeightGr (gramos) o netVolumeMl (ml), no ambos." },
+        {
+          error:
+            "Cargá solo uno: netWeightGr (gramos) o netVolumeMl (ml), no ambos.",
+        },
         { status: 400 }
       );
     }
 
-    // ✅ vatRate opcional por producto
     const vatRate = parseVatRate(form.get("vatRate"));
 
-    const priceARS = numVal(form.get("price")); // ARS decimal
+    const priceARS = numVal(form.get("price"));
     const stockRaw = numVal(form.get("stock"));
+
+    const maxStock = unitType === "PER_KG" ? 999_999 : 2_000_000;
+    if (!Number.isFinite(stockRaw) || stockRaw < 0 || stockRaw > maxStock) {
+      return NextResponse.json(
+        { error: `Stock inválido (máximo ${maxStock} ${unitType === "PER_KG" ? "kg" : "unidades"})` },
+        { status: 400 }
+      );
+    }
+
     const stock = normalizeStock(stockRaw, unitType);
 
     const isOnSale = boolVal(form.get("isOnSale"));
-    const salePriceStr = strVal(form.get("salePrice"));
-    const salePriceARS = salePriceStr ? Number(salePriceStr) : null;
+    const salePriceARS = numVal(form.get("salePrice"));
 
     const saleEndDateStr = strVal(form.get("saleEndDate"));
     const parsed = parseOptionalDateTime(saleEndDateStr);
@@ -236,7 +276,6 @@ export async function POST(request: Request) {
     const isFeatured = boolVal(form.get("isFeatured"));
     const isActive = boolVal(form.get("isActive"));
 
-    // Validación mínima
     if (!name || !slug || !categoryId) {
       return NextResponse.json(
         { error: "Faltan campos obligatorios (name/slug/categoryId)" },
@@ -248,32 +287,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Precio inválido" }, { status: 400 });
     }
 
-    // Unicidad slug
     const slugExists = await prisma.product.findUnique({ where: { slug } });
     if (slugExists) {
       return NextResponse.json({ error: "El slug ya existe" }, { status: 400 });
     }
 
-    // Imagen opcional (solo si sube archivo)
     let image: string | null = null;
     const imageEntry = form.get("image");
+
     if (imageEntry instanceof File && imageEntry.size > 0) {
       const [uploaded] = await uploadImages([imageEntry]);
       image = uploaded.secureUrl;
     }
 
-    // ✅ Oferta (si isOnSale false => limpiamos todo)
     const safeSaleEndDate = isOnSale ? parsed.date : null;
 
     const safeSalePriceCents =
-      isOnSale && salePriceARS !== null && Number.isFinite(salePriceARS) && salePriceARS > 0
+      isOnSale && Number.isFinite(salePriceARS) && salePriceARS > 0
         ? Math.round(salePriceARS * 100)
         : null;
 
     const priceCents = Math.round(priceARS * 100);
 
     const discountPercent =
-      isOnSale && safeSalePriceCents !== null && priceCents > 0 && safeSalePriceCents < priceCents
+      isOnSale &&
+      safeSalePriceCents !== null &&
+      priceCents > 0 &&
+      safeSalePriceCents < priceCents
         ? Math.round(((priceCents - safeSalePriceCents) / priceCents) * 100)
         : null;
 
@@ -283,27 +323,22 @@ export async function POST(request: Request) {
         slug,
         description,
         categoryId,
-
-        unitType: unitType as any,
+        unitType,
         stock,
-
         price: priceCents,
         image,
-
-        // ✅ NUEVO: contenido neto
         netWeightGr,
         netVolumeMl,
-
-        // ✅ IVA opcional por producto
         vatRate,
-
         isOnSale,
         salePrice: safeSalePriceCents,
         saleEndDate: safeSaleEndDate,
         discountPercent,
-
         isFeatured,
         isActive,
+        measurementUnit,
+        unitMultiplier,
+        brand,
       },
       select: {
         id: true,
@@ -315,11 +350,8 @@ export async function POST(request: Request) {
         image: true,
         stock: true,
         unitType: true,
-
-        // ✅ NUEVO
         netWeightGr: true,
         netVolumeMl: true,
-
         vatRate: true,
         isOnSale: true,
         salePrice: true,
@@ -327,6 +359,9 @@ export async function POST(request: Request) {
         discountPercent: true,
         isFeatured: true,
         isActive: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
         category: {
           select: {
             id: true,
@@ -338,7 +373,12 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(created, { status: 201 });
+    const normalizedCreated = {
+      ...created,
+      stock: stockFromDb(created.unitType as UnitType, created.stock),
+    };
+
+    return NextResponse.json(normalizedCreated, { status: 201 });
   } catch (error) {
     console.error("Error creating product:", error);
     return NextResponse.json(

@@ -58,11 +58,18 @@ export async function POST(req: Request) {
 
   let slug = baseSlug;
 
-  // evitar colisiones
-  for (let i = 0; i < 50; i++) {
-    const exists = await prisma.category.findUnique({ where: { slug } });
-    if (!exists) break;
-    slug = `${baseSlug}-${i + 2}`;
+  // evitar colisiones (una sola query)
+  const existing = await prisma.category.findMany({
+    where: { slug: { startsWith: baseSlug } },
+    select: { slug: true },
+  });
+  const taken = new Set(existing.map((c) => c.slug));
+
+  if (taken.has(slug)) {
+    for (let i = 2; i < 52; i++) {
+      slug = `${baseSlug}-${i}`;
+      if (!taken.has(slug)) break;
+    }
   }
 
   const created = await prisma.category.create({

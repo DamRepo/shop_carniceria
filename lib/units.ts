@@ -1,4 +1,4 @@
-import type { UnitType } from "@prisma/client";
+type UnitType = "PER_KG" | "PER_UNIT";
 
 export const GRAMS_PER_KG = 1000;
 

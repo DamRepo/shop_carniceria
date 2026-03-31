@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600; // 1 hora — categorías raramente cambian
 
 export async function GET() {
   try {

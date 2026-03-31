@@ -6,13 +6,34 @@ import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALLOWED: Record<string, true> = {
-  PENDING: true,
-  CONFIRMED: true,
-  PREPARING: true,
-  READY: true,
-  COMPLETED: true,
-  CANCELLED: true,
+const ALLOWED_STATUSES = [
+  "PENDING_PAYMENT",
+  "PENDING",
+  "CONFIRMED",
+  "PREPARING",
+  "READY",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+
+type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
+
+function isAllowedStatus(value: unknown): value is AllowedStatus {
+  return (
+    typeof value === "string" &&
+    ALLOWED_STATUSES.includes(value as AllowedStatus)
+  );
+}
+
+// Transiciones válidas de estado. COMPLETED y CANCELLED son terminales.
+const VALID_TRANSITIONS: Record<AllowedStatus, readonly AllowedStatus[]> = {
+  PENDING_PAYMENT: ["PENDING", "CONFIRMED", "CANCELLED"],
+  PENDING:         ["CONFIRMED", "CANCELLED"],
+  CONFIRMED:       ["PREPARING", "CANCELLED"],
+  PREPARING:       ["READY", "CANCELLED"],
+  READY:           ["COMPLETED", "CANCELLED"],
+  COMPLETED:       [],
+  CANCELLED:       [],
 };
 
 export async function PATCH(
@@ -20,54 +41,159 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions).catch(() => null);
 
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session || (session.user as any)?.role !== "ADMIN") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => null);
-    const status = body?.status as string | undefined;
+    const orderId = params?.id?.trim();
 
-    if (!status || !ALLOWED[status]) {
+    if (!orderId) {
+      return NextResponse.json({ error: "Falta id de orden" }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => null);
+    const nextStatus = body?.status;
+
+    if (!isAllowedStatus(nextStatus)) {
       return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
     }
 
-    // Traemos el estado actual para decidir confirmedAt
     const current = await prisma.order.findUnique({
-      where: { id: params.id },
-      select: { confirmedAt: true, status: true },
-    });
-
-    if (!current) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
-    }
-
-    const shouldConfirm =
-      status === "CONFIRMED" ||
-      status === "PREPARING" ||
-      status === "READY" ||
-      status === "COMPLETED";
-
-    const data: any = { status };
-
-    // ✅ Si pasa a estado “real” y no estaba confirmada, la confirmamos ahora
-    if (shouldConfirm && !current.confirmedAt) {
-      data.confirmedAt = new Date();
-    }
-
-    // Si cancelás, no tocamos confirmedAt (podés decidir lo contrario)
-    const order = await prisma.order.update({
-      where: { id: params.id },
-      data,
-      include: {
-        items: { include: { product: true } },
+      where: { id: orderId },
+      select: {
+        id: true,
+        status: true,
+        confirmedAt: true,
+        cancelledAt: true,
+        paymentStatus: true,
       },
     });
 
-    return NextResponse.json(order);
+    if (!current) {
+      return NextResponse.json(
+        { error: "Orden no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    const allowedNext = VALID_TRANSITIONS[current.status as AllowedStatus] ?? [];
+    if (!allowedNext.includes(nextStatus)) {
+      return NextResponse.json(
+        {
+          error: `Transición inválida: ${current.status} → ${nextStatus}`,
+          allowedNext,
+        },
+        { status: 422 }
+      );
+    }
+
+    const shouldSetConfirmedAt =
+      nextStatus === "CONFIRMED" ||
+      nextStatus === "PREPARING" ||
+      nextStatus === "READY" ||
+      nextStatus === "COMPLETED";
+
+    const isCancelling = nextStatus === "CANCELLED";
+
+    const data: {
+      status: AllowedStatus;
+      confirmedAt?: Date;
+      cancelledAt?: Date | null;
+      cancellationReason?: string | null;
+      cancelledBy?: string | null;
+    } = {
+      status: nextStatus,
+    };
+
+    // Si pasa a un estado operativo y todavía no fue confirmada
+    if (shouldSetConfirmedAt && !current.confirmedAt) {
+      data.confirmedAt = new Date();
+    }
+
+    // Si pasa a cancelada y todavía no estaba cancelada
+    if (isCancelling && !current.cancelledAt) {
+      data.cancelledAt = new Date();
+      data.cancelledBy = "ADMIN";
+    }
+
+    // Si deja de estar cancelada, limpiamos datos de cancelación
+    if (!isCancelling && current.cancelledAt) {
+      data.cancelledAt = null;
+      data.cancellationReason = null;
+      data.cancelledBy = null;
+    }
+
+    // Optimistic lock: solo actualiza si el status no cambió desde que lo leímos
+    const { count } = await prisma.order.updateMany({
+      where: { id: orderId, status: current.status },
+      data,
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { error: "La orden fue modificada por otro usuario. Recargá la página." },
+        { status: 409 }
+      );
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        confirmedAt: true,
+        cancelledAt: true,
+        cancellationReason: true,
+        cancelledBy: true,
+        subtotal: true,
+        deliveryCost: true,
+        total: true,
+        deliveryMethod: true,
+        address: true,
+        addressDetails: true,
+        city: true,
+        postalCode: true,
+        notes: true,
+        pickupDate: true,
+        pickupTimeSlot: true,
+        pickupNotes: true,
+        customerName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+        items: {
+          select: {
+            id: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: {
+              select: {
+                id: true,
+                name: true,
+                unitType: true,
+                image: true,
+                slug: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(order, { status: 200 });
   } catch (error) {
     console.error("Error updating order:", error);
-    return NextResponse.json({ error: "Error al actualizar orden" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Error al actualizar orden" },
+      { status: 500 }
+    );
   }
 }

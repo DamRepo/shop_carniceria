@@ -132,6 +132,33 @@ export function stepDownKg(quantity: number): number {
 }
 
 /**
+ * Normaliza cantidad en KG:
+ * - mínimo 0.1
+ * - < 1kg => pasos de 0.1
+ * - >= 1kg => pasos de 0.5
+ *
+ * Ejemplos:
+ * 0.26 -> 0.3
+ * 0.94 -> 0.9
+ * 1.1  -> 1.0
+ * 1.24 -> 1.0
+ * 1.26 -> 1.5
+ */
+export function normalizeKgQuantity(quantity: number): number {
+  const q = Number(quantity);
+
+  if (!Number.isFinite(q) || q <= 0) {
+    return 0.1;
+  }
+
+  if (q < 1) {
+    return +(Math.round(q * 10) / 10).toFixed(1);
+  }
+
+  return +(Math.round(q * 2) / 2).toFixed(1);
+}
+
+/**
  * Formatea cantidad según tipo de unidad:
  * - PER_KG: <1kg -> gramos (0.2 => "200 g"), >=1kg -> "1,5 kg"
  * - PER_UNIT: "1 unidad" / "2 unidades"
@@ -166,4 +193,46 @@ export function formatQuantity(
  */
 export function getUnitLabel(unitType: UnitType): string {
   return unitType === "PER_KG" ? "kg" : "unidad";
+}
+
+/* =========================================================
+   PRECIO DE REFERENCIA (leyenda comparativa)
+========================================================= */
+
+/**
+ * Genera la leyenda de precio de referencia para mostrar en tarjetas de producto.
+ *
+ * Lógica de prioridad:
+ *  1. netVolumeMl presente  → "Precio por 1 L: $X"   ($/litro calculado)
+ *  2. netWeightGr presente  → "Precio por 1 kg: $X"  ($/kg calculado)
+ *  3. PER_KG sin peso/vol   → "Precio por 1 kg: $X"  (precio directo, ya es por kg)
+ *  4. PER_UNIT sin peso/vol → "Precio por 1 ud: $X"  (precio directo por unidad)
+ *
+ * priceCents debe ser el precio final efectivo (con oferta aplicada si corresponde).
+ * Devuelve null si el precio no es válido.
+ */
+export function getReferencePriceLabel(params: {
+  priceCents: number | null | undefined;
+  unitType: UnitType;
+  netWeightGr?: number | null;
+  netVolumeMl?: number | null;
+}): string | null {
+  const cents = Number(params.priceCents ?? 0);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+
+  const ml = Number(params.netVolumeMl ?? 0);
+  if (Number.isFinite(ml) && ml > 0) {
+    return `Precio por 1 L: ${formatPrice(Math.round((cents * 1000) / ml))}`;
+  }
+
+  const gr = Number(params.netWeightGr ?? 0);
+  if (Number.isFinite(gr) && gr > 0) {
+    return `Precio por 1 kg: ${formatPrice(Math.round((cents * 1000) / gr))}`;
+  }
+
+  if (params.unitType === "PER_KG") {
+    return `Precio por 1 kg: ${formatPrice(cents)}`;
+  }
+
+  return `Precio por 1 ud: ${formatPrice(cents)}`;
 }

@@ -8,7 +8,13 @@ import { ShoppingCart, Zap, Tag } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatPrice, getUnitLabel, netFromGrossCents, getVatRate } from "@/lib/utils-format";
+import {
+  formatPrice,
+  netFromGrossCents,
+  getVatRate,
+  getReferencePriceLabel,
+} from "@/lib/utils-format";
+import { UnitPriceTag } from "@/components/UnitPriceTag";
 import { useCartStore } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -25,15 +31,24 @@ interface ProductDTO {
   price: number;
   stock: number;
 
-  // ❌ SACADO: netWeightGr / netVolumeMl
-
   vatRate?: number | null;
   category?: { vatRate?: number | null } | null;
+
+  netWeightGr?: number | null;
+  netVolumeMl?: number | null;
 
   isOnSale?: boolean;
   salePrice?: number | null;
   saleEndDate?: string | null;
   discountPercent?: number | null;
+
+  minPurchaseQty?: number | null;
+  qtyStep?: number | null;
+  maxPurchaseQty?: number | null;
+  allowsDecimals?: boolean;
+
+  measurementUnit?: string | null;
+  unitMultiplier?: number | null;
 }
 
 interface ProductCardProps {
@@ -53,6 +68,33 @@ function calcDiscountPercent(original: number, sale: number) {
   if (!Number.isFinite(original) || !Number.isFinite(sale)) return null;
   if (original <= 0 || sale <= 0 || sale >= original) return null;
   return Math.round(((original - sale) / original) * 100);
+}
+
+function getInitialQty(product: ProductDTO) {
+  const offerActive = hasActiveOffer(product);
+  if (!offerActive) return 1;
+
+  const min = Number(product.minPurchaseQty ?? 1);
+  return Number.isFinite(min) && min > 0 ? min : 1;
+}
+
+function getOfferQtyLabel(product: ProductDTO) {
+  const offerActive = hasActiveOffer(product);
+  if (!offerActive) return null;
+
+  const min = Number(product.minPurchaseQty ?? 0);
+  const step = Number(product.qtyStep ?? 0);
+  const unit = product.unitType ?? "PER_KG";
+
+  if (unit === "PER_KG" && min >= 2 && step >= 2) {
+    return `Promo por ${min} kg`;
+  }
+
+  if (unit === "PER_UNIT" && min >= 2 && step >= 1) {
+    return `Promo por ${min} un`;
+  }
+
+  return null;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
@@ -78,6 +120,15 @@ export function ProductCard({ product }: ProductCardProps) {
   const vatRate = getVatRate(product);
   const netPrice = netFromGrossCents(finalPrice, vatRate);
 
+  const initialQty = getInitialQty(product);
+  const offerQtyLabel = getOfferQtyLabel(product);
+  const referencePriceLabel = getReferencePriceLabel({
+    priceCents: finalPrice,
+    unitType: product.unitType ?? "PER_KG",
+    netWeightGr: product.netWeightGr,
+    netVolumeMl: product.netVolumeMl,
+  });
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -89,13 +140,19 @@ export function ProductCard({ product }: ProductCardProps) {
       name: product.name,
       slug: product.slug,
       price: finalPrice,
-      quantity: 1,
+      quantity: initialQty,
       unitType: product.unitType ?? "PER_KG",
       image: product.image ?? undefined,
       vatRate,
     });
 
-    toast.success(`${product.name} agregado al carrito`);
+    toast.success(
+      `${product.name} agregado al carrito${
+        (product.unitType ?? "PER_KG") === "PER_KG"
+          ? ` (${initialQty} kg)`
+          : ` (${initialQty} un)`
+      }`
+    );
   };
 
   const handleBuyNow = (e: React.MouseEvent) => {
@@ -109,7 +166,7 @@ export function ProductCard({ product }: ProductCardProps) {
       name: product.name,
       slug: product.slug,
       price: finalPrice,
-      quantity: 1,
+      quantity: initialQty,
       unitType: product.unitType ?? "PER_KG",
       image: product.image ?? undefined,
       vatRate,
@@ -127,7 +184,6 @@ export function ProductCard({ product }: ProductCardProps) {
           transition-all hover:shadow-lg hover:shadow-primary/20 hover:border-primary/50
         "
       >
-        {/* IMAGEN: grande, sin margen interno */}
         <div className="relative bg-muted overflow-hidden h-[220px] md:h-[240px]">
           {product.image ? (
             <Image
@@ -144,25 +200,28 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
 
           {offerActive && (
-            <div className="absolute top-2 left-2 flex items-center gap-2">
-              <Badge className="bg-red-600 hover:bg-red-700 text-white">
+            <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1">
+              <Badge className="bg-red-600 hover:bg-red-700 text-white rounded-full px-3 py-1 shadow-md">
                 <Tag className="h-3 w-3 mr-1" />
                 Oferta
               </Badge>
+
               {discount !== null && (
-                <Badge className="bg-black text-white font-bold">-{discount}%</Badge>
+                <Badge className="bg-black text-white font-bold rounded-full px-3 py-1 shadow-md">
+                  -{discount}%
+                </Badge>
               )}
             </div>
           )}
 
           {product.stock > 0 && product.stock <= 5 && (
-            <Badge className="absolute top-2 right-2 bg-orange-500 hover:bg-orange-600">
+            <Badge className="absolute top-2 left-2 bg-orange-500 hover:bg-orange-600 z-20">
               Últimas
             </Badge>
           )}
 
           {product.stock <= 0 && (
-            <Badge className="absolute top-2 right-2 bg-red-600 hover:bg-red-700">
+            <Badge className="absolute top-2 left-2 bg-red-600 hover:bg-red-700 z-20">
               Agotado
             </Badge>
           )}
@@ -176,6 +235,12 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="text-sm text-muted-foreground line-clamp-2 min-h-[34px]">
             {product.description?.trim() || " "}
           </p>
+
+          {offerQtyLabel ? (
+            <p className="text-xs font-medium text-red-600">
+              {offerQtyLabel}
+            </p>
+          ) : null}
 
           <div className="flex flex-col gap-1">
             <div className="leading-tight">
@@ -198,9 +263,17 @@ export function ProductCard({ product }: ProductCardProps) {
               )}
             </div>
 
-            <span className="text-xs text-muted-foreground">
-              Precio por {getUnitLabel(product.unitType ?? "PER_KG")}
-            </span>
+            {product.measurementUnit && product.unitMultiplier != null ? (
+              <UnitPriceTag
+                priceCents={finalPrice}
+                measurementUnit={product.measurementUnit}
+                unitMultiplier={product.unitMultiplier}
+              />
+            ) : referencePriceLabel ? (
+              <span className="text-xs text-muted-foreground">
+                {referencePriceLabel}
+              </span>
+            ) : null}
 
             <span className="text-[11px] text-muted-foreground leading-tight lowercase">
               precio sin impuestos nacionales: {formatPrice(netPrice)}

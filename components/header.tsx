@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { formatPrice } from "@/lib/utils-format";
 
 type MenuItem =
   | { type: "link"; href: string; label: string }
@@ -102,7 +103,8 @@ export function Header() {
     (async () => {
       setCatsLoading(true);
       try {
-        const res = await fetch("/api/categories/tree", { cache: "no-store" });
+        // Sin cache: "no-store" — el ISR del servidor (revalidate=3600) cachea la respuesta
+        const res = await fetch("/api/categories/tree");
         const data = await safeJson<NavCategory[]>(res);
         if (!alive) return;
         setNavCategories(Array.isArray(data) ? data : []);
@@ -199,10 +201,10 @@ export function Header() {
       } finally {
         setSearchLoading(false);
       }
-    }, 250);
+    }, 300);
 
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q]); // debounce 300ms
 
   function closeSearch() {
     setSearchOpen(false);
@@ -315,7 +317,7 @@ export function Header() {
                               {p.name}
                             </div>
                             <div className="text-xs text-zinc-400 truncate">
-                              {p.slug}
+                              {formatPrice(p.price)}
                             </div>
                           </div>
                         </Link>
@@ -449,7 +451,7 @@ export function Header() {
                               {p.name}
                             </div>
                             <div className="text-xs text-zinc-400 truncate">
-                              {p.slug}
+                              {formatPrice(p.price)}
                             </div>
                           </div>
                         </Link>

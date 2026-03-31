@@ -19,6 +19,13 @@ export type Product = {
   price: number; // centavos
   stock: number; // si PER_KG: kg (puede ser decimal). Si UNIT: unidades enteras (idealmente)
 
+  netWeightGr?: number | null; // gramos netos del envase (solo PER_UNIT)
+  netVolumeMl?: number | null; // ml netos del envase (solo PER_UNIT)
+
+  measurementUnit?: string | null;
+  unitMultiplier?: number | null;
+  brand?: string | null;
+
   isActive: boolean;
   isFeatured: boolean;
 

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600; // GET público: 1 hora. POST es admin y no aplica caché.
 
 function slugify(input: string) {
   return input
@@ -73,17 +73,23 @@ export async function POST(req: Request) {
   }
 
   const baseSlug = slugify(name);
-  let slug = baseSlug;
 
-  // idempotente por slug
-  const existing = await prisma.category.findUnique({ where: { slug } });
+  // Idempotente: si ya existe exactamente este slug, devolvemos el existente
+  const existing = await prisma.category.findUnique({ where: { slug: baseSlug } });
   if (existing) return NextResponse.json(existing);
 
-  // fallback por colisiones
-  for (let i = 0; i < 50; i++) {
-    const exists = await prisma.category.findUnique({ where: { slug } });
-    if (!exists) break;
-    slug = `${baseSlug}-${i + 2}`;
+  // Buscar colisiones con una sola query (slug = baseSlug o baseSlug-N)
+  const collisions = await prisma.category.findMany({
+    where: { slug: { startsWith: baseSlug } },
+    select: { slug: true },
+  });
+
+  const taken = new Set((collisions as any[]).map((c: any) => c.slug));
+  let slug = baseSlug;
+  let counter = 2;
+  while (taken.has(slug)) {
+    slug = `${baseSlug}-${counter}`;
+    counter++;
   }
 
   const created = await prisma.category.create({

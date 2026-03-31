@@ -1,72 +1,86 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+function stockFromDb(unitType: "PER_KG" | "PER_UNIT", stock: number) {
+  if (!Number.isFinite(stock) || stock < 0) return 0;
+  if (unitType === "PER_UNIT") return stock;
+  return stock / 1000;
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string } }
 ) {
   try {
-    const slug = params.slug
+    const slug = params.slug;
 
     if (!slug) {
-      return NextResponse.json({ error: 'Slug es requerido' }, { status: 400 })
+      return NextResponse.json({ error: "Slug es requerido" }, { status: 400 });
     }
 
-    // Obtener el producto actual
     const currentProduct = await prisma.product.findUnique({
       where: { slug },
-      include: { category: true },
-    })
+      select: { id: true, categoryId: true },
+    });
 
     if (!currentProduct) {
-      return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
+      return NextResponse.json(
+        { error: "Producto no encontrado" },
+        { status: 404 }
+      );
     }
 
-    // Obtener productos de la misma categoría (excluyendo el actual)
-    const sameCategory = await prisma.product.findMany({
+    const products = await prisma.product.findMany({
       where: {
-        categoryId: currentProduct.categoryId,
         id: { not: currentProduct.id },
         isActive: true,
         stock: { gt: 0 },
+        categoryId: currentProduct.categoryId, // priorizar misma categoría
       },
-      include: { category: true },
-      take: 4,
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
-
-    // Si tenemos menos de 4 productos de la misma categoría, agregar productos aleatorios de otras categorías
-    let relatedProducts = [...sameCategory]
-
-    if (relatedProducts.length < 4) {
-      const randomProducts = await prisma.product.findMany({
-        where: {
-          categoryId: { not: currentProduct.categoryId },
-          id: { not: currentProduct.id },
-          isActive: true,
-          stock: { gt: 0 },
+      take: 12, // limitar resultados — antes traía toda la tabla
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        image: true,
+        price: true,
+        stock: true,
+        unitType: true,
+        netWeightGr: true,
+        netVolumeMl: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
+        vatRate: true,
+        isOnSale: true,
+        salePrice: true,
+        saleEndDate: true,
+        discountPercent: true,
+        isFeatured: true,
+        isActive: true,
+        categoryId: true,
+        category: {
+          select: { id: true, name: true, slug: true, vatRate: true },
         },
-        include: { category: true },
-        take: 4 - relatedProducts.length,
-      })
+      },
+    });
 
-      relatedProducts = [...relatedProducts, ...randomProducts]
-    }
+    const shuffled = [...products].sort(() => Math.random() - 0.5);
+    const randomProducts = shuffled.slice(0, 6);
 
-    // Mezclar aleatoriamente
-    const shuffled = relatedProducts.sort(() => Math.random() - 0.5)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizedProducts = (randomProducts as any[]).map((product: any) => ({
+      ...product,
+      stock: stockFromDb(product.unitType, product.stock),
+    }));
 
-    // Retornar máximo 6 productos
-    const finalProducts = shuffled.slice(0, 6)
-
-    return NextResponse.json(finalProducts)
+    return NextResponse.json(normalizedProducts);
   } catch (error) {
-    console.error('Error al obtener productos relacionados:', error)
+    console.error("Error al obtener productos aleatorios:", error);
+
     return NextResponse.json(
-      { error: 'Error al obtener productos relacionados' },
+      { error: "Error al obtener productos aleatorios" },
       { status: 500 }
-    )
+    );
   }
 }

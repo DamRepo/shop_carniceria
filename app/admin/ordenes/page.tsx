@@ -9,16 +9,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, CheckCircle, XCircle, Package } from 'lucide-react';
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  Package,
+  CalendarDays,
+  StickyNote,
+  Truck,
+} from 'lucide-react';
 import { formatPrice } from '@/lib/utils-format';
 import { toast } from 'sonner';
 
-type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED';
+type OrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'READY'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
 type DeliveryMethod = 'PICKUP' | 'DELIVERY';
 
 interface Order {
   id: string;
-  status: OrderStatus;
+  status: OrderStatus | string;
 
   customerName: string;
   email: string | null;
@@ -26,16 +42,25 @@ interface Order {
 
   deliveryMethod: DeliveryMethod;
   address: string | null;
+  addressDetails?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  notes?: string | null;
+
+  pickupDate: string | null;
+  pickupTimeSlot: string | null;
+  pickupNotes: string | null;
 
   subtotal: number;
   deliveryCost: number;
   total: number;
 
-  createdAt: string; // JSON ISO
+  createdAt: string;
   items: {
     id: string;
     quantity: number;
     unitPrice: number;
+    lineTotal?: number;
     product: {
       name: string;
       unitType: 'PER_KG' | 'PER_UNIT';
@@ -44,6 +69,7 @@ interface Order {
 }
 
 const statusColors: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: 'bg-amber-500/20 text-amber-400',
   PENDING: 'bg-yellow-500/20 text-yellow-500',
   CONFIRMED: 'bg-cyan-500/20 text-cyan-500',
   PREPARING: 'bg-blue-500/20 text-blue-500',
@@ -53,6 +79,7 @@ const statusColors: Record<OrderStatus, string> = {
 };
 
 const statusLabels: Record<OrderStatus, string> = {
+  PENDING_PAYMENT: 'Pendiente de pago',
   PENDING: 'Pendiente',
   CONFIRMED: 'Confirmada',
   PREPARING: 'En Preparación',
@@ -61,7 +88,8 @@ const statusLabels: Record<OrderStatus, string> = {
   CANCELLED: 'Cancelado',
 };
 
-const statusIcons: Record<OrderStatus, any> = {
+const statusIcons: Record<OrderStatus, React.ComponentType<{ className?: string }>> = {
+  PENDING_PAYMENT: Clock,
   PENDING: Clock,
   CONFIRMED: CheckCircle,
   PREPARING: Package,
@@ -69,6 +97,30 @@ const statusIcons: Record<OrderStatus, any> = {
   COMPLETED: CheckCircle,
   CANCELLED: XCircle,
 };
+
+function formatPickupDate(dateString: string | null) {
+  if (!dateString) return null;
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+function getStatusUi(status: string) {
+  const safeStatus = status as OrderStatus;
+
+  return {
+    label: statusLabels[safeStatus] ?? status,
+    color:
+      statusColors[safeStatus] ?? 'bg-zinc-500/20 text-zinc-300',
+    Icon: statusIcons[safeStatus] ?? Clock,
+  };
+}
 
 export default function OrdenesAdmin() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -86,8 +138,6 @@ export default function OrdenesAdmin() {
     try {
       const params = new URLSearchParams();
 
-      // ✅ IMPORTANTE: mientras estés en desarrollo/operación del local,
-      // querés ver también las NO confirmadas (PENDING sin pago).
       params.set('includeUnconfirmed', 'true');
 
       if (filterStatus !== 'all') {
@@ -146,28 +196,29 @@ export default function OrdenesAdmin() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-orange-500" />
       </div>
     );
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Órdenes</h1>
-          <p className="text-zinc-400 mt-1">
+          <p className="mt-1 text-zinc-400">
             {filteredOrders.length} orden{filteredOrders.length !== 1 ? 'es' : ''}
           </p>
         </div>
 
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-56 bg-zinc-900 border-zinc-800">
+          <SelectTrigger className="w-56 border-zinc-800 bg-zinc-900">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-zinc-900 border-zinc-800">
+          <SelectContent className="border-zinc-800 bg-zinc-900">
             <SelectItem value="all">Todas las órdenes</SelectItem>
+            <SelectItem value="PENDING_PAYMENT">Pendientes de pago</SelectItem>
             <SelectItem value="PENDING">Pendientes</SelectItem>
             <SelectItem value="CONFIRMED">Confirmadas</SelectItem>
             <SelectItem value="PREPARING">En Preparación</SelectItem>
@@ -179,34 +230,38 @@ export default function OrdenesAdmin() {
       </div>
 
       {filteredOrders.length === 0 ? (
-        <Card className="bg-zinc-900 border-zinc-800 p-12 text-center">
-          <Package className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">No hay órdenes</h3>
+        <Card className="border-zinc-800 bg-zinc-900 p-12 text-center">
+          <Package className="mx-auto mb-4 h-16 w-16 text-zinc-600" />
+          <h3 className="mb-2 text-xl font-semibold text-white">No hay órdenes</h3>
           <p className="text-zinc-400">
             {filterStatus === 'all'
               ? 'Aún no se han recibido órdenes'
-              : `No hay órdenes con estado: ${statusLabels[filterStatus as OrderStatus]}`}
+              : `No hay órdenes con estado: ${
+                  statusLabels[filterStatus as OrderStatus] ?? filterStatus
+                }`}
           </p>
         </Card>
       ) : (
         <div className="space-y-4">
           {filteredOrders.map((order) => {
-            const StatusIcon = statusIcons[order.status];
+            const { Icon: StatusIcon, color: statusColor, label: statusLabel } =
+              getStatusUi(order.status);
+            const pickupDateLabel = formatPickupDate(order.pickupDate);
 
             return (
-              <Card key={order.id} className="bg-zinc-900 border-zinc-800 p-6">
-                <div className="flex items-start justify-between mb-4">
+              <Card key={order.id} className="border-zinc-800 bg-zinc-900 p-6">
+                <div className="mb-4 flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="mb-2 flex items-center gap-3">
                       <h3 className="text-lg font-semibold text-white">
                         Orden #{order.id.slice(0, 8)}
                       </h3>
 
                       <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${statusColors[order.status]}`}
+                        className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${statusColor}`}
                       >
-                        <StatusIcon className="w-4 h-4" />
-                        {statusLabels[order.status]}
+                        <StatusIcon className="h-4 w-4" />
+                        {statusLabel}
                       </span>
                     </div>
 
@@ -225,12 +280,25 @@ export default function OrdenesAdmin() {
                     <p className="text-2xl font-bold text-white">
                       {formatPrice(order.total ?? 0)}
                     </p>
+                    <div className="mt-2 space-y-1 text-sm text-zinc-400">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>Subtotal:</span>
+                        <span>{formatPrice(order.subtotal ?? 0)}</span>
+                      </div>
+
+                      {Number(order.deliveryCost ?? 0) > 0 && (
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Envío:</span>
+                          <span>{formatPrice(order.deliveryCost ?? 0)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4 pb-4 border-b border-zinc-800">
+                <div className="mb-4 grid grid-cols-1 gap-6 border-b border-zinc-800 pb-4 md:grid-cols-2">
                   <div>
-                    <h4 className="text-sm font-medium text-zinc-400 mb-2">
+                    <h4 className="mb-2 text-sm font-medium text-zinc-400">
                       Información del Cliente
                     </h4>
                     <div className="space-y-1">
@@ -241,36 +309,87 @@ export default function OrdenesAdmin() {
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-medium text-zinc-400 mb-2">
+                    <h4 className="mb-2 text-sm font-medium text-zinc-400">
                       Método de Entrega
                     </h4>
-                    <p className="text-white mb-1">
+
+                    <p className="mb-1 flex items-center gap-2 text-white">
+                      {order.deliveryMethod === 'DELIVERY' && (
+                        <Truck className="h-4 w-4 text-zinc-400" />
+                      )}
                       {order.deliveryMethod === 'DELIVERY'
                         ? 'Envío a domicilio'
                         : 'Retiro en local'}
                     </p>
-                    {order.deliveryMethod === 'DELIVERY' && order.address && (
-                      <p className="text-sm text-zinc-400">{order.address}</p>
+
+                    {order.deliveryMethod === 'DELIVERY' && (
+                      <div className="space-y-1 text-sm text-zinc-400">
+                        {order.address && <p>{order.address}</p>}
+                        {order.addressDetails && <p>{order.addressDetails}</p>}
+                        {order.city && <p>{order.city}</p>}
+                        {order.postalCode && <p>CP: {order.postalCode}</p>}
+                        {order.notes && (
+                          <p>
+                            <span className="font-medium text-zinc-300">Notas:</span>{' '}
+                            {order.notes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {order.deliveryMethod === 'PICKUP' && (
+                      <div className="mt-3 space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                        <div className="flex items-center gap-2 text-sm text-zinc-300">
+                          <CalendarDays className="h-4 w-4 text-zinc-500" />
+                          <span>
+                            <span className="font-medium">Día:</span>{' '}
+                            {pickupDateLabel ?? 'No definido'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm text-zinc-300">
+                          <Clock className="h-4 w-4 text-zinc-500" />
+                          <span>
+                            <span className="font-medium">Horario:</span>{' '}
+                            {order.pickupTimeSlot ?? 'No definido'}
+                          </span>
+                        </div>
+
+                        {order.pickupNotes ? (
+                          <div className="flex items-start gap-2 text-sm text-zinc-300">
+                            <StickyNote className="mt-0.5 h-4 w-4 text-zinc-500" />
+                            <span>
+                              <span className="font-medium">Nota:</span>{' '}
+                              {order.pickupNotes}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     )}
                   </div>
                 </div>
 
                 <div className="mb-4">
-                  <h4 className="text-sm font-medium text-zinc-400 mb-3">
+                  <h4 className="mb-3 text-sm font-medium text-zinc-400">
                     Productos ({order.items.length})
                   </h4>
+
                   <div className="space-y-2">
                     {order.items.map((item) => (
                       <div
                         key={item.id}
-                        className="flex justify-between items-center text-sm"
+                        className="flex items-center justify-between text-sm"
                       >
                         <span className="text-white">
                           {item.product.name} x {item.quantity}
                           {item.product.unitType === 'PER_KG' ? 'kg' : ''}
                         </span>
+
                         <span className="text-zinc-400">
-                          {formatPrice((item.unitPrice ?? 0) * (item.quantity ?? 0))}
+                          {formatPrice(
+                            item.lineTotal ??
+                              (item.unitPrice ?? 0) * (item.quantity ?? 0)
+                          )}
                         </span>
                       </div>
                     ))}
@@ -280,12 +399,15 @@ export default function OrdenesAdmin() {
                 <div className="flex gap-2">
                   <Select
                     value={order.status}
-                    onValueChange={(value) => handleStatusChange(order.id, value as OrderStatus)}
+                    onValueChange={(value) =>
+                      handleStatusChange(order.id, value as OrderStatus)
+                    }
                   >
-                    <SelectTrigger className="w-56 bg-zinc-800 border-zinc-700">
+                    <SelectTrigger className="w-56 border-zinc-700 bg-zinc-800">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                    <SelectContent className="border-zinc-700 bg-zinc-800">
+                      <SelectItem value="PENDING_PAYMENT">Pendiente de pago</SelectItem>
                       <SelectItem value="PENDING">Pendiente</SelectItem>
                       <SelectItem value="CONFIRMED">Confirmada</SelectItem>
                       <SelectItem value="PREPARING">En Preparación</SelectItem>

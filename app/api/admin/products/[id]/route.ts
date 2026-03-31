@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { uploadImages } from "@/lib/uploads/upload-images";
 
-/** Ajustá este type si ya lo tenés declarado en otro lado */
 type UnitType = "PER_KG" | "PER_UNIT";
 
 /* =========================
@@ -16,9 +15,9 @@ function toStr(v: FormDataEntryValue | null): string | undefined {
 }
 
 function toNullableStr(v: FormDataEntryValue | null): string | null | undefined {
-  if (v === null) return undefined; // no vino el campo
+  if (v === null) return undefined;
   const s = String(v).trim();
-  return s ? s : null; // vino vacío => null
+  return s ? s : null;
 }
 
 function toBool(v: FormDataEntryValue | null): boolean | undefined {
@@ -39,6 +38,17 @@ function toNumber(v: FormDataEntryValue | null): number | undefined {
   return n;
 }
 
+function toNullableFloat(v: FormDataEntryValue | null): number | null | undefined {
+  if (v === null) return undefined;
+  const s = String(v).trim();
+  if (!s) return null;
+
+  const normalized = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return undefined;
+  return n;
+}
+
 function toUnitType(v: FormDataEntryValue | null): UnitType | undefined {
   const s = String(v ?? "").trim();
   if (!s) return undefined;
@@ -46,14 +56,12 @@ function toUnitType(v: FormDataEntryValue | null): UnitType | undefined {
   return undefined;
 }
 
-/** ✅ Dinero ARS -> CENTAVOS (Int) */
+/** Dinero ARS -> CENTAVOS (Int) */
 function toMoneyCents(v: FormDataEntryValue | null): number | undefined {
   const s0 = String(v ?? "").trim();
   if (!s0) return undefined;
 
-  // "1.234,56" => "1234.56"
   const s = s0.includes(",") ? s0.replace(/\./g, "").replace(",", ".") : s0;
-
   const n = Number(s);
   if (!Number.isFinite(n)) return undefined;
 
@@ -61,16 +69,16 @@ function toMoneyCents(v: FormDataEntryValue | null): number | undefined {
 }
 
 /**
- * ✅ IVA opcional por producto:
+ * IVA opcional por producto:
  * - si no vino el campo => undefined (no tocar)
  * - si vino vacío => null (usar categoría)
  * - si vino "0.21" => 0.21
  * - si vino "0.105" => 0.105
  */
 function toVatRate(v: FormDataEntryValue | null): number | null | undefined {
-  if (v === null) return undefined; // no vino
+  if (v === null) return undefined;
   const s = String(v).trim();
-  if (!s) return null; // vino vacío => null
+  if (!s) return null;
 
   const n = Number(s);
   if (!Number.isFinite(n)) return undefined;
@@ -81,7 +89,7 @@ function toVatRate(v: FormDataEntryValue | null): number | null | undefined {
 }
 
 /**
- * ✅ Entero positivo opcional (gramos/ml)
+ * Entero positivo opcional (gramos/ml)
  * - si no vino => undefined (no tocar)
  * - si vino vacío => null (limpiar)
  * - si vino <=0 => null
@@ -90,18 +98,46 @@ function toVatRate(v: FormDataEntryValue | null): number | null | undefined {
 function toOptionalPositiveInt(
   v: FormDataEntryValue | null
 ): number | null | undefined {
-  if (v === null) return undefined; // no vino => no tocar
+  if (v === null) return undefined;
 
   const s = String(v).trim();
-  if (!s) return null; // vino vacío => limpiar
+  if (!s) return null;
 
   const n = Number(s);
-  if (!Number.isFinite(n)) return undefined; // vino basura => ignorar/no tocar
+  if (!Number.isFinite(n)) return undefined;
 
   const int = Math.floor(n);
   if (int <= 0) return null;
 
   return int;
+}
+
+/* =========================
+   Helpers de stock
+   Modelo consistente:
+   - PER_UNIT => stock en unidades enteras
+   - PER_KG   => stock en gramos enteros en DB
+   ========================= */
+function stockToDb(stockRaw: number, unitType: UnitType): number {
+  if (!Number.isFinite(stockRaw) || stockRaw < 0) return 0;
+
+  if (unitType === "PER_UNIT") {
+    return Math.max(0, Math.floor(stockRaw));
+  }
+
+  // El admin carga kg; en DB guardamos gramos enteros
+  return Math.max(0, Math.round(stockRaw * 1000));
+}
+
+function stockFromDb(stockRaw: number, unitType: UnitType): number {
+  if (!Number.isFinite(stockRaw) || stockRaw < 0) return 0;
+
+  if (unitType === "PER_UNIT") {
+    return stockRaw;
+  }
+
+  // En DB está en gramos; al admin le devolvemos kg
+  return stockRaw / 1000;
 }
 
 export const dynamic = "force-dynamic";
@@ -124,7 +160,6 @@ export async function PUT(
     const slug = toStr(form.get("slug"));
     const description = toNullableStr(form.get("description"));
 
-    // ✅ Dinero: DB en centavos (Int)
     const priceCents = toMoneyCents(form.get("price"));
     const salePriceCentsIncoming = toMoneyCents(form.get("salePrice"));
 
@@ -133,11 +168,9 @@ export async function PUT(
     const stockIncoming = toNumber(form.get("stock"));
     const unitTypeIncoming = toUnitType(form.get("unitType"));
 
-    // ✅ NUEVO: net content (pueden venir o no venir)
     const netWeightGrIncoming = toOptionalPositiveInt(form.get("netWeightGr"));
     const netVolumeMlIncoming = toOptionalPositiveInt(form.get("netVolumeMl"));
 
-    // ✅ IVA opcional por producto
     const vatRateIncoming = toVatRate(form.get("vatRate"));
 
     const isOnSale = toBool(form.get("isOnSale"));
@@ -145,6 +178,24 @@ export async function PUT(
 
     const isFeatured = toBool(form.get("isFeatured"));
     const isActive = toBool(form.get("isActive"));
+
+    const minPurchaseQtyIncoming = toNullableFloat(form.get("minPurchaseQty"));
+    const qtyStepIncoming = toNullableFloat(form.get("qtyStep"));
+    const maxPurchaseQtyIncoming = toNullableFloat(form.get("maxPurchaseQty"));
+    const allowsDecimalsIncoming = toBool(form.get("allowsDecimals"));
+
+    const measurementUnitIncoming = toStr(form.get("measurementUnit"));
+    const unitMultiplierRaw = toNumber(form.get("unitMultiplier"));
+    const unitMultiplierIncoming =
+      unitMultiplierRaw !== undefined
+        ? Number.isFinite(unitMultiplierRaw) && unitMultiplierRaw > 0
+          ? unitMultiplierRaw
+          : 1
+        : undefined;
+
+    const brandRaw = form.get("brand");
+    const brandIncoming: string | null | undefined =
+      brandRaw === null ? undefined : (String(brandRaw).trim() || null);
 
     const existingProduct = await prisma.product.findUnique({
       where: { id: params.id },
@@ -171,11 +222,9 @@ export async function PUT(
       }
     }
 
-    // ✅ unitType final: si viene, usamos el nuevo; si no, mantenemos el actual
     const finalUnitType: UnitType =
       unitTypeIncoming ?? (existingProduct.unitType as UnitType);
 
-    // ✅ imagen opcional
     const imageEntry = form.get("image");
     let imageUrlToSave: string | undefined;
     if (imageEntry instanceof File && imageEntry.size > 0) {
@@ -183,7 +232,6 @@ export async function PUT(
       imageUrlToSave = uploaded?.secureUrl;
     }
 
-    // ✅ saleEndDate (vino o no vino) + VALIDACIÓN (datetime-local / ISO)
     let saleEndDateToSave: Date | null | undefined = undefined;
     if (saleEndDateRaw !== undefined) {
       if (!saleEndDateRaw) {
@@ -200,31 +248,33 @@ export async function PUT(
       }
     }
 
-    // ✅ stock según unidad
     let stockToSave: number | undefined = undefined;
     if (stockIncoming !== undefined) {
-      stockToSave =
-        finalUnitType === "PER_UNIT"
-          ? Math.max(0, Math.floor(stockIncoming))
-          : Math.max(0, stockIncoming); // PER_KG: permitir decimal
+      // PER_KG: el admin ingresa kg; en DB se guarda en gramos (×1000).
+      // Límite: 999 999 kg = ~999 999 000 gramos, dentro del rango Int32 (max ~2 147 483 647).
+      const maxStock = finalUnitType === "PER_KG" ? 999_999 : 2_000_000;
+      if (!Number.isFinite(stockIncoming) || stockIncoming < 0 || stockIncoming > maxStock) {
+        return NextResponse.json(
+          { error: `Stock inválido (máximo ${maxStock} ${finalUnitType === "PER_KG" ? "kg" : "unidades"})` },
+          { status: 400 }
+        );
+      }
+
+      stockToSave = stockToDb(stockIncoming, finalUnitType);
     }
 
-    // ✅ Campos de oferta
     let salePriceToSave: number | null | undefined = undefined;
     let discountPercent: number | null | undefined = undefined;
 
     if (isOnSale === false) {
-      // apagaron oferta => limpiamos
       salePriceToSave = null;
       discountPercent = null;
       saleEndDateToSave = null;
     } else {
-      // si mandaron salePrice, lo seteamos (en centavos)
       if (salePriceCentsIncoming !== undefined) {
         salePriceToSave = salePriceCentsIncoming > 0 ? salePriceCentsIncoming : null;
       }
 
-      // descuento (centavos contra centavos)
       if (
         isOnSale === true &&
         typeof priceCents === "number" &&
@@ -239,9 +289,6 @@ export async function PUT(
       }
     }
 
-    // ✅ Contenido neto: decide si actualizar y cómo
-    // - Si PER_KG => si vinieron campos, los limpiamos (null)
-    // - Si PER_UNIT => aplicar lo que vino, pero validar no ambos
     let netWeightGrToSave: number | null | undefined = undefined;
     let netVolumeMlToSave: number | null | undefined = undefined;
 
@@ -249,19 +296,16 @@ export async function PUT(
     const netVolumeCame = netVolumeMlIncoming !== undefined;
 
     if (finalUnitType === "PER_KG") {
-      // si cambió a PER_KG o ya era PER_KG y mandaron contenido, lo limpiamos
       if (netWeightCame || netVolumeCame || unitTypeIncoming === "PER_KG") {
         netWeightGrToSave = null;
         netVolumeMlToSave = null;
       }
     } else {
-      // PER_UNIT
       const nextWeight =
         netWeightGrIncoming !== undefined ? netWeightGrIncoming : undefined;
       const nextVol =
         netVolumeMlIncoming !== undefined ? netVolumeMlIncoming : undefined;
 
-      // Si el cliente mandó ambos y ambos terminan en número >0 => error
       const weightPositive =
         typeof nextWeight === "number" && nextWeight > 0;
       const volPositive =
@@ -274,21 +318,91 @@ export async function PUT(
         );
       }
 
-      // Si vino netWeightGr, lo aplicamos y si es positivo limpiamos el otro
       if (netWeightGrIncoming !== undefined) {
-        netWeightGrToSave = netWeightGrIncoming; // puede ser number o null
+        netWeightGrToSave = netWeightGrIncoming;
         if (typeof netWeightGrIncoming === "number" && netWeightGrIncoming > 0) {
           netVolumeMlToSave = null;
         }
       }
 
-      // Si vino netVolumeMl, lo aplicamos y si es positivo limpiamos el otro
       if (netVolumeMlIncoming !== undefined) {
-        netVolumeMlToSave = netVolumeMlIncoming; // puede ser number o null
+        netVolumeMlToSave = netVolumeMlIncoming;
         if (typeof netVolumeMlIncoming === "number" && netVolumeMlIncoming > 0) {
           netWeightGrToSave = null;
         }
       }
+    }
+
+    let minPurchaseQtyToSave: number | null | undefined = undefined;
+    let qtyStepToSave: number | null | undefined = undefined;
+    let maxPurchaseQtyToSave: number | null | undefined = undefined;
+    let allowsDecimalsToSave: boolean | undefined = undefined;
+
+    if (minPurchaseQtyIncoming !== undefined) {
+      if (minPurchaseQtyIncoming !== null && minPurchaseQtyIncoming <= 0) {
+        return NextResponse.json(
+          { error: "minPurchaseQty debe ser mayor a 0" },
+          { status: 400 }
+        );
+      }
+      minPurchaseQtyToSave = minPurchaseQtyIncoming;
+    }
+
+    if (qtyStepIncoming !== undefined) {
+      if (qtyStepIncoming !== null && qtyStepIncoming <= 0) {
+        return NextResponse.json(
+          { error: "qtyStep debe ser mayor a 0" },
+          { status: 400 }
+        );
+      }
+      qtyStepToSave = qtyStepIncoming;
+    }
+
+    if (maxPurchaseQtyIncoming !== undefined) {
+      if (maxPurchaseQtyIncoming !== null && maxPurchaseQtyIncoming <= 0) {
+        return NextResponse.json(
+          { error: "maxPurchaseQty debe ser mayor a 0" },
+          { status: 400 }
+        );
+      }
+      maxPurchaseQtyToSave = maxPurchaseQtyIncoming;
+    }
+
+    if (allowsDecimalsIncoming !== undefined) {
+      allowsDecimalsToSave = allowsDecimalsIncoming;
+    }
+
+    const effectiveMin =
+      minPurchaseQtyToSave !== undefined ? minPurchaseQtyToSave : undefined;
+    const effectiveStep =
+      qtyStepToSave !== undefined ? qtyStepToSave : undefined;
+    const effectiveMax =
+      maxPurchaseQtyToSave !== undefined ? maxPurchaseQtyToSave : undefined;
+
+    if (
+      effectiveMin !== undefined &&
+      effectiveStep !== undefined &&
+      effectiveMin !== null &&
+      effectiveStep !== null &&
+      effectiveStep > effectiveMin
+    ) {
+      return NextResponse.json(
+        { error: "qtyStep no puede ser mayor que minPurchaseQty" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      effectiveMin !== undefined &&
+      effectiveMax !== undefined &&
+      effectiveMin !== null &&
+      effectiveMax !== null &&
+      effectiveMax < effectiveMin
+    ) {
+      return NextResponse.json(
+        { error: "maxPurchaseQty no puede ser menor que minPurchaseQty" },
+        { status: 400 }
+      );
     }
 
     const product = await prisma.product.update({
@@ -305,14 +419,11 @@ export async function PUT(
 
         ...(stockToSave !== undefined && { stock: stockToSave }),
 
-        // ✅ unitType solo si vino
-        ...(unitTypeIncoming !== undefined && { unitType: finalUnitType as any }),
+        ...(unitTypeIncoming !== undefined && { unitType: finalUnitType }),
 
-        // ✅ NUEVO: net content (si no vino, no tocar)
         ...(netWeightGrToSave !== undefined && { netWeightGr: netWeightGrToSave }),
         ...(netVolumeMlToSave !== undefined && { netVolumeMl: netVolumeMlToSave }),
 
-        // ✅ IVA (si no vino el campo => no tocar)
         ...(vatRateIncoming !== undefined && { vatRate: vatRateIncoming }),
 
         ...(isOnSale !== undefined && { isOnSale }),
@@ -321,8 +432,17 @@ export async function PUT(
         ...(saleEndDateToSave !== undefined && { saleEndDate: saleEndDateToSave }),
         ...(discountPercent !== undefined && { discountPercent }),
 
+        ...(minPurchaseQtyToSave !== undefined && { minPurchaseQty: minPurchaseQtyToSave }),
+        ...(qtyStepToSave !== undefined && { qtyStep: qtyStepToSave }),
+        ...(maxPurchaseQtyToSave !== undefined && { maxPurchaseQty: maxPurchaseQtyToSave }),
+        ...(allowsDecimalsToSave !== undefined && { allowsDecimals: allowsDecimalsToSave }),
+
         ...(isFeatured !== undefined && { isFeatured }),
         ...(isActive !== undefined && { isActive }),
+
+        ...(measurementUnitIncoming !== undefined && { measurementUnit: measurementUnitIncoming }),
+        ...(unitMultiplierIncoming !== undefined && { unitMultiplier: unitMultiplierIncoming }),
+        ...(brandIncoming !== undefined && { brand: brandIncoming }),
       },
 
       select: {
@@ -336,7 +456,6 @@ export async function PUT(
         stock: true,
         unitType: true,
 
-        // ✅ NUEVO
         netWeightGr: true,
         netVolumeMl: true,
 
@@ -346,8 +465,18 @@ export async function PUT(
         salePrice: true,
         saleEndDate: true,
         discountPercent: true,
+
+        minPurchaseQty: true,
+        qtyStep: true,
+        maxPurchaseQty: true,
+        allowsDecimals: true,
+
         isFeatured: true,
         isActive: true,
+
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
 
         category: {
           select: {
@@ -361,7 +490,12 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(product);
+    const normalizedProduct = {
+      ...product,
+      stock: stockFromDb(product.stock, product.unitType as UnitType),
+    };
+
+    return NextResponse.json(normalizedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
     return NextResponse.json(
@@ -384,7 +518,6 @@ export async function DELETE(
 
     const id = params.id;
 
-    // Si tiene ventas asociadas, NO borramos hard (rompe historial). Desactivamos.
     const usedCount = await prisma.orderItem.count({
       where: { productId: id },
     });
@@ -402,7 +535,6 @@ export async function DELETE(
       });
     }
 
-    // Si no está referenciado, sí borramos
     await prisma.product.delete({
       where: { id },
     });
@@ -412,10 +544,10 @@ export async function DELETE(
       mode: "hard",
       message: "Producto eliminado.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error deleting product:", error);
     return NextResponse.json(
-      { error: error?.message ?? "Error al eliminar producto" },
+      { error: "Error al eliminar producto" },
       { status: 500 }
     );
   }

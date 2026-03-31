@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
+type ProductWhereInput = Record<string, unknown>;
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const revalidate = 0;
 
 const ALLOWED_SECTIONS = new Set([
   "minimercado",
@@ -11,6 +11,11 @@ const ALLOWED_SECTIONS = new Set([
   "elaborados",
   "fruteria-y-verduleria",
 ]);
+
+function stockFromDb(_unitType: "PER_KG" | "PER_UNIT", stock: number) {
+  if (!Number.isFinite(stock) || stock < 0) return 0;
+  return stock;
+}
 
 export async function GET(req: Request) {
   try {
@@ -26,21 +31,21 @@ export async function GET(req: Request) {
 
     type IdRow = { id: string };
 
-    const where: Prisma.ProductWhereInput = {};
+    const where: ProductWhereInput = {};
     if (onlyActive) where.isActive = true;
 
-    // ✅ Ofertas: solo si NO vencieron (o si no tienen fecha)
     if (onSale) {
       const now = new Date();
       where.isOnSale = true;
 
-      const rule: Prisma.ProductWhereInput = {
+      const rule: ProductWhereInput = {
         OR: [{ saleEndDate: null }, { saleEndDate: { gt: now } }],
       };
 
-      // append seguro
       if (where.AND) {
-        where.AND = Array.isArray(where.AND) ? [...where.AND, rule] : [where.AND, rule];
+        where.AND = Array.isArray(where.AND)
+          ? [...where.AND, rule]
+          : [where.AND, rule];
       } else {
         where.AND = [rule];
       }
@@ -48,41 +53,35 @@ export async function GET(req: Request) {
 
     if (featured) where.isFeatured = true;
 
-    // 1) Filtrar por categoría exacta
     if (categorySlug && categorySlug !== "todos") {
       where.category = { slug: categorySlug };
-    }
-    // 2) Filtrar por sección raíz + hijas
-    else if (section) {
+    } else if (section) {
       if (!ALLOWED_SECTIONS.has(section)) {
         return NextResponse.json([], { status: 200 });
       }
 
-      const root = (await prisma.category.findUnique({
+      // Una sola query: trae la categoría raíz con sus hijas directas
+      const root = await prisma.category.findUnique({
         where: { slug: section },
-        select: { id: true },
-      })) as IdRow | null;
+        select: { id: true, children: { select: { id: true } } },
+      });
 
       if (!root) return NextResponse.json([], { status: 200 });
 
-      const children = (await prisma.category.findMany({
-        where: { parentId: root.id },
-        select: { id: true },
-      })) as IdRow[];
-
-      const categoryIds = [root.id, ...children.map((c) => c.id)];
+      const categoryIds = [root.id, ...root.children.map((c: IdRow) => c.id)];
       where.categoryId = { in: categoryIds };
     }
 
     const limit = limitParam ? Number(limitParam) : undefined;
     const take =
-      Number.isFinite(limit) && (limit as number) > 0 ? (limit as number) : undefined;
+      Number.isFinite(limit) && (limit as number) > 0
+        ? (limit as number)
+        : undefined;
 
     const products = await prisma.product.findMany({
       where,
       orderBy: { createdAt: "desc" },
       ...(take ? { take } : {}),
-
       select: {
         id: true,
         name: true,
@@ -94,9 +93,11 @@ export async function GET(req: Request) {
         price: true,
         stock: true,
 
-        // ✅ contenido neto
         netWeightGr: true,
         netVolumeMl: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
 
         vatRate: true,
 
@@ -120,7 +121,13 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json(products ?? []);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizedProducts = (products ?? []).map((product: any) => ({
+      ...product,
+      stock: stockFromDb(product.unitType, product.stock),
+    }));
+
+    return NextResponse.json(normalizedProducts);
   } catch (e) {
     console.error("GET /api/products error:", e);
     return NextResponse.json(

@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const revalidate = 600; // 10 minutos — detalle de producto es casi estático
 
 type IdRow = { id: string };
+
+function stockFromDb(_unitType: "PER_KG" | "PER_UNIT", stock: number) {
+  if (!Number.isFinite(stock) || stock < 0) return 0;
+  return stock;
+}
 
 export async function GET(
   _request: Request,
@@ -17,7 +22,6 @@ export async function GET(
       return NextResponse.json({ error: "Slug es requerido" }, { status: 400 });
     }
 
-    // ✅ SELECT explícito: asegura category.vatRate SIEMPRE
     const product = await prisma.product.findUnique({
       where: { slug },
       select: {
@@ -31,6 +35,12 @@ export async function GET(
         price: true,
         stock: true,
 
+        netWeightGr: true,
+        netVolumeMl: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
+
         vatRate: true,
 
         isActive: true,
@@ -47,7 +57,13 @@ export async function GET(
             name: true,
             slug: true,
             parentId: true,
-            vatRate: true, // ✅ CLAVE
+            vatRate: true,
+            // Traer categorías hermanas en la misma query, evita un segundo round-trip a DB
+            parent: {
+              select: {
+                children: { select: { id: true } },
+              },
+            },
           },
         },
       },
@@ -61,20 +77,10 @@ export async function GET(
     }
 
     const categoryId = product.categoryId;
-    const parentId = product.category?.parentId ?? null;
+    // Las hermanas ya vienen incluidas desde el select anterior — sin query extra
+    const siblingCategoryIds: string[] =
+      product.category?.parent?.children?.map((c: IdRow) => c.id) ?? [];
 
-    // 2) Si tiene madre, buscamos categorías hermanas (misma madre)
-    let siblingCategoryIds: string[] = [];
-    if (parentId) {
-      const siblings = (await prisma.category.findMany({
-        where: { parentId },
-        select: { id: true },
-      })) as IdRow[];
-
-      siblingCategoryIds = siblings.map((c: IdRow) => c.id);
-    }
-
-    // 3) Relacionados: misma categoría + (opcional) hermanas
     const related = await prisma.product.findMany({
       where: {
         isActive: true,
@@ -88,8 +94,6 @@ export async function GET(
       },
       orderBy: { createdAt: "desc" },
       take: 8,
-
-      // ✅ SELECT explícito: asegura related[].category.vatRate
       select: {
         id: true,
         name: true,
@@ -100,6 +104,12 @@ export async function GET(
         unitType: true,
         price: true,
         stock: true,
+
+        netWeightGr: true,
+        netVolumeMl: true,
+        measurementUnit: true,
+        unitMultiplier: true,
+        brand: true,
 
         vatRate: true,
 
@@ -117,13 +127,27 @@ export async function GET(
             name: true,
             slug: true,
             parentId: true,
-            vatRate: true, // ✅ CLAVE
+            vatRate: true,
           },
         },
       },
     });
 
-    return NextResponse.json({ product, related });
+    const normalizedProduct = {
+      ...product,
+      stock: stockFromDb(product.unitType, product.stock),
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizedRelated = (related as any[]).map((item: any) => ({
+      ...item,
+      stock: stockFromDb(item.unitType, item.stock),
+    }));
+
+    return NextResponse.json({
+      product: normalizedProduct,
+      related: normalizedRelated,
+    });
   } catch (error) {
     console.error("Error fetching product detail:", error);
     return NextResponse.json(

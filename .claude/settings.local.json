@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/dev/shop_carniceria -maxdepth 1 -type f -name README* -o -name .env* -o -name CLAUDE.md -o -name .cursorrules)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm run:*)",
+      "Bash(grep:*)",
+      "Bash(find \"C:\\\\dev\\\\shop_carniceria\\\\app\\\\\\(shop\\)\" -type f -name \"*.tsx\" -o -name \"*.ts\")",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(2)",
+      "Bash(npx next:*)"
+    ]
+  }
+}

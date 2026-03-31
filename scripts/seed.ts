@@ -1,4 +1,7 @@
-﻿import { PrismaClient, UnitType, UserRole } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
+
+type UnitType = "PER_KG" | "PER_UNIT";
+type UserRole = "CUSTOMER" | "ADMIN" | "EMPLOYEE";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -137,7 +140,7 @@ async function upsertProduct(p: SeedProduct) {
 }
 
 async function devReset() {
-  if (process.env.NODE_ENV === "production") return;
+  if (process.env.NODE_ENV !== "development") return;
 
   await prisma.checkoutSession.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -167,7 +170,7 @@ async function main() {
     where: { email: adminEmail },
     update: {
       password: hashedPassword,
-      role: UserRole.ADMIN,
+      role: "ADMIN",
       receiveOffers: false,
       name: "Administrador",
     },
@@ -175,7 +178,7 @@ async function main() {
       name: "Administrador",
       email: adminEmail,
       password: hashedPassword,
-      role: UserRole.ADMIN,
+      role: "ADMIN",
       receiveOffers: false,
     },
   });
@@ -244,7 +247,7 @@ async function main() {
       name: "Agua Mineral 2L",
       slug: "agua-mineral-2l",
       description: "Agua mineral sin gas",
-      unitType: UnitType.PER_UNIT,
+      unitType: "PER_UNIT",
       price: 75000,
       stock: 200,
       categorySlug: slugify("Bebidas"),
@@ -254,7 +257,7 @@ async function main() {
       name: "Asado (por kg)",
       slug: "asado-kg",
       description: "Tira de asado para parrilla",
-      unitType: UnitType.PER_KG,
+      unitType: "PER_KG",
       price: 850000,
       stock: 50,
       categorySlug: slugify("Carne Vacuna"),
@@ -264,7 +267,7 @@ async function main() {
       name: "Pollo Entero (por kg)",
       slug: "pollo-entero-kg",
       description: "Pollo entero fresco",
-      unitType: UnitType.PER_KG,
+      unitType: "PER_KG",
       price: 420000,
       stock: 40,
       categorySlug: slugify("Pollo"),
@@ -273,7 +276,7 @@ async function main() {
       name: "Chorizo Parrillero (por kg)",
       slug: "chorizo-parrillero-kg",
       description: "Chorizo parrillero casero",
-      unitType: UnitType.PER_KG,
+      unitType: "PER_KG",
       price: 680000,
       stock: 60,
       categorySlug: slugify("Embutidos"),
@@ -282,7 +285,7 @@ async function main() {
       name: "Papa (por kg)",
       slug: "papa-kg",
       description: "Papa blanca",
-      unitType: UnitType.PER_KG,
+      unitType: "PER_KG",
       price: 120000,
       stock: 100,
       categorySlug: slugify("Verduras frescas"),
@@ -300,7 +303,7 @@ async function main() {
     name: "Agua Mineral 2L (Oferta)",
     slug: "agua-mineral-2l-oferta",
     description: "Oferta por tiempo limitado",
-    unitType: UnitType.PER_UNIT,
+    unitType: "PER_UNIT",
     price: 75000,
     stock: 100,
     categorySlug: slugify("Bebidas"),

@@ -16,10 +16,6 @@ model Category {
   updatedAt   DateTime @updatedAt
   parentId    String?
   imageUrl    String?
-
-  // ✅ IVA por categoría (regla general)
-  // 0.21 = 21%
-  // 0.105 = 10,5%
   vatRate     Float    @default(0.21)
 
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
@@ -37,14 +33,10 @@ model Product {
   image           String?
   unitType        UnitType
   price           Int
-
-  // ✅ Contenido neto (solo para PER_UNIT, opcional)
-  // Sólidos: 250g, 354g, 700g, etc.
   netWeightGr     Int?
-  // Bebidas: 473ml, 2000ml, etc.
   netVolumeMl     Int?
-
   stock           Int       @default(0)
+  reservedStock   Int       @default(0)
   isActive        Boolean   @default(true)
   isFeatured      Boolean   @default(false)
   categoryId      String
@@ -54,16 +46,24 @@ model Product {
   discountPercent Int?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-
-  // ✅ IVA opcional por producto (si necesitás excepciones)
-  // Si es null, se usa category.vatRate
   vatRate         Float?
+
+  minPurchaseQty   Float?
+  qtyStep          Float?
+  maxPurchaseQty   Float?
+  allowsDecimals   Boolean  @default(false)
+
+  measurementUnit  String   @default("un")
+  unitMultiplier   Float    @default(1)
+  brand            String?
 
   orderItems OrderItem[]
   category   Category    @relation(fields: [categoryId], references: [id])
 
   @@index([categoryId])
   @@index([slug])
+  @@index([isActive])
+  @@index([isActive, createdAt])
   @@index([isOnSale])
   @@index([isFeatured])
 }
@@ -95,9 +95,7 @@ model User {
 
   orders           Order[]
   checkoutSessions CheckoutSession[]
-
-  // ✅ lado inverso para reset password
-  resetTokens PasswordResetToken[]
+  resetTokens      PasswordResetToken[]
 
   @@index([email])
 }
@@ -106,7 +104,6 @@ model Order {
   id          String @id @default(cuid())
   orderNumber String @unique @default(cuid())
 
-  // Dueño (para mis-compras)
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -114,21 +111,30 @@ model Order {
   phone        String
   email        String?
 
-  status         OrderStatus    @default(PENDING)
+  status         OrderStatus    @default(PENDING_PAYMENT)
   deliveryMethod DeliveryMethod
 
-  // Pago
-  paymentMethod PaymentMethod
-  paymentStatus PaymentStatus @default(PENDING)
-  paidAt        DateTime?
-  mpPaymentId   String?       @unique
-  mpStatus      String?
+  paymentMethod       PaymentMethod
+  paymentStatus       PaymentStatus @default(PENDING)
+  paidAt              DateTime?
+  mpPaymentId         String?       @unique
+  mpStatus            String?
+  mpPreferenceId      String?
+  mpExternalReference String?
 
   address        String?
   addressDetails String?
   city           String?
   postalCode     String?
   notes          String?
+
+  pickupDate     DateTime?
+  pickupTimeSlot String?
+  pickupNotes    String?
+
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledBy        String?
 
   subtotal     Int
   deliveryCost Int @default(0)
@@ -138,14 +144,15 @@ model Order {
   updatedAt   DateTime  @updatedAt
   confirmedAt DateTime?
 
-  items OrderItem[]
-
-  checkoutSessions CheckoutSession[]
+  items             OrderItem[]
+  checkoutSessions  CheckoutSession[]
 
   @@index([userId])
   @@index([orderNumber])
   @@index([createdAt])
   @@index([paymentStatus])
+  @@index([status])
+  @@index([email])
 }
 
 model OrderItem {
@@ -180,6 +187,10 @@ model CheckoutSession {
   postalCode     String?
   notes          String?
 
+  pickupDate     DateTime?
+  pickupTimeSlot String?
+  pickupNotes    String?
+
   itemsSnapshot Json
   subtotal      Int
   deliveryCost  Int
@@ -192,6 +203,9 @@ model CheckoutSession {
   mpStatus       String?
   approvedAt     DateTime?
 
+  expiresAt           DateTime?
+  reservationReleased Boolean  @default(false)
+
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
@@ -200,6 +214,9 @@ model CheckoutSession {
 
   @@index([userId])
   @@index([status])
+  @@index([orderId])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 enum UnitType {
@@ -213,6 +230,7 @@ enum DeliveryMethod {
 }
 
 enum OrderStatus {
+  PENDING_PAYMENT
   PENDING
   CONFIRMED
   PREPARING
@@ -234,9 +252,9 @@ enum PaymentMethod {
 
 enum PaymentStatus {
   PENDING
-  PENDING_LOCAL
   PAID
   FAILED
+  CANCELLED
 }
 
 enum CheckoutSessionStatus {
@@ -244,4 +262,5 @@ enum CheckoutSessionStatus {
   PENDING
   APPROVED
   FAILED
+  EXPIRED
 }
