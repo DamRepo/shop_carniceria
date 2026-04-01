@@ -212,16 +212,17 @@ export default function CartPage() {
 
             return (
               <Card key={item.id} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex gap-4">
-                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex gap-3">
+                    {/* Imagen: ancho fijo, no crece ni encoge */}
+                    <div className="relative h-20 w-20 flex-none overflow-hidden rounded-md bg-muted">
                       {item.image ? (
                         <Image
                           src={item.image}
                           alt={item.name ?? "Producto"}
                           fill
                           className="object-cover"
-                          sizes="96px"
+                          sizes="80px"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
@@ -230,21 +231,35 @@ export default function CartPage() {
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/productos/${item.slug ?? ""}`}
-                        className="line-clamp-1 text-lg font-semibold transition-colors hover:text-primary"
-                      >
-                        {item.name ?? "Producto"}
-                      </Link>
+                    {/* Columna derecha: todo el contenido */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      {/* Fila: nombre + botón eliminar */}
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/productos/${item.slug ?? ""}`}
+                          className="text-sm font-semibold leading-snug transition-colors hover:text-primary sm:text-base"
+                        >
+                          {item.name ?? "Producto"}
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeItem(item.id)}
+                          className="h-7 w-7 flex-none text-destructive hover:text-destructive"
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
 
-                      <p className="text-muted-foreground">
+                      {/* Precio unitario */}
+                      <p className="text-sm text-muted-foreground">
                         {formatPrice(item.price ?? 0)} por{" "}
                         {item.unitType === "PER_KG" ? "kg" : "unidad"}
                       </p>
 
                       <p className="text-[11px] text-muted-foreground">
-                        Precio sin impuestos Nacionales:{" "}
+                        Sin imp. nac.:{" "}
                         {formatPrice(
                           netFromGrossCents(
                             item.price ?? 0,
@@ -254,71 +269,57 @@ export default function CartPage() {
                       </p>
 
                       {offerRuleLabel ? (
-                        <p className="mt-1 text-xs font-medium text-red-600">
+                        <p className="text-xs font-medium text-red-600">
                           {offerRuleLabel}
                         </p>
                       ) : null}
 
-                      <div className="mt-3 flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => decrementQuantity(item)}
-                          className="h-8 w-8"
-                          type="button"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
+                      {/* Fila inferior: controles + total */}
+                      <div className="mt-2 flex items-end justify-between">
+                        {/* Controles de cantidad */}
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => decrementQuantity(item)}
+                            className="h-8 w-8"
+                            type="button"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
 
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleQuantityChange(item, e.target.value ?? "")
-                          }
-                          step={rules.qtyStep}
-                          min={rules.minPurchaseQty}
-                          max={rules.maxPurchaseQty ?? undefined}
-                          className="h-8 w-24 text-center"
-                        />
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleQuantityChange(item, e.target.value ?? "")
+                            }
+                            step={rules.qtyStep}
+                            min={rules.minPurchaseQty}
+                            max={rules.maxPurchaseQty ?? undefined}
+                            className="h-8 w-16 text-center sm:w-24"
+                          />
 
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => incrementQuantity(item)}
-                          className="h-8 w-8"
-                          type="button"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => incrementQuantity(item)}
+                            className="h-8 w-8"
+                            type="button"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
 
-                        <span className="ml-2 text-sm text-muted-foreground">
-                          {formatQuantity(
-                            item.quantity ?? 0,
-                            item.unitType ?? "PER_KG"
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end justify-between">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(item.id)}
-                        className="text-destructive hover:text-destructive"
-                        type="button"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-primary">
-                          {formatPrice(itemTotal)}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          SIN IMPUESTOS: {formatPrice(itemNet)}
-                        </p>
+                        {/* Total del item: precio + sin imp apilados */}
+                        <div className="text-right">
+                          <p className="text-base font-bold text-primary sm:text-lg">
+                            {formatPrice(itemTotal)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            sin imp: {formatPrice(itemNet)}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
