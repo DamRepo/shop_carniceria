@@ -18,8 +18,6 @@ type Body = {
   deliveryZone?: string;
   address?: string;
   addressDetails?: string;
-  city?: string;
-  postalCode?: string;
   notes?: string;
 
   pickupDate?: string;
@@ -505,11 +503,6 @@ export async function POST(req: Request) {
             deliveryMethod === "DELIVERY"
               ? addressDetails ?? undefined
               : undefined,
-          city: deliveryMethod === "DELIVERY" ? city ?? undefined : undefined,
-          postalCode:
-            deliveryMethod === "DELIVERY"
-              ? postalCode ?? undefined
-              : undefined,
           notes: notes ?? undefined,
 
           pickupDate:
@@ -556,11 +549,6 @@ export async function POST(req: Request) {
           addressDetails:
             deliveryMethod === "DELIVERY"
               ? addressDetails ?? undefined
-              : undefined,
-          city: deliveryMethod === "DELIVERY" ? city ?? undefined : undefined,
-          postalCode:
-            deliveryMethod === "DELIVERY"
-              ? postalCode ?? undefined
               : undefined,
           notes: notes ?? undefined,
 
