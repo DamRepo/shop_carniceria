@@ -23,8 +23,6 @@ type BuildTelegramOrderMessageParams = {
 
   address?: string | null;
   addressDetails?: string | null;
-  city?: string | null;
-  postalCode?: string | null;
 
   notes?: string | null;
 
@@ -134,8 +132,6 @@ export function buildTelegramOrderMessage(
   const email = safeText(params.email);
   const address = safeText(params.address);
   const addressDetails = safeText(params.addressDetails);
-  const city = safeText(params.city);
-  const postalCode = safeText(params.postalCode);
   const notes = safeText(params.notes);
   const pickupTimeSlot = safeText(params.pickupTimeSlot);
   const pickupNotes = safeText(params.pickupNotes);
@@ -168,8 +164,6 @@ export function buildTelegramOrderMessage(
     `<b>Modalidad:</b> ${delivery}\n` +
     (address ? `<b>Dirección:</b> ${address}\n` : "") +
     (addressDetails ? `<b>Detalle dirección:</b> ${addressDetails}\n` : "") +
-    (city ? `<b>Ciudad:</b> ${city}\n` : "") +
-    (postalCode ? `<b>Código postal:</b> ${postalCode}\n` : "") +
     (pickupDate ? `<b>Fecha retiro:</b> ${pickupDate}\n` : "") +
     (pickupTimeSlot ? `<b>Hora retiro:</b> ${pickupTimeSlot}\n` : "") +
     (pickupNotes ? `<b>Notas retiro:</b> ${pickupNotes}\n` : "") +
