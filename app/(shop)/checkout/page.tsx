@@ -18,17 +18,15 @@ import { CheckoutDetails } from "@/components/checkout/checkout-details";
 import { CheckoutSummary } from "@/components/checkout/checkout-summary";
 import type { CheckoutFormData } from "@/components/checkout/types";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
+import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 
 const PICKUP_TIME_SLOTS = [
   "07:30 a 09:30",
   "09:30 a 11:30",
   "11:30 a 13:00",
-  "17:00 a 19:00",
-  "19:00 a 22:00",
+  "16:00 a 18:00",
+  "18:00 a 21:00",
 ];
-
-//  precios en centavos, $1200 = 120000
-const DELIVERY_COST = 120000;
 
 function getTodayLocalDateString() {
   const now = new Date();
@@ -72,10 +70,9 @@ export default function CheckoutPage() {
     phone: "",
     email: "",
     deliveryMethod: "PICKUP",
+    deliveryZone: "",
     address: "",
     addressDetails: "",
-    city: "",
-    postalCode: "",
     notes: "",
     pickupDate: "",
     pickupTimeSlot: "",
@@ -113,8 +110,7 @@ export default function CheckoutPage() {
         if (value === "PICKUP") {
           next.address = "";
           next.addressDetails = "";
-          next.city = "";
-          next.postalCode = "";
+          next.deliveryZone = "";
         }
 
         if (value === "DELIVERY") {
@@ -139,13 +135,13 @@ export default function CheckoutPage() {
 
   const validateDeliveryDetailsStep = () => {
     if (formData.deliveryMethod === "DELIVERY") {
-      if (!formData.address.trim()) {
-        toast.error("Ingresá la dirección para el delivery");
+      if (!formData.deliveryZone) {
+        toast.error("Seleccioná la zona de envío");
         return false;
       }
 
-      if (!formData.city.trim()) {
-        toast.error("Ingresá la ciudad del delivery");
+      if (!formData.address.trim()) {
+        toast.error("Ingresá la dirección para el delivery");
         return false;
       }
 
@@ -201,11 +197,6 @@ export default function CheckoutPage() {
         formData.deliveryMethod === "DELIVERY"
           ? formData.addressDetails.trim()
           : "",
-      city: formData.deliveryMethod === "DELIVERY" ? formData.city.trim() : "",
-      postalCode:
-        formData.deliveryMethod === "DELIVERY"
-          ? formData.postalCode.trim()
-          : "",
       notes: formData.notes.trim(),
       pickupDate:
         formData.deliveryMethod === "PICKUP" ? formData.pickupDate : "",
@@ -215,6 +206,8 @@ export default function CheckoutPage() {
         formData.deliveryMethod === "PICKUP"
           ? formData.pickupNotes.trim()
           : "",
+      deliveryZone:
+        formData.deliveryMethod === "DELIVERY" ? formData.deliveryZone : "",
       items: orderItems,
     };
   };
@@ -294,9 +287,6 @@ export default function CheckoutPage() {
         if (formData.address) params.set("address", formData.address);
         if (formData.addressDetails)
           params.set("addressDetails", formData.addressDetails);
-        if (formData.city) params.set("city", formData.city);
-        if (formData.postalCode)
-          params.set("postalCode", formData.postalCode);
       }
 
       if (formData.deliveryMethod === "PICKUP") {
@@ -317,7 +307,9 @@ export default function CheckoutPage() {
 
   const subtotal = checkoutTotal;
   const deliveryCost =
-    formData.deliveryMethod === "DELIVERY" ? DELIVERY_COST : 0;
+    formData.deliveryMethod === "DELIVERY" && isValidShippingZone(formData.deliveryZone)
+      ? getShippingCost(formData.deliveryZone)
+      : 0;
   const total = subtotal + deliveryCost;
 
   const subtotalNet = (items ?? []).reduce((sum, item) => {
@@ -438,12 +430,6 @@ export default function CheckoutPage() {
               addressDetails={
                 formData.deliveryMethod === "DELIVERY"
                   ? formData.addressDetails
-                  : ""
-              }
-              city={formData.deliveryMethod === "DELIVERY" ? formData.city : ""}
-              postalCode={
-                formData.deliveryMethod === "DELIVERY"
-                  ? formData.postalCode
                   : ""
               }
               notes={formData.notes}

@@ -127,24 +127,7 @@ export default function CarniceriaPage() {
       ) : (
         <CategoryFilterBar allProducts={all} label="Carnicería">
           {(filtered, _filters: FilterOptions) => {
-            const filteredSet = new Set(filtered.map((p: any) => p.id));
-
-            const groups = (() => {
-              const map = new Map<string, { label: string; items: ProductDTO[] }>();
-              for (const p of all) {
-                if (!filteredSet.has(p.id)) continue;
-                const slug = p.category?.slug ?? "carniceria";
-                const label = p.category?.name ?? "Carnicería";
-                const group = map.get(slug) ?? { label, items: [] };
-                group.items.push(p);
-                map.set(slug, group);
-              }
-              return Array.from(map.entries())
-                .map(([slug, v]) => ({ slug, label: v.label, items: v.items }))
-                .sort((a, b) => a.label.localeCompare(b.label));
-            })();
-
-            if (groups.length === 0) {
+            if (filtered.length === 0) {
               return (
                 <div className="text-center py-20 text-muted-foreground">
                   <p>No hay productos con los filtros aplicados.</p>
@@ -152,25 +135,12 @@ export default function CarniceriaPage() {
               );
             }
 
-            const multiGroup = groups.length > 1;
-
             return (
-              <>
-                {groups.map((group) => (
-                  <section key={group.slug} className="mb-10">
-                    {multiGroup && (
-                      <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4 pb-2 border-b">
-                        {group.label} ({group.items.length})
-                      </p>
-                    )}
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
-                      {group.items.map((product) => (
-                        <ProductCard key={product.id} product={product as any} />
-                      ))}
-                    </div>
-                  </section>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+                {filtered.map((product) => (
+                  <ProductCard key={product.id} product={product as any} />
                 ))}
-              </>
+              </div>
             );
           }}
         </CategoryFilterBar>

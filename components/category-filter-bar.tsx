@@ -131,9 +131,6 @@ export function CategoryFilterBar({ allProducts, label, children }: Props) {
   const CategoryBlock = () =>
     showCategoryFilter ? (
       <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-          Subcategoría
-        </p>
         <div className="flex flex-col gap-1">
           <button
             type="button"

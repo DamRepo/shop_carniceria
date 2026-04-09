@@ -6,11 +6,10 @@ import { authOptions } from "@/lib/auth";
 import { sendOrderConfirmationEmail } from "@/lib/mail/actions";
 import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
 import { rateLimit } from "@/lib/rate-limit";
+import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const DELIVERY_COST_CENTS = 120000;
 
 class HttpError extends Error {
   status: number;
@@ -123,10 +122,9 @@ export async function POST(request: Request) {
       throw new HttpError(400, "Método de entrega inválido");
     }
 
+    const deliveryZoneRaw = normalizeString(body?.deliveryZone);
     const address = normalizeString(body?.address);
     const addressDetails = normalizeString(body?.addressDetails);
-    const city = normalizeString(body?.city);
-    const postalCode = normalizeString(body?.postalCode);
     const notes = normalizeString(body?.notes);
 
     const pickupDateRaw = normalizeString(body?.pickupDate);
@@ -145,7 +143,10 @@ export async function POST(request: Request) {
     }
 
     if (deliveryMethod === "DELIVERY") {
-      if (!address || !city) {
+      if (!isValidShippingZone(deliveryZoneRaw)) {
+        throw new HttpError(400, "Zona de envío inválida");
+      }
+      if (!address) {
         throw new HttpError(400, "Falta dirección de envío");
       }
     }
@@ -210,7 +211,9 @@ export async function POST(request: Request) {
     });
 
     const deliveryCostCents =
-      deliveryMethod === "DELIVERY" ? DELIVERY_COST_CENTS : 0;
+      deliveryMethod === "DELIVERY" && isValidShippingZone(deliveryZoneRaw)
+        ? getShippingCost(deliveryZoneRaw)
+        : 0;
 
     const totalCents = subtotalCents + deliveryCostCents;
 

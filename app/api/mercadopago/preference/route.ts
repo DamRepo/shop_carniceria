@@ -3,11 +3,10 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const DELIVERY_COST_CENTS = 120000; // $1200.00
 
 type BodyItem = { productId: string; quantity: number };
 
@@ -16,6 +15,7 @@ type Body = {
   phone: string;
   email?: string;
   deliveryMethod: "PICKUP" | "DELIVERY";
+  deliveryZone?: string;
   address?: string;
   addressDetails?: string;
   city?: string;
@@ -242,10 +242,9 @@ export async function POST(req: Request) {
       );
     }
 
+    const deliveryZoneRaw = normalizeString(body?.deliveryZone);
     const address = normalizeString(body?.address);
     const addressDetails = normalizeString(body?.addressDetails);
-    const city = normalizeString(body?.city);
-    const postalCode = normalizeString(body?.postalCode);
     const notes = normalizeString(body?.notes);
 
     const pickupDateRaw = normalizeString(body?.pickupDate);
@@ -261,6 +260,12 @@ export async function POST(req: Request) {
     }
 
     if (deliveryMethod === "DELIVERY") {
+      if (!isValidShippingZone(deliveryZoneRaw)) {
+        return NextResponse.json(
+          { error: "Zona de envío inválida" },
+          { status: 400 }
+        );
+      }
       if (!address) {
         return NextResponse.json(
           { error: "Dirección requerida para delivery" },
@@ -426,7 +431,9 @@ export async function POST(req: Request) {
     });
 
     const deliveryCostCents =
-      deliveryMethod === "DELIVERY" ? DELIVERY_COST_CENTS : 0;
+      deliveryMethod === "DELIVERY" && isValidShippingZone(deliveryZoneRaw)
+        ? getShippingCost(deliveryZoneRaw)
+        : 0;
 
     const totalCents = subtotalCents + deliveryCostCents;
 

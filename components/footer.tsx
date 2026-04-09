@@ -62,9 +62,9 @@ export function Footer() {
               <div className="flex items-start gap-2">
                 <Clock className="h-4 w-4 text-red-500 mt-1" />
                 <p>
-                  Lunes a Sábado: 7:30 - 13:00 / 17:00 - 22:00
+                  Lunes a Sábado: 7:30 - 13:00 / 16:00 - 21:00
                   <br />
-                  Domingos: 8:00 - 12:00
+                  Domingos: 8:00 - 13:00
                 </p>
               </div>
 

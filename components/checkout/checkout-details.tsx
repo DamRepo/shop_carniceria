@@ -9,7 +9,6 @@ import {
   StickyNote,
   Truck,
   Home,
-  MapPinned,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,8 +30,6 @@ interface CheckoutDetailsProps {
   pickupNotes?: string;
   address?: string;
   addressDetails?: string;
-  city?: string;
-  postalCode?: string;
   notes?: string;
 }
 
@@ -60,8 +57,6 @@ export function CheckoutDetails({
   pickupNotes,
   address,
   addressDetails,
-  city,
-  postalCode,
   notes,
 }: CheckoutDetailsProps) {
   const isDelivery = deliveryMethod === "DELIVERY";
@@ -151,30 +146,6 @@ export function CheckoutDetails({
                     <p className="text-sm font-medium">Domicilio</p>
                     <p className="text-sm text-muted-foreground">
                       {address?.trim() ? address : "No informado"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border bg-background p-4">
-                <div className="flex items-start gap-3">
-                  <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Ciudad</p>
-                    <p className="text-sm text-muted-foreground">
-                      {city?.trim() ? city : "No informada"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border bg-background p-4">
-                <div className="flex items-start gap-3">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Código postal</p>
-                    <p className="text-sm text-muted-foreground">
-                      {postalCode?.trim() ? postalCode : "No informado"}
                     </p>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, MapPin, MapPinned, StickyNote } from "lucide-react";
+import { Home, MapPin, StickyNote } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,32 +63,6 @@ export function DeliveryAddressStep({
                 disabled={disabled}
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="city">Ciudad</Label>
-            <div className="relative">
-              <MapPinned className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => onChange("city", e.target.value)}
-                placeholder="Ej: Chajarí"
-                className="pl-10"
-                disabled={disabled}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="postalCode">Código postal</Label>
-            <Input
-              id="postalCode"
-              value={formData.postalCode}
-              onChange={(e) => onChange("postalCode", e.target.value)}
-              placeholder="Ej: 3228"
-              disabled={disabled}
-            />
           </div>
 
           <div className="space-y-2 md:col-span-2">

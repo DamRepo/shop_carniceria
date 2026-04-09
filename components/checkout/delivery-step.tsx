@@ -1,9 +1,11 @@
 "use client";
 
-import { Info, MapPin, Store, Truck } from "lucide-react";
+import { AlertCircle, MapPin, Store, Truck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { CheckoutFormData } from "@/components/checkout/types";
+import { SHIPPING_ZONES, SHIPPING_OUTSIDE_MESSAGE } from "@/lib/shipping";
+import type { ShippingZone } from "@/lib/shipping";
 
 interface DeliveryStepProps {
   formData: CheckoutFormData;
@@ -20,6 +22,8 @@ export function DeliveryStep({
 }: DeliveryStepProps) {
   const isPickup = formData.deliveryMethod === "PICKUP";
   const isDelivery = formData.deliveryMethod === "DELIVERY";
+  const canContinue =
+    isPickup || (isDelivery && formData.deliveryZone !== "");
 
   return (
     <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
@@ -66,7 +70,7 @@ export function DeliveryStep({
                 </div>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Lunes a Sábado: 07:30 - 13:00 y 17:00 - 22:00
+                  Lunes a Sábado: 07:30 - 13:00 y 16:00 - 21:00
                   <br />
                   Domingos: 08:00 - 13:00
                 </p>
@@ -100,29 +104,48 @@ export function DeliveryStep({
                   Recibí tu pedido en tu domicilio dentro de la zona disponible.
                 </p>
 
-                <p className="mt-3 text-sm">
-                  <span className="font-medium">Costo de envío:</span>{" "}
-                  <span className="text-muted-foreground">$1200</span>
-                </p>
-
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Vas a poder completar tu dirección en el siguiente paso.
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Seleccioná la zona para ver el costo de envío.
                 </p>
               </div>
             </div>
           </button>
         </div>
 
-        <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
-          <div className="flex items-start gap-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <p className="text-sm leading-6 text-muted-foreground">
-              Si elegís <span className="font-medium">envío a domicilio</span>, se suman{" "}
-              <span className="font-medium">$1200</span> al total del pedido. Si elegís{" "}
-              <span className="font-medium">retiro en el local</span>, no se cobra envío.
-            </p>
+        {isDelivery && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Zona de envío</p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(Object.entries(SHIPPING_ZONES) as [ShippingZone, (typeof SHIPPING_ZONES)[ShippingZone]][]).map(
+                ([key, zone]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => onChange("deliveryZone", key)}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      formData.deliveryZone === key
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border bg-background hover:border-primary/40"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{zone.label}</p>
+                    <p className="mt-1 text-base font-semibold text-primary">
+                      {zone.priceDisplay}
+                    </p>
+                  </button>
+                )
+              )}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-xl border border-dashed bg-muted/20 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">
+                {SHIPPING_OUTSIDE_MESSAGE}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="rounded-2xl border bg-background p-4">
           <p className="text-sm">
@@ -130,8 +153,10 @@ export function DeliveryStep({
             <span className="text-muted-foreground">
               {isPickup
                 ? "Retiro en el local"
+                : isDelivery && formData.deliveryZone
+                ? `Envío – ${SHIPPING_ZONES[formData.deliveryZone].label} (${SHIPPING_ZONES[formData.deliveryZone].priceDisplay})`
                 : isDelivery
-                ? "Envío a domicilio"
+                ? "Envío a domicilio (seleccioná la zona)"
                 : "No definido"}
             </span>
           </p>
@@ -146,7 +171,7 @@ export function DeliveryStep({
             type="button"
             onClick={onContinue}
             className="rounded-xl px-6"
-            disabled={!formData.deliveryMethod}
+            disabled={!canContinue}
           >
             Continuar
           </Button>

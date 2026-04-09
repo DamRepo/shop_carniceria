@@ -37,9 +37,10 @@ export default function PreguntasFrecuentesPage() {
               ¿Hacen envíos a domicilio?
             </AccordionTrigger>
             <AccordionContent className="text-zinc-300">
-              ¡Hola! Por ahora no estamos haciendo envíos, pero podés mandar a
-              alguien a buscar tu compra sin problemas. Avisanos los datos de
-              quién retira y se lo entregamos.
+              Sí, realizamos envíos dentro de San José de Feliciano y su ejido
+              (hasta 4 km). El costo varía según la zona: <strong>$1.500</strong> para
+              Ciudad y <strong>$3.200</strong> para Ejido. No realizamos envíos fuera
+              de esas zonas.
             </AccordionContent>
           </AccordionItem>
 

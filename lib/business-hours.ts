@@ -20,9 +20,18 @@ function inRange(t: Date, start: Date, end: Date) {
 /**
  * Calcula "listo estimado" sumando 2 horas de preparación,
  * respetando horarios del local:
- * Lun–Sáb 07:30–13:00 y 17:00–22:00
+ * Lun–Sáb 07:30–13:00 y 16:00–21:00
  * Dom 08:00–13:00
  */
+
+/** Devuelve el Date de la próxima apertura a partir de `from` (día siguiente). */
+function nextOpeningAfter(from: Date): Date {
+  const next = new Date(from);
+  next.setDate(next.getDate() + 1);
+  const [h, m] = next.getDay() === 0 ? [8, 0] : [7, 30];
+  return setTime(next, h, m);
+}
+
 export function estimateReadyAt(purchasedAt: Date, prepHours = 2): ReadyEstimate {
   const d = new Date(purchasedAt);
   const day = d.getDay(); // 0=domingo
@@ -32,7 +41,7 @@ export function estimateReadyAt(purchasedAt: Date, prepHours = 2): ReadyEstimate
     ? [{ start: [8, 0] as const, end: [13, 0] as const }]
     : [
         { start: [7, 30] as const, end: [13, 0] as const },
-        { start: [17, 0] as const, end: [22, 0] as const },
+        { start: [16, 0] as const, end: [21, 0] as const },
       ];
 
   // 1) Si compra dentro de un rango abierto
@@ -55,13 +64,8 @@ export function estimateReadyAt(purchasedAt: Date, prepHours = 2): ReadyEstimate
         };
       }
 
-      // No hay más rangos hoy: saltar al próximo día (mañana)
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
-      const nextIsSunday = next.getDay() === 0;
-      const open = nextIsSunday ? [8, 0] : [7, 30];
-      const nextOpen = setTime(next, open[0], open[1]);
-
+      // No hay más rangos hoy: próxima apertura
+      const nextOpen = nextOpeningAfter(d);
       return {
         readyAt: addHours(nextOpen, prepHours),
         note: "Fuera del horario de atención, se estima para la próxima apertura.",
@@ -78,13 +82,8 @@ export function estimateReadyAt(purchasedAt: Date, prepHours = 2): ReadyEstimate
     };
   }
 
-  // Después de cerrar: próxima apertura del día siguiente
-  const next = new Date(d);
-  next.setDate(next.getDate() + 1);
-  const nextIsSunday = next.getDay() === 0;
-  const open = nextIsSunday ? [8, 0] : [7, 30];
-  const nextOpen = setTime(next, open[0], open[1]);
-
+  // Después de cerrar: próxima apertura
+  const nextOpen = nextOpeningAfter(d);
   return {
     readyAt: addHours(nextOpen, prepHours),
     note: "Fuera del horario de atención, se estima para la próxima apertura.",
