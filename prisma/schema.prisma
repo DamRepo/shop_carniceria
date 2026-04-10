@@ -88,6 +88,7 @@ model User {
   password      String
   name          String?
   phone         String?
+  image         String?
   role          UserRole @default(CUSTOMER)
   receiveOffers Boolean  @default(true)
   createdAt     DateTime @default(now())

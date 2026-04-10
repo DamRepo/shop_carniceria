@@ -1,13 +1,15 @@
 "use client";
 
+import React from "react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/product-card";
 import { ProductFilters, FilterOptions } from "@/components/product-filters";
+import { CategoryChips } from "@/components/CategoryChips";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
-  Loader2,
+  AlertTriangle,
   Filter,
   ChevronDown,
   ChevronRight,
@@ -64,9 +66,12 @@ export default function ProductosClient() {
   const [allProducts, setAllProducts] = useState<ProductWithCategory[]>([]);
   const [categories, setCategories] = useState<CategoryWithCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchKey, setFetchKey] = useState(0);
 
   const [openMothers, setOpenMothers] = useState<Record<string, boolean>>({});
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [topSort, setTopSort] = useState<"relevancia" | "price-asc" | "price-desc" | "recent">("relevancia");
 
   const [filters, setFilters] = useState<FilterOptions>({
     minPrice: 0,
@@ -77,6 +82,7 @@ export default function ProductosClient() {
   });
 
   const selectedCategory = (searchParams.get("category") || "todos").trim();
+  const searchTerm = (searchParams.get("search") || "").trim();
 
   /* -----------------------
      Cargar categorías
@@ -105,24 +111,30 @@ export default function ProductosClient() {
      Cargar productos
   ----------------------- */
   useEffect(() => {
+    let alive = true;
     (async () => {
       setLoading(true);
+      setError(null);
       try {
         const res = await fetch("/api/products", { cache: "no-store" });
-        if (res.ok) {
-          const data = (await res.json()) as ProductWithCategory[];
-          setAllProducts(data ?? []);
-        } else {
-          setAllProducts([]);
+        if (!res.ok) {
+          const msg = `Error ${res.status} al cargar productos`;
+          console.error("[ProductosClient]", msg);
+          if (alive) setError(msg);
+          return;
         }
-      } catch (error) {
-        console.error("Error fetching products:", error);
-        setAllProducts([]);
+        const data = (await res.json()) as ProductWithCategory[];
+        if (alive) setAllProducts(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("[ProductosClient] fetch error:", err);
+        if (alive) setError("No pudimos cargar los productos. Verificá tu conexión.");
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-  }, []);
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey]);
 
   const mothers = useMemo(
     () => categories.filter((c) => !c.parentId),
@@ -158,8 +170,11 @@ export default function ProductosClient() {
   }, [selectedCategory, categories]);
 
   const goToCategory = (slug: string | "todos") => {
-    if (slug === "todos") router.push("/productos");
-    else router.push(`/productos?category=${encodeURIComponent(slug)}`);
+    const params = new URLSearchParams();
+    if (slug !== "todos") params.set("category", slug);
+    if (searchTerm) params.set("search", searchTerm);
+    const qs = params.toString();
+    router.push(qs ? `/productos?${qs}` : "/productos");
   };
 
   const goToCategoryMobile = (slug: string | "todos") => {
@@ -187,7 +202,7 @@ export default function ProductosClient() {
       );
     }
 
-    return allProducts.filter((p) => p.category.slug === selectedCategory);
+    return allProducts.filter((p) => p.categoryId === selectedCat.id);
   }, [allProducts, categories, selectedCategory]);
 
   /* -----------------------
@@ -211,6 +226,15 @@ export default function ProductosClient() {
   ----------------------- */
   const filteredProducts = useMemo(() => {
     let result = [...categoryFilteredProducts];
+
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(lower) ||
+          (p.description ?? "").toLowerCase().includes(lower)
+      );
+    }
 
     result = result.filter((product) => {
       const price = product?.price ?? 0;
@@ -257,7 +281,33 @@ export default function ProductosClient() {
     }
 
     return result;
-  }, [categoryFilteredProducts, filters]);
+  }, [categoryFilteredProducts, filters, searchTerm]);
+
+  const displayedProducts = useMemo(() => {
+    if (topSort === "relevancia") return filteredProducts;
+    const sorted = [...filteredProducts];
+    switch (topSort) {
+      case "price-asc":
+        sorted.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+        break;
+      case "price-desc":
+        sorted.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+        break;
+      case "recent":
+        sorted.sort((a, b) => {
+          const dA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dB - dA;
+        });
+        break;
+    }
+    return sorted;
+  }, [filteredProducts, topSort]);
+
+  function handleRetry() {
+    setAllProducts([]);
+    setFetchKey((k) => k + 1);
+  }
 
   const CategoriesBlock = ({ mobile }: { mobile: boolean }) => (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
@@ -331,10 +381,69 @@ export default function ProductosClient() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-4xl font-bold mb-2">Nuestros Productos</h1>
-        <p className="text-muted-foreground text-sm sm:text-lg">
-          Explorá nuestra selección de carnes, embutidos y más
-        </p>
+        {searchTerm ? (
+          <>
+            <h1 className="text-2xl sm:text-4xl font-bold mb-2">
+              Resultados para &ldquo;{searchTerm}&rdquo;
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-lg">
+              {filteredProducts.length} producto(s) encontrado(s)
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl sm:text-4xl font-bold mb-2">Nuestros Productos</h1>
+            <p className="text-muted-foreground text-sm sm:text-lg">
+              Explorá nuestra selección de carnes, embutidos y más
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Chips de categorías */}
+      <div className="mb-4">
+        {mothers.length > 0 ? (
+          <CategoryChips
+            categories={mothers}
+            selectedCategory={selectedCategory}
+            onSelect={goToCategory}
+          />
+        ) : (
+          <div
+            className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none" } as React.CSSProperties}
+          >
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="shrink-0 h-8 w-24 rounded-full bg-zinc-800 animate-pulse"
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Barra de ordenamiento */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <span className="text-sm text-muted-foreground hidden sm:block">
+          {filteredProducts.length} producto(s)
+        </span>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <label htmlFor="top-sort" className="text-sm text-muted-foreground whitespace-nowrap">
+            Ordenar por:
+          </label>
+          <select
+            id="top-sort"
+            value={topSort}
+            onChange={(e) => setTopSort(e.target.value as typeof topSort)}
+            className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-red-500 w-full sm:w-auto"
+          >
+            <option value="relevancia">Relevancia</option>
+            <option value="price-asc">Menor precio</option>
+            <option value="price-desc">Mayor precio</option>
+            <option value="recent">Novedades</option>
+          </select>
+        </div>
       </div>
 
       {/* MOBILE: botón que abre todo */}
@@ -397,24 +506,67 @@ export default function ProductosClient() {
 
         <div className="lg:col-span-3 min-w-0">
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
-              {filteredProducts.map((product) => (
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden flex flex-col"
+                >
+                  {/* Imagen — misma altura que la card real */}
+                  <div className="bg-zinc-800 h-[220px]" />
+
+                  {/* Contenido */}
+                  <div className="p-3 flex-1 flex flex-col gap-1.5">
+                    {/* Título */}
+                    <div className="h-4 bg-zinc-800 rounded w-3/4" />
+                    {/* Descripción — 2 líneas */}
+                    <div className="space-y-1 min-h-[34px]">
+                      <div className="h-3 bg-zinc-800 rounded" />
+                      <div className="h-3 bg-zinc-800 rounded w-5/6" />
+                    </div>
+                    {/* Precio: tachado + principal + sin impuestos */}
+                    <div className="space-y-1 mt-1">
+                      <div className="h-3 bg-zinc-800 rounded w-1/3" />
+                      <div className="h-6 bg-zinc-800 rounded w-2/5" />
+                      <div className="h-3 bg-zinc-800 rounded w-3/4" />
+                    </div>
+                  </div>
+
+                  {/* Footer — 2 botones */}
+                  <div className="p-3 pt-0 flex flex-col gap-2">
+                    <div className="h-10 bg-zinc-800 rounded" />
+                    <div className="h-10 bg-zinc-800 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+              <AlertTriangle className="h-10 w-10 text-red-500" />
+              <p className="text-lg font-medium">
+                No pudimos cargar los productos. Intentá de nuevo más tarde.
+              </p>
+              <Button onClick={handleRetry} type="button" variant="outline">
+                Reintentar
+              </Button>
+            </div>
+          ) : displayedProducts.length > 0 ? (
+            <div className="grid grid-cols-2 gap-x-2 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+              {displayedProducts.map((product) => (
                 <ProductCard key={product.id} product={product as any} />
               ))}
             </div>
           ) : (
             <div className="text-center py-20">
               <p className="text-muted-foreground text-lg">
-                {categoryFilteredProducts.length === 0
+                {searchTerm
+                  ? `No se encontraron productos para "${searchTerm}"`
+                  : categoryFilteredProducts.length === 0
                   ? "No se encontraron productos en esta categoría"
                   : "No se encontraron productos con los filtros aplicados"}
               </p>
               <p className="text-muted-foreground text-sm mt-2">
-                Intentá ajustar los filtros
+                {searchTerm ? "Intentá con otro término de búsqueda" : "Intentá ajustar los filtros"}
               </p>
             </div>
           )}

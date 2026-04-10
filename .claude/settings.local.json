@@ -12,7 +12,10 @@
       "Bash(python3 -c \":*)",
       "Bash(node -e \":*)",
       "Bash(2)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(xargs -I{} sh -c 'head -1 \"{}\" | grep -qv \"use client\" && echo \"MISSING: {}\"')",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && head -3 \"{}\"')",
+      "Bash(xargs head:*)"
     ]
   }
 }

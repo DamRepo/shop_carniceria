@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -100,6 +100,7 @@ function getOfferQtyLabel(product: ProductDTO) {
 export function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const addItem = useCartStore((state) => state.addItem);
+  const [imgError, setImgError] = useState(false);
 
   const canBuy = (product.stock ?? 0) > 0;
   const offerActive = hasActiveOffer(product);
@@ -185,13 +186,14 @@ export function ProductCard({ product }: ProductCardProps) {
         "
       >
         <div className="relative bg-muted overflow-hidden h-[220px] md:h-[240px]">
-          {product.image ? (
+          {product.image && !imgError ? (
             <Image
               src={product.image}
               alt={product.name}
               fill
               className="object-cover object-[center_30%] transition-transform group-hover:scale-[1.03]"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              onError={() => setImgError(true)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -214,21 +216,21 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {product.stock > 0 && product.stock <= 5 && (
-            <Badge className="absolute top-2 left-2 bg-orange-500 hover:bg-orange-600 z-20">
-              Últimas
+          {product.stock > 0 && product.stock <= 10 && (
+            <Badge className="absolute top-2 left-2 z-20 bg-amber-500 hover:bg-amber-600 text-white text-[11px] px-2 py-0.5">
+              Últimas unidades
             </Badge>
           )}
 
           {product.stock <= 0 && (
-            <Badge className="absolute top-2 left-2 bg-red-600 hover:bg-red-700 z-20">
+            <Badge className="absolute top-2 left-2 z-20 bg-red-600 hover:bg-red-700 text-white text-[11px] px-2 py-0.5">
               Agotado
             </Badge>
           )}
         </div>
 
         <CardContent className="p-3 flex-1 flex flex-col gap-1.5">
-          <h3 className="font-semibold text-[15px] leading-snug line-clamp-1">
+          <h3 className="font-medium text-[14px] leading-snug line-clamp-2">
             {product.name}
           </h3>
 
@@ -249,14 +251,14 @@ export function ProductCard({ product }: ProductCardProps) {
                   <span className="block text-xs text-muted-foreground line-through">
                     {formatPrice(product.price)}
                   </span>
-                  <span className="block text-xl font-bold text-primary">
+                  <span className="block text-xl font-medium text-primary">
                     {formatPrice(finalPrice)}
                   </span>
                 </>
               ) : (
                 <>
                   <span className="block text-xs text-muted-foreground">{" "}</span>
-                  <span className="block text-xl font-bold text-primary">
+                  <span className="block text-xl font-medium text-primary">
                     {formatPrice(product.price)}
                   </span>
                 </>

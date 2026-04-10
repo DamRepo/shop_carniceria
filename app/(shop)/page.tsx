@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { HeroSlider } from "@/components/hero-slider";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { ProductRowSlider } from "@/components/product-row-slider";
+import { ProductCard } from "@/components/product-card";
 import { FeaturedCategoryCardVertical } from "@/components/featured-category-card-vertical";
 import { PromoDoubleBanner } from "@/components/promo-double-banner";
 import { FeaturedCategoryCardHorizontal } from "@/components/featured-category-card-horizontal";
@@ -112,6 +113,33 @@ function getEffectivePrice(p: ProductWithSale | Product): number {
   return 0;
 }
 
+/** Adapta ProductWithSale al DTO que espera ProductCard (normaliza saleEndDate a string). */
+function adaptForCard(p: ProductWithSale) {
+  return {
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    description: p.description,
+    image: p.image,
+    unitType: p.unitType,
+    price: p.price,
+    stock: p.stock,
+    vatRate: p.vatRate ?? null,
+    category: p.category ? { vatRate: p.category.vatRate ?? null } : null,
+    netWeightGr: (p as { netWeightGr?: number | null }).netWeightGr ?? null,
+    netVolumeMl: (p as { netVolumeMl?: number | null }).netVolumeMl ?? null,
+    isOnSale: typeof p.isOnSale === "boolean" ? p.isOnSale : false,
+    salePrice: p.salePrice ?? null,
+    saleEndDate:
+      p.saleEndDate instanceof Date
+        ? p.saleEndDate.toISOString()
+        : (p.saleEndDate as string | null | undefined) ?? null,
+    discountPercent: p.discountPercent ?? null,
+    measurementUnit: (p as { measurementUnit?: string | null }).measurementUnit ?? null,
+    unitMultiplier: (p as { unitMultiplier?: number | null }).unitMultiplier ?? null,
+  };
+}
+
 type HomeSliderCardProps = {
   product: ProductWithSale;
   showFeaturedBadge?: boolean;
@@ -180,8 +208,8 @@ function HomeSliderCard({
     <Link href={`/productos/${product.slug}`} className="block h-full">
       <motion.article
         className="
-          group flex h-full min-h-[340px] flex-col overflow-hidden rounded-lg border bg-card
-          transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg
+          group flex h-full flex-col overflow-hidden rounded-xl border bg-card
+          transition-colors duration-200 hover:border-primary/40
         "
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -193,7 +221,7 @@ function HomeSliderCard({
               src={product.image}
               alt={product.name}
               fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 220px"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 220px"
               className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
@@ -203,9 +231,9 @@ function HomeSliderCard({
           )}
 
           {showFeaturedBadge ? (
-            <Badge className="absolute right-2 top-2 bg-primary text-primary-foreground">
-              <Star className="mr-1 h-3 w-3" fill="currentColor" />
-              Destacado
+            <Badge className="absolute right-2 top-2 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5">
+              <Star className="h-2.5 w-2.5 sm:mr-1" fill="currentColor" />
+              <span className="hidden sm:inline">Destacado</span>
             </Badge>
           ) : null}
 
@@ -225,12 +253,12 @@ function HomeSliderCard({
           priceInfo.hasSale &&
           discountBadgeMode === "top-right" ? (
             <div className="absolute right-2 top-2 z-20 flex flex-col items-end gap-1">
-              <Badge className="bg-red-600 text-white">
-                <Tag className="mr-1 h-3 w-3" />
+              <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0.5">
+                <Tag className="mr-1 h-2.5 w-2.5" />
                 Oferta
               </Badge>
               {discount !== null ? (
-                <Badge className="bg-black font-bold text-white">
+                <Badge className="bg-black font-bold text-white text-[10px] px-1.5 py-0.5">
                   -{discount}%
                 </Badge>
               ) : null}
@@ -240,13 +268,13 @@ function HomeSliderCard({
           {showOfferBadge &&
           priceInfo.hasSale &&
           discountBadgeMode === "bottom-left" ? (
-            <div className="absolute bottom-2 left-2 z-20 flex flex-col gap-2">
-              <Badge className="w-fit bg-red-600 text-white shadow-sm">
-                <Tag className="mr-1 h-3 w-3" />
+            <div className="absolute bottom-2 left-2 z-20 flex flex-col gap-1">
+              <Badge className="w-fit bg-red-600 text-white shadow-sm text-[10px] px-1.5 py-0.5">
+                <Tag className="mr-1 h-2.5 w-2.5" />
                 Oferta
               </Badge>
               {discount !== null ? (
-                <Badge className="w-fit bg-black font-bold text-white shadow-sm">
+                <Badge className="w-fit bg-black font-bold text-white shadow-sm text-[10px] px-1.5 py-0.5">
                   -{discount}%
                 </Badge>
               ) : null}
@@ -254,10 +282,10 @@ function HomeSliderCard({
           ) : null}
         </div>
 
-        <div className="flex flex-1 flex-col p-4">
+        <div className="flex flex-1 flex-col p-2 sm:p-4">
           <h3
             className="
-              line-clamp-2 overflow-hidden text-[17px] font-semibold
+              line-clamp-2 overflow-hidden text-[12px] sm:text-[17px] font-semibold
               leading-snug transition-colors group-hover:text-primary
             "
             title={product.name}
@@ -265,25 +293,27 @@ function HomeSliderCard({
             {product.name}
           </h3>
 
-          <div className="mt-2">
+          <div className="mt-1.5">
             {priceInfo.hasSale && typeof priceInfo.salePrice === "number" ? (
               <>
-                <div className="truncate text-sm text-muted-foreground line-through">
-                  {formatPrice(priceInfo.originalPrice ?? product.price)}
-                </div>
-
-                <div className="flex items-baseline gap-2 overflow-hidden">
-                  <span className="truncate text-2xl font-bold text-primary">
-                    {formatPrice(priceInfo.salePrice)}
+                <div className="flex items-center gap-1 overflow-hidden">
+                  <span className="truncate text-[11px] sm:text-sm text-muted-foreground line-through">
+                    {formatPrice(priceInfo.originalPrice ?? product.price)}
                   </span>
+                  {discount !== null && discount >= 5 ? (
+                    <span className="shrink-0 rounded-full bg-red-600/10 px-1 py-0.5 text-[9px] sm:text-[10px] font-bold text-red-600">
+                      -{discount}%
+                    </span>
+                  ) : null}
                 </div>
+                <span className="block truncate text-base sm:text-2xl font-bold text-primary">
+                  {formatPrice(priceInfo.salePrice)}
+                </span>
               </>
             ) : (
-              <div className="flex items-baseline gap-2 overflow-hidden">
-                <span className="truncate text-2xl font-bold text-primary">
-                  {formatPrice(product.price)}
-                </span>
-              </div>
+              <span className="block truncate text-base sm:text-2xl font-bold text-primary">
+                {formatPrice(product.price)}
+              </span>
             )}
           </div>
 
@@ -291,48 +321,44 @@ function HomeSliderCard({
             if (!product.measurementUnit || product.unitMultiplier == null) return null;
             const result = computeUnitPrice(effectivePrice, product.measurementUnit, product.unitMultiplier);
             return result ? (
-              <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+              <p className="mt-0.5 truncate text-[10px] sm:text-[11px] font-medium text-muted-foreground hidden sm:block">
                 {result.label}
               </p>
             ) : null;
           })()}
 
-          <div className="mt-1">
-            <p
-              className="line-clamp-2 overflow-hidden text-[11px] leading-tight text-muted-foreground"
-              title={`precio sin impuestos nacionales: ${formatPrice(netPrice)}`}
-            >
-              precio sin impuestos nacionales: {formatPrice(netPrice)}
-            </p>
-          </div>
+          <p className="mt-0.5 text-[10px] sm:text-[11px] leading-tight text-muted-foreground hidden sm:block">
+            sin impuestos: {formatPrice(netPrice)}
+          </p>
 
-          <div className="mt-2">
+          <div className="mt-1.5">
             {showLowStock ? (
               <Badge
                 variant="outline"
-                className="border-orange-500 text-xs text-orange-500"
+                className="border-orange-500 text-[10px] px-1.5 py-0.5 text-orange-500"
               >
-                ¡Últimas unidades!
+                Últimas
               </Badge>
             ) : noStock ? (
               <Badge
                 variant="outline"
-                className="border-red-500 text-xs text-red-500"
+                className="border-red-500 text-[10px] px-1.5 py-0.5 text-red-500"
               >
-                Sin stock
+                Agotado
               </Badge>
             ) : null}
           </div>
 
-          <div className="mt-auto pt-4">
+          <div className="mt-auto pt-2 sm:pt-4">
             <Button
               type="button"
-              className="w-full font-semibold"
+              size="sm"
+              className="w-full text-[12px] sm:text-sm font-semibold py-1.5 sm:py-2 h-auto"
               onClick={handleAddToCart}
               disabled={noStock}
             >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              {noStock ? "Sin stock" : "Agregar"}
+              <ShoppingCart className="mr-1 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
+              {noStock ? "Agotado" : "Agregar"}
             </Button>
           </div>
         </div>
@@ -490,7 +516,7 @@ export default function HomePage() {
           </motion.div>
 
           {loading ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {[...Array(8)].map((_, i) => (
                 <div
                   key={i}
@@ -524,12 +550,7 @@ export default function HomePage() {
                 <ProductRowSlider
                   items={featuredProducts}
                   renderItem={(product) => (
-                    <HomeSliderCard
-                      product={product}
-                      showFeaturedBadge
-                      showOfferBadge
-                      discountBadgeMode="top-right"
-                    />
+                    <ProductCard product={adaptForCard(product)} />
                   )}
                 />
               </div>
@@ -561,7 +582,7 @@ export default function HomePage() {
           </motion.div>
 
           {bestSellersLoading ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
@@ -577,11 +598,7 @@ export default function HomePage() {
             <ProductRowSlider
               items={bestSellers}
               renderItem={(product) => (
-                <HomeSliderCard
-                  product={product}
-                  showOfferBadge
-                  discountBadgeMode="top-right"
-                />
+                <ProductCard product={adaptForCard(product)} />
               )}
             />
           ) : (
@@ -712,11 +729,13 @@ export default function HomePage() {
           href: "/productos?category=pollo",
           imageSrc: "/calisa.png",
           alt: "pollos calisa",
+          label: "Pollos",
         }}
         right={{
-          href: "/productos?category=congelados",
+          href: "/productos?category=congelados-carniceria",
           imageSrc: "/congelados.png",
           alt: "congelados caseros",
+          label: "Congelados",
         }}
       />
 

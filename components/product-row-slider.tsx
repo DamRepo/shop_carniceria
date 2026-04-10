@@ -34,7 +34,7 @@ export function ProductRowSlider<T>({
         variant="outline"
         size="icon"
         onClick={() => scroll("left")}
-        className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-background/80 backdrop-blur-sm"
+        className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-background/80 backdrop-blur-sm hidden sm:flex"
       >
         <ChevronLeft className="h-5 w-5" />
       </Button>
@@ -44,12 +44,12 @@ export function ProductRowSlider<T>({
         variant="outline"
         size="icon"
         onClick={() => scroll("right")}
-        className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-background/80 backdrop-blur-sm"
+        className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-background/80 backdrop-blur-sm hidden sm:flex"
       >
         <ChevronRight className="h-5 w-5" />
       </Button>
 
-      <div className="px-12 md:px-14">
+      <div className="sm:px-12 md:px-14">
         <div
           ref={scrollRef}
           className="flex items-stretch gap-3 overflow-x-auto scroll-smooth scrollbar-hide"
@@ -57,7 +57,7 @@ export function ProductRowSlider<T>({
           {items.map((item, index) => (
             <div
               key={index}
-              className="shrink-0 basis-[205px] sm:basis-[215px] lg:basis-[220px]"
+              className="shrink-0 basis-[calc(50vw-10px)] sm:basis-[215px] lg:basis-[220px]"
             >
               {renderItem(item, index)}
             </div>

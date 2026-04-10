@@ -43,9 +43,19 @@ export async function POST(req: Request) {
     body?.description !== undefined && body?.description !== null
       ? String(body.description).trim()
       : null;
+  const parentId =
+    body?.parentId && typeof body.parentId === "string" ? body.parentId : null;
 
   if (!name) {
     return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
+  }
+
+  // Verificar que el parentId existe si fue provisto
+  if (parentId) {
+    const parent = await prisma.category.findUnique({ where: { id: parentId } });
+    if (!parent) {
+      return NextResponse.json({ error: "Categoría madre no encontrada" }, { status: 400 });
+    }
   }
 
   // slug opcional: si no viene, lo generamos
@@ -73,7 +83,7 @@ export async function POST(req: Request) {
   }
 
   const created = await prisma.category.create({
-    data: { name, slug, description },
+    data: { name, slug, description, parentId },
   });
 
   return NextResponse.json(created, { status: 201 });

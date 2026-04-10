@@ -143,6 +143,40 @@ function stockFromDb(stockRaw: number, unitType: UnitType): number {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.isActive !== "boolean") {
+      return NextResponse.json(
+        { error: "Se requiere { isActive: boolean }" },
+        { status: 400 }
+      );
+    }
+
+    const product = await prisma.product.update({
+      where: { id: params.id },
+      data: { isActive: body.isActive },
+      select: { id: true, isActive: true },
+    });
+
+    return NextResponse.json(product);
+  } catch (error) {
+    console.error("Error toggling product isActive:", error);
+    return NextResponse.json(
+      { error: "Error al actualizar producto" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }

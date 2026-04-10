@@ -59,6 +59,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: siteUrl,
   },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-image.png"],
+  },
   robots: {
     index: true,
     follow: true,
@@ -77,8 +81,10 @@ const jsonLd = {
     "Carnicería y fábrica de embutidos artesanales en San José de Feliciano, Entre Ríos.",
   url: siteUrl,
   image: `${siteUrl}/og-image.png`,
+  telephone: "+5493458556104",
   address: {
     "@type": "PostalAddress",
+    streetAddress: "Calle Sarmiento N°403",
     addressLocality: "San José de Feliciano",
     addressRegion: "Entre Ríos",
     addressCountry: "AR",
@@ -104,7 +110,7 @@ const jsonLd = {
     {
       "@type": "OpeningHoursSpecification",
       dayOfWeek: ["Sunday"],
-      opens: "08:00",
+      opens: "08:30",
       closes: "13:00",
     },
   ],

@@ -25,6 +25,7 @@ import {
   ClipboardList,
   Sparkles,
   Activity,
+  FolderTree,
 } from "lucide-react";
 
 interface Stats {
@@ -49,6 +50,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -87,6 +89,7 @@ export default function AdminDashboard() {
         onSaleProducts: data.onSaleProducts,
         featuredProducts: data.featuredProducts,
       });
+      setLastUpdated(new Date());
     } catch (err: any) {
       console.error("Error fetching stats:", err);
       setErrorMsg(err?.message || "Error desconocido al cargar estadísticas");
@@ -112,6 +115,7 @@ export default function AdminDashboard() {
       icon: Package,
       color: "text-sky-400",
       ring: "from-sky-500/20 to-transparent",
+      href: "/admin/productos",
     },
     {
       title: "Órdenes",
@@ -120,6 +124,7 @@ export default function AdminDashboard() {
       icon: ShoppingCart,
       color: "text-emerald-400",
       ring: "from-emerald-500/20 to-transparent",
+      href: "/admin/ordenes",
     },
     {
       title: "Ofertas Activas",
@@ -128,6 +133,7 @@ export default function AdminDashboard() {
       icon: Tag,
       color: "text-orange-400",
       ring: "from-orange-500/20 to-transparent",
+      href: "/admin/ofertas",
     },
     {
       title: "Destacados",
@@ -136,6 +142,7 @@ export default function AdminDashboard() {
       icon: TrendingUp,
       color: "text-fuchsia-400",
       ring: "from-fuchsia-500/20 to-transparent",
+      href: "/admin/productos",
     },
   ];
 
@@ -205,10 +212,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
-        <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-300">
               <Sparkles className="h-3.5 w-3.5" />
@@ -245,6 +252,17 @@ export default function AdminDashboard() {
               {refreshing ? "Actualizando..." : "Actualizar"}
             </button>
           </div>
+
+          {lastUpdated && (
+            <p className="text-xs text-zinc-500 mt-1 lg:mt-0 lg:text-right">
+              Actualizado:{" "}
+              {lastUpdated.toLocaleTimeString("es-AR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </p>
+          )}
         </div>
       </div>
 
@@ -254,34 +272,33 @@ export default function AdminDashboard() {
           const Icon = stat.icon;
 
           return (
-            <Card
-              key={stat.title}
-              className="relative overflow-hidden border-zinc-800 bg-zinc-900/95 transition hover:-translate-y-0.5 hover:border-zinc-700"
-            >
-              <div
-                className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${stat.ring}`}
-              />
-              <CardHeader className="relative pb-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate text-sm font-medium text-zinc-400">
-                      {stat.title}
-                    </CardTitle>
-                  </div>
+            <Link key={stat.title} href={stat.href}>
+              <Card className="relative overflow-hidden border-zinc-800 bg-zinc-900/95 transition hover:-translate-y-0.5 hover:border-zinc-700 cursor-pointer">
+                <div
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${stat.ring}`}
+                />
+                <CardHeader className="relative pb-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-sm font-medium text-zinc-400">
+                        {stat.title}
+                      </CardTitle>
+                    </div>
 
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950">
-                    <Icon className={`h-5 w-5 ${stat.color}`} />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950">
+                      <Icon className={`h-5 w-5 ${stat.color}`} />
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
+                </CardHeader>
 
-              <CardContent className="relative">
-                <div className="text-3xl font-bold text-white sm:text-4xl">
-                  {stat.value}
-                </div>
-                <p className="mt-2 text-xs text-zinc-500">{stat.subtitle}</p>
-              </CardContent>
-            </Card>
+                <CardContent className="relative">
+                  <div className="text-3xl font-bold text-white sm:text-4xl">
+                    {stat.value}
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-500">{stat.subtitle}</p>
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
       </div>
@@ -364,6 +381,12 @@ export default function AdminDashboard() {
               icon={Package}
               title="Administrar productos"
               subtitle="Crear, editar y activar productos"
+            />
+            <QuickLink
+              href="/admin/categorias"
+              icon={FolderTree}
+              title="Administrar categorías"
+              subtitle="Crear, editar y organizar categorías"
             />
             <QuickLink
               href="/admin/ordenes"

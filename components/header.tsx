@@ -2,7 +2,31 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
+
+// Inner component — isolated so useSearchParams has its own Suspense boundary
+function SearchParamsSync({
+  setCategory,
+  setSection,
+  setOnSale,
+}: {
+  setCategory: React.Dispatch<React.SetStateAction<string>>;
+  setSection: React.Dispatch<React.SetStateAction<string>>;
+  setOnSale: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const searchParams = useSearchParams();
+  const category = searchParams.get("category") || "";
+  const section = searchParams.get("section") || "";
+  const onSale = searchParams.get("onSale") === "true";
+
+  useEffect(() => {
+    setCategory(category);
+    setSection(section);
+    setOnSale(onSale);
+  }, [category, section, onSale, setCategory, setSection, setOnSale]);
+
+  return null;
+}
 import {
   ShoppingCart,
   Menu,
@@ -15,7 +39,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -82,13 +106,15 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const totalItems = useCartStore((state) => state.getTotalItems());
+  const prevTotalRef = useRef<number>(0);
+  const [cartBumped, setCartBumped] = useState(false);
   const pathname = usePathname();
 
-  const searchParams = useSearchParams();
-  const activeCategory = searchParams.get("category") || "";
-  const activeSection = searchParams.get("section") || "";
-  const activeOnSale = searchParams.get("onSale") === "true";
+  const [activeCategory, setActiveCategory] = useState("");
+  const [activeSection, setActiveSection] = useState("");
+  const [activeOnSale, setActiveOnSale] = useState(false);
 
+  const router = useRouter();
   const { data: session, status } = useSession();
 
   // -----------------------
@@ -166,6 +192,19 @@ export function Header() {
     setMounted(true);
   }, []);
 
+  // Animación del badge del carrito al incrementar
+  useEffect(() => {
+    if (!mounted) return;
+    const current = totalItems ?? 0;
+    if (current > prevTotalRef.current) {
+      setCartBumped(true);
+      const t = setTimeout(() => setCartBumped(false), 350);
+      prevTotalRef.current = current;
+      return () => clearTimeout(t);
+    }
+    prevTotalRef.current = current;
+  }, [totalItems, mounted]);
+
   // -----------------------
   // Buscador
   // -----------------------
@@ -210,6 +249,19 @@ export function Header() {
     setSearchOpen(false);
   }
 
+  function goToSearchResults() {
+    const term = q.trim();
+    if (!term) return;
+    closeSearch();
+    setQ("");
+    router.push(`/productos?search=${encodeURIComponent(term)}`);
+  }
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    goToSearchResults();
+  }
+
   const showDropdown = searchOpen && q.trim().length >= 2;
 
   // Mobile dropdown toggles
@@ -247,6 +299,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/90">
+      <Suspense fallback={null}>
+        <SearchParamsSync
+          setCategory={setActiveCategory}
+          setSection={setActiveSection}
+          setOnSale={setActiveOnSale}
+        />
+      </Suspense>
+
       {/* ===================== FILA 1 ===================== */}
       <div className="border-b border-zinc-800 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
         <div className="container mx-auto max-w-7xl px-4 py-2">
@@ -269,17 +329,19 @@ export function Header() {
 
               {/* Buscador inline */}
               <div className="relative flex-1" ref={searchBoxMobileRef}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                <Input
-                  value={q}
-                  onChange={(e) => {
-                    setQ(e.target.value);
-                    setSearchOpen(true);
-                  }}
-                  onFocus={() => setSearchOpen(true)}
-                  placeholder="Buscar productos..."
-                  className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
-                />
+                <form onSubmit={handleSearchSubmit} className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                  <Input
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setSearchOpen(true);
+                    }}
+                    onFocus={() => setSearchOpen(true)}
+                    placeholder="Buscar productos..."
+                    className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
+                  />
+                </form>
 
                 {showDropdown && (
                   <div
@@ -313,10 +375,10 @@ export function Header() {
                             ) : null}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-zinc-100 truncate">
+                            <div className="text-sm font-medium text-zinc-100 line-clamp-2">
                               {p.name}
                             </div>
-                            <div className="text-xs text-zinc-400 truncate">
+                            <div className="text-xs text-zinc-400">
                               {formatPrice(p.price)}
                             </div>
                           </div>
@@ -324,11 +386,20 @@ export function Header() {
                       ))}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-zinc-800 flex justify-end">
+                    <div className="px-3 py-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                      {results.length >= 2 && (
+                        <button
+                          type="button"
+                          onClick={goToSearchResults}
+                          className="text-xs text-red-400 hover:text-red-300 font-medium truncate text-left"
+                        >
+                          Ver todos los resultados para &ldquo;{q.trim()}&rdquo;
+                        </button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400"
+                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400 shrink-0 ml-auto"
                         onClick={closeSearch}
                         type="button"
                       >
@@ -349,7 +420,13 @@ export function Header() {
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {mounted && (totalItems ?? 0) > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center">
+                    <span
+                      className={[
+                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center",
+                        "transition-transform duration-150",
+                        cartBumped ? "scale-125" : "scale-100",
+                      ].join(" ")}
+                    >
                       {totalItems}
                     </span>
                   )}
@@ -402,17 +479,19 @@ export function Header() {
             {/* Buscador (desktop) */}
             <div className="hidden lg:block" ref={searchBoxDesktopRef}>
               <div className="relative max-w-3xl mx-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                <Input
-                  value={q}
-                  onChange={(e) => {
-                    setQ(e.target.value);
-                    setSearchOpen(true);
-                  }}
-                  onFocus={() => setSearchOpen(true)}
-                  placeholder="Buscar productos..."
-                  className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
-                />
+                <form onSubmit={handleSearchSubmit} className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                  <Input
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setSearchOpen(true);
+                    }}
+                    onFocus={() => setSearchOpen(true)}
+                    placeholder="Buscar productos..."
+                    className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
+                  />
+                </form>
 
                 {showDropdown && (
                   <div
@@ -447,10 +526,10 @@ export function Header() {
                           </div>
 
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-zinc-100 truncate">
+                            <div className="text-sm font-medium text-zinc-100 line-clamp-2">
                               {p.name}
                             </div>
-                            <div className="text-xs text-zinc-400 truncate">
+                            <div className="text-xs text-zinc-400">
                               {formatPrice(p.price)}
                             </div>
                           </div>
@@ -458,11 +537,20 @@ export function Header() {
                       ))}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-zinc-800 flex justify-end">
+                    <div className="px-3 py-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                      {results.length >= 2 && (
+                        <button
+                          type="button"
+                          onClick={goToSearchResults}
+                          className="text-xs text-red-400 hover:text-red-300 font-medium truncate text-left"
+                        >
+                          Ver todos los resultados para &ldquo;{q.trim()}&rdquo;
+                        </button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400"
+                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400 shrink-0 ml-auto"
                         onClick={closeSearch}
                         type="button"
                       >
@@ -575,7 +663,13 @@ export function Header() {
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {mounted && (totalItems ?? 0) > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center">
+                    <span
+                      className={[
+                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center",
+                        "transition-transform duration-150",
+                        cartBumped ? "scale-125" : "scale-100",
+                      ].join(" ")}
+                    >
                       {totalItems}
                     </span>
                   )}

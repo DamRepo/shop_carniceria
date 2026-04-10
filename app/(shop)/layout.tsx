@@ -12,11 +12,9 @@ export default function ShopLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <Suspense fallback={null}>
-        <PromoTopBanner />
-        <Header />
-        <DeliveryBanner />
-      </Suspense>
+      <PromoTopBanner />
+      <Header />
+      <DeliveryBanner />
 
       <main className="flex-1">{children}</main>
 

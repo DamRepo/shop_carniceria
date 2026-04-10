@@ -43,6 +43,7 @@ export async function GET() {
         id: true,
         name: true,
         slug: true,
+        description: true,
         image: true,
         price: true,
         stock: true,

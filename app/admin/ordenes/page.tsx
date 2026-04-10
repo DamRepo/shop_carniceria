@@ -167,6 +167,12 @@ export default function OrdenesAdmin() {
   };
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    const newLabel = statusLabels[newStatus] ?? newStatus;
+    const confirmed = confirm(
+      `¿Cambiar el estado de esta orden a "${newLabel}"?`
+    );
+    if (!confirmed) return;
+
     try {
       const response = await fetch(`/api/admin/orders/${orderId}`, {
         method: 'PATCH',

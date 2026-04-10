@@ -21,14 +21,14 @@ function inRange(t: Date, start: Date, end: Date) {
  * Calcula "listo estimado" sumando 2 horas de preparación,
  * respetando horarios del local:
  * Lun–Sáb 07:30–13:00 y 16:00–21:00
- * Dom 08:00–13:00
+ * Dom 08:30–13:00
  */
 
 /** Devuelve el Date de la próxima apertura a partir de `from` (día siguiente). */
 function nextOpeningAfter(from: Date): Date {
   const next = new Date(from);
   next.setDate(next.getDate() + 1);
-  const [h, m] = next.getDay() === 0 ? [8, 0] : [7, 30];
+  const [h, m] = next.getDay() === 0 ? [8, 30] : [7, 30];
   return setTime(next, h, m);
 }
 
@@ -38,7 +38,7 @@ export function estimateReadyAt(purchasedAt: Date, prepHours = 2): ReadyEstimate
   const isSunday = day === 0;
 
   const ranges = isSunday
-    ? [{ start: [8, 0] as const, end: [13, 0] as const }]
+    ? [{ start: [8, 30] as const, end: [13, 0] as const }]
     : [
         { start: [7, 30] as const, end: [13, 0] as const },
         { start: [16, 0] as const, end: [21, 0] as const },

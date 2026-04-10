@@ -71,17 +71,27 @@ export default function OfertasAdmin() {
     try {
       const response = await fetch('/api/admin/products', { cache: 'no-store' });
       const data = (await response.json()) as Product[];
+      const offers = (data ?? []).filter((p) => p.isOnSale);
 
-      // 🔎 Debug: mirá si llegan los campos
-      console.log('OFERTAS RAW 1:', data?.[0]);
-      console.log('CAMPOS:', {
-        unitType: data?.[0]?.unitType,
-        netWeightGr: data?.[0]?.netWeightGr,
-        netVolumeMl: data?.[0]?.netVolumeMl,
-        image: data?.[0]?.image,
+      // Ordenar: activas primero (las que vencen antes), luego sin fecha, luego vencidas
+      const now = Date.now();
+      offers.sort((a, b) => {
+        const aEnd = a.saleEndDate ? new Date(a.saleEndDate).getTime() : null;
+        const bEnd = b.saleEndDate ? new Date(b.saleEndDate).getTime() : null;
+        const aExpired = aEnd !== null && aEnd <= now;
+        const bExpired = bEnd !== null && bEnd <= now;
+
+        if (aExpired && !bExpired) return 1;
+        if (!aExpired && bExpired) return -1;
+        if (!aExpired && !bExpired) {
+          if (aEnd === null && bEnd === null) return 0;
+          if (aEnd === null) return 1;
+          if (bEnd === null) return -1;
+          return aEnd - bEnd; // vencen antes → primero
+        }
+        return (aEnd ?? 0) - (bEnd ?? 0);
       });
 
-      const offers = (data ?? []).filter((p) => p.isOnSale);
       setProducts(offers);
     } catch (error) {
       console.error('Error fetching offers:', error);
@@ -117,9 +127,6 @@ export default function OfertasAdmin() {
 
   return (
     <div>
-      {/* 🔥 prueba para confirmar que editás el archivo correcto */}
-      <div className="p-2 text-xs text-red-500">ARCHIVO OFERTAS ADMIN: v999</div>
-
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Ofertas</h1>
@@ -165,9 +172,14 @@ export default function OfertasAdmin() {
                 : null;
 
             const imageSrc = product.image ?? product.imageUrl ?? null;
+            const endDate = product.saleEndDate ? new Date(product.saleEndDate) : null;
+            const isExpired = endDate !== null && endDate.getTime() <= Date.now();
 
             return (
-              <Card key={product.id} className="bg-zinc-900 border-zinc-800 overflow-hidden">
+              <Card
+                key={product.id}
+                className={`bg-zinc-900 border-zinc-800 overflow-hidden transition-opacity ${isExpired ? 'opacity-50' : ''}`}
+              >
                 <div className="relative aspect-[4/3] bg-zinc-800">
                   {imageSrc ? (
                     <Image src={imageSrc} alt={product.name} fill className="object-cover" />
@@ -230,9 +242,16 @@ export default function OfertasAdmin() {
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 text-sm text-zinc-400 mt-3 mb-4">
-                    <Clock className="w-4 h-4" />
-                    <span>{getRemainingTime(product.saleEndDate)}</span>
+                  <div className="flex items-center gap-2 text-sm mt-3 mb-4">
+                    <Clock className={`w-4 h-4 ${isExpired ? 'text-red-400' : 'text-zinc-400'}`} />
+                    <span className={isExpired ? 'text-red-400 font-medium' : 'text-zinc-400'}>
+                      {getRemainingTime(product.saleEndDate)}
+                    </span>
+                    {isExpired && (
+                      <span className="ml-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-400">
+                        Vencida
+                      </span>
+                    )}
                   </div>
 
                   <Link href="/admin/productos">

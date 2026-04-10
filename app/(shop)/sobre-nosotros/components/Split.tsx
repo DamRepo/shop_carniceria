@@ -19,7 +19,13 @@ export default function Split({ side, kicker, desc, bullets, image }: Props) {
           <div className={isLeft ? "lg:col-span-6 order-1" : "lg:col-span-6 order-2"}>
             <div className="relative h-64 sm:h-96 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
               {image ? (
-                <Image src={image.src} alt={image.alt} fill className="object-cover" />
+                <Image
+                  src={image.src}
+                  alt={image.alt}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                />
               ) : (
                 <div className="h-full w-full flex items-center justify-center text-zinc-500">
                   Posible imagen

@@ -72,7 +72,7 @@ export function DeliveryStep({
                 <p className="mt-2 text-sm text-muted-foreground">
                   Lunes a Sábado: 07:30 - 13:00 y 16:00 - 21:00
                   <br />
-                  Domingos: 08:00 - 13:00
+                  Domingos: 08:30 - 13:00
                 </p>
               </div>
             </div>

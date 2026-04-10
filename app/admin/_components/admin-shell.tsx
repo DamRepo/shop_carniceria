@@ -4,17 +4,18 @@ import { useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import {
   LayoutDashboard,
   Package,
   ShoppingCart,
   Tag,
+  FolderTree,
   LogOut,
   Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { AvatarUpload } from "@/components/admin/AvatarUpload";
 
 export function AdminShell({
   children,
@@ -52,23 +53,15 @@ export function AdminShell({
   const menuItems = [
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/productos", icon: Package, label: "Productos" },
+    { href: "/admin/categorias", icon: FolderTree, label: "Categorías" },
     { href: "/admin/ofertas", icon: Tag, label: "Ofertas" },
     { href: "/admin/ordenes", icon: ShoppingCart, label: "Órdenes" },
   ];
 
   const SidebarContent = () => (
     <div className="flex h-full flex-col bg-zinc-900">
-      <div className="shrink-0 mt-12 p-6 border-b border-zinc-800 flex items-center gap-3">
-        <div className="relative h-10 w-10 rounded-full overflow-hidden bg-zinc-700">
-          <Image
-            src="/avatar.png"
-            alt="Avatar"
-            fill
-            className="object-cover"
-            sizes="40px"
-            priority
-          />
-        </div>
+      <div className="shrink-0 mt-4 p-5 border-b border-zinc-800 flex items-center gap-3">
+        <AvatarUpload size="sm" />
 
         <div className="flex flex-col">
           <p className="text-sm text-zinc-300">
@@ -103,13 +96,18 @@ export function AdminShell({
         })}
       </nav>
 
-      <div className="shrink-0 p-4 border-t border-zinc-800">
-        <div className="mb-3 px-4">
-          <p className="text-sm font-medium text-white">
-            {session.user?.name ?? "Admin"}
-          </p>
-          <p className="text-xs text-zinc-400">{session.user?.email ?? ""}</p>
-        </div>
+      <div className="shrink-0 p-4 border-t border-zinc-800 space-y-2">
+        <Link
+          href="/admin/perfil"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors group"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white truncate">
+              {session.user?.name ?? "Admin"}
+            </p>
+            <p className="text-xs text-zinc-400 truncate">{session.user?.email ?? ""}</p>
+          </div>
+        </Link>
 
         <Button
           onClick={() => signOut({ callbackUrl: "/" })}
@@ -154,7 +152,7 @@ export function AdminShell({
       </div>
 
       <main className="md:ml-64 min-w-0">
-        <div className="p-3 sm:p-6 lg:p-8">{children}</div>
+        <div className="p-3 sm:p-4 lg:p-6">{children}</div>
       </main>
     </div>
   );

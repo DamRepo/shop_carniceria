@@ -70,17 +70,25 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           phone: user.phone,
+          image: (user as any).image ?? null,
         } as any;
       },
     }),
   ],
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session: updateData }) {
       if (user) {
         token.role = (user as any).role;
         token.id = (user as any).id;
         (token as any).phone = (user as any).phone ?? null;
+        (token as any).image = (user as any).image ?? null;
+      }
+      // Called when client invokes useSession().update({ image: ... })
+      if (trigger === "update" && updateData) {
+        if (typeof (updateData as any).image !== "undefined") {
+          (token as any).image = (updateData as any).image;
+        }
       }
       return token;
     },
@@ -89,6 +97,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = (token as any).role as string | undefined;
         (session.user as any).id = (token as any).id as string | undefined;
         (session.user as any).phone = (token as any).phone ?? null;
+        (session.user as any).image = (token as any).image ?? null;
       }
       return session;
     },

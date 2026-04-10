@@ -228,7 +228,7 @@ function OrderConfirmedContent() {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Horarios del local: Lun–Sáb 07:30–13:00 y 16:00–21:00 · Dom 08:00–13:00
+                  Horarios del local: Lun–Sáb 07:30–13:00 y 16:00–21:00 · Dom 08:30–13:00
                 </p>
               </>
             )}
