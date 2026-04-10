@@ -10,7 +10,6 @@ export const runtime = "nodejs";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "avatars");
 
 function extFromMime(mime: string): string {
   if (mime === "image/jpeg") return "jpg";
@@ -19,18 +18,24 @@ function extFromMime(mime: string): string {
   return "jpg";
 }
 
-async function ensureUploadDir() {
-  await mkdir(UPLOAD_DIR, { recursive: true });
+function getUploadDir(): string {
+  const base = process.env.UPLOAD_DIR ?? "./public/uploads";
+  return path.join(base, "avatars");
+}
+
+function getFileUrl(filename: string): string {
+  const base = process.env.UPLOAD_URL ?? "/uploads";
+  return `${base}/avatars/${filename}`;
 }
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== "ADMIN") {
+    if (!session || (session.user as { role?: string })?.role !== "ADMIN") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const userId = (session.user as any)?.id as string | undefined;
+    const userId = (session.user as { id?: string })?.id;
     if (!userId) {
       return NextResponse.json({ error: "Usuario no identificado" }, { status: 401 });
     }
@@ -56,7 +61,8 @@ export async function POST(request: Request) {
       );
     }
 
-    await ensureUploadDir();
+    const uploadDir = getUploadDir();
+    await mkdir(uploadDir, { recursive: true });
 
     // Remove any previous avatar for this user
     const existing = await prisma.user.findUnique({
@@ -65,18 +71,19 @@ export async function POST(request: Request) {
     });
 
     if (existing?.image && existing.image.startsWith("/uploads/avatars/")) {
-      const oldPath = path.join(process.cwd(), "public", existing.image);
+      const oldFilename = path.basename(existing.image);
+      const oldPath = path.join(uploadDir, oldFilename);
       await unlink(oldPath).catch(() => undefined);
     }
 
     const ext = extFromMime(file.type);
     const filename = `${userId}.${ext}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
+    const filePath = path.join(uploadDir, filename);
 
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
-    const imageUrl = `/uploads/avatars/${filename}`;
+    const imageUrl = getFileUrl(filename);
 
     await prisma.user.update({
       where: { id: userId },
@@ -93,11 +100,11 @@ export async function POST(request: Request) {
 export async function DELETE(_request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== "ADMIN") {
+    if (!session || (session.user as { role?: string })?.role !== "ADMIN") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const userId = (session.user as any)?.id as string | undefined;
+    const userId = (session.user as { id?: string })?.id;
     if (!userId) {
       return NextResponse.json({ error: "Usuario no identificado" }, { status: 401 });
     }
@@ -108,7 +115,8 @@ export async function DELETE(_request: Request) {
     });
 
     if (user?.image && user.image.startsWith("/uploads/avatars/")) {
-      const filePath = path.join(process.cwd(), "public", user.image);
+      const filename = path.basename(user.image);
+      const filePath = path.join(getUploadDir(), filename);
       await unlink(filePath).catch(() => undefined);
     }
 

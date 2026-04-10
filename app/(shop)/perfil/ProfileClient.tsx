@@ -3,7 +3,6 @@
 import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import Image from "next/image";
 import {
   Camera,
   Loader2,
@@ -373,13 +372,10 @@ export function ProfileClient({ user }: { user: UserProfile }) {
           title="Cambiar foto de perfil"
         >
           {displaySrc ? (
-            <Image
+            <img
               src={displaySrc}
               alt={user.name || "Avatar"}
-              width={imgSize}
-              height={imgSize}
-              className="object-cover w-full h-full"
-              unoptimized={displaySrc.includes("?t=")}
+              className="object-cover w-full h-full rounded-full"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-red-600 text-white font-semibold select-none">

@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import Image from "next/image";
 import { Camera, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -132,13 +131,10 @@ export function AvatarUpload({ size = "sm", onChanged }: AvatarUploadProps) {
         disabled={uploading}
       >
         {displaySrc ? (
-          <Image
+          <img
             src={displaySrc}
             alt={name}
-            fill
-            className="object-cover"
-            sizes={size === "lg" ? "80px" : "40px"}
-            unoptimized={displaySrc.includes("?t=")}
+            className="object-cover w-full h-full rounded-full"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-orange-500 font-semibold text-white select-none">
