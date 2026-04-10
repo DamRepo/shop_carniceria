@@ -576,7 +576,7 @@ export function Header() {
                         className="gap-2 hover:bg-zinc-900 text-zinc-200"
                       >
                         {(session.user as { image?: string | null }).image ? (
-                          <Image
+                          <img
                             src={(session.user as { image?: string | null }).image!}
                             alt={session.user?.name ?? "Avatar"}
                             width={32}
