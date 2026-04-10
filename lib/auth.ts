@@ -70,7 +70,8 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           phone: user.phone,
-          image: (user as any).image ?? null,
+          image: user.image ?? null,
+          username: user.username ?? null,
         } as any;
       },
     }),
@@ -81,23 +82,28 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role;
         token.id = (user as any).id;
-        (token as any).phone = (user as any).phone ?? null;
-        (token as any).image = (user as any).image ?? null;
+        token.phone = (user as any).phone ?? null;
+        token.image = (user as any).image ?? null;
+        token.username = (user as any).username ?? null;
       }
-      // Called when client invokes useSession().update({ image: ... })
+      // Called when client invokes useSession().update(...)
       if (trigger === "update" && updateData) {
-        if (typeof (updateData as any).image !== "undefined") {
-          (token as any).image = (updateData as any).image;
-        }
+        const u = updateData as { image?: string | null; name?: string; username?: string | null };
+        if (typeof u.image !== "undefined") token.image = u.image;
+        if (typeof u.name !== "undefined") token.name = u.name;
+        if (typeof u.username !== "undefined") token.username = u.username;
       }
       return token;
     },
     async session({ session, token }) {
       if (session?.user) {
-        (session.user as any).role = (token as any).role as string | undefined;
-        (session.user as any).id = (token as any).id as string | undefined;
-        (session.user as any).phone = (token as any).phone ?? null;
-        (session.user as any).image = (token as any).image ?? null;
+        (session.user as any).role = token.role;
+        (session.user as any).id = token.id;
+        (session.user as any).phone = token.phone ?? null;
+        (session.user as any).image = token.image ?? null;
+        (session.user as any).username = token.username ?? null;
+        // Keep session.user.name in sync with token.name
+        if (token.name) session.user.name = token.name;
       }
       return session;
     },

@@ -44,6 +44,24 @@ export default async function ProductosAdminPage({ searchParams }: PageProps) {
     ? (orderBy as AllowedOrderBy)
     : "createdAt";
 
+  /* ─── Resolve category filter IDs (explicit, avoids nested OR edge cases) ─── */
+  let categoryIds: string[] | null = null;
+  if (category) {
+    const catFound = await prisma.category.findUnique({
+      where: { slug: category },
+      include: { children: { select: { id: true } } },
+    });
+    if (catFound) {
+      categoryIds =
+        catFound.children.length > 0
+          ? [catFound.id, ...catFound.children.map((c) => c.id)]
+          : [catFound.id];
+    } else {
+      // Unknown slug → force empty result
+      categoryIds = [];
+    }
+  }
+
   /* ─── Build Prisma WHERE ─── */
   const conditions: Prisma.ProductWhereInput[] = [];
 
@@ -58,13 +76,8 @@ export default async function ProductosAdminPage({ searchParams }: PageProps) {
     });
   }
 
-  if (category) {
-    conditions.push({
-      OR: [
-        { category: { slug: category } },
-        { category: { parent: { slug: category } } },
-      ],
-    });
+  if (categoryIds !== null) {
+    conditions.push({ categoryId: { in: categoryIds } });
   }
 
   if (estado === "activo") conditions.push({ isActive: true });

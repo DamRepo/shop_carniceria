@@ -36,6 +36,7 @@ import {
   LayoutDashboard,
   Search,
   Package,
+  UserCircle,
 } from "lucide-react";
 import { useCartStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -574,7 +575,24 @@ export function Header() {
                         size="sm"
                         className="gap-2 hover:bg-zinc-900 text-zinc-200"
                       >
-                        <User className="h-4 w-4" />
+                        {(session.user as { image?: string | null }).image ? (
+                          <Image
+                            src={(session.user as { image?: string | null }).image!}
+                            alt={session.user?.name ?? "Avatar"}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <span className="w-8 h-8 rounded-full bg-red-600 text-white text-xs font-semibold flex items-center justify-center shrink-0 select-none">
+                            {session.user?.name
+                              ?.split(" ")
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join("")
+                              .toUpperCase() ?? "?"}
+                          </span>
+                        )}
                         <span>{session.user?.name || "Usuario"}</span>
                       </Button>
                     </DropdownMenuTrigger>
@@ -593,6 +611,16 @@ export function Header() {
                       </div>
 
                       <DropdownMenuSeparator className="bg-zinc-800" />
+
+                      <DropdownMenuItem
+                        asChild
+                        className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                      >
+                        <Link href="/perfil" className="flex items-center">
+                          <UserCircle className="h-4 w-4 mr-2" />
+                          Mi perfil
+                        </Link>
+                      </DropdownMenuItem>
 
                       {session.user?.role !== "ADMIN" && (
                         <DropdownMenuItem
@@ -782,16 +810,28 @@ export function Header() {
                       </div>
 
                       {session.user?.role !== "ADMIN" && (
-                        <Link
-                          href="/mis-compras"
-                          onClick={() => {
-                            setMobileMenuOpen(false);
-                            setMobileCatsOpen(false);
-                          }}
-                          className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
-                        >
-                          Mis compras
-                        </Link>
+                        <>
+                          <Link
+                            href="/perfil"
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              setMobileCatsOpen(false);
+                            }}
+                            className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                          >
+                            Mi perfil
+                          </Link>
+                          <Link
+                            href="/mis-compras"
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              setMobileCatsOpen(false);
+                            }}
+                            className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                          >
+                            Mis compras
+                          </Link>
+                        </>
                       )}
 
                       {session.user?.role === "ADMIN" && (

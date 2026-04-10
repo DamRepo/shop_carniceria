@@ -732,7 +732,7 @@ export default function HomePage() {
           label: "Pollos",
         }}
         right={{
-          href: "/productos?category=congelados-carniceria",
+          href: "/productos?category=congelados",
           imageSrc: "/congelados.png",
           alt: "congelados caseros",
           label: "Congelados",
