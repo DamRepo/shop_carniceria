@@ -254,6 +254,7 @@ enum PaymentMethod {
 
 enum PaymentStatus {
   PENDING
+  PENDING_LOCAL
   PAID
   FAILED
   CANCELLED

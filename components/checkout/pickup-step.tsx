@@ -227,7 +227,7 @@ export function PickupStep({
               id="pickupNotes"
               value={formData.pickupNotes}
               onChange={(e) => onChange("pickupNotes", e.target.value)}
-              placeholder="Ej: paso después de las 18, etc."
+              placeholder="Ej: paso después de las 18 hs. Podés indicar también cómo querés el corte: bife para milanesa, bife para la plancha, etc."
               rows={4}
               className="rounded-xl pl-10"
               disabled={disabled}

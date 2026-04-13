@@ -31,7 +31,7 @@ type Order = {
   | "READY"
   | "COMPLETED"
   | "CANCELLED";
-  paymentStatus: "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+  paymentStatus: "PENDING" | "PENDING_LOCAL" | "PAID" | "FAILED" | "CANCELLED";
   paymentMethod: "MERCADO_PAGO" | "CASH";
   deliveryMethod: "PICKUP" | "DELIVERY";
   total: number;
@@ -97,7 +97,9 @@ function statusLabel(s: Order["status"]) {
 
 function paymentLabel(ps: Order["paymentStatus"], pm: Order["paymentMethod"]) {
   if (pm === "CASH") {
-    return ps === "PENDING" ? "Pago pendiente en local" : "Pago en local";
+    return ps === "PENDING" || ps === "PENDING_LOCAL"
+      ? "Pago pendiente en local"
+      : "Pago en local";
   }
 
   switch (ps) {
@@ -106,6 +108,7 @@ function paymentLabel(ps: Order["paymentStatus"], pm: Order["paymentMethod"]) {
     case "FAILED":
       return "Pago fallido";
     case "PENDING":
+    case "PENDING_LOCAL":
       return "Pago pendiente";
     case "CANCELLED":
       return "Pago cancelado";

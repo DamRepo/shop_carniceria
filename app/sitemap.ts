@@ -1,6 +1,8 @@
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://carniceriaelnegro.com";
 

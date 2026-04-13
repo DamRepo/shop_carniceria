@@ -73,7 +73,7 @@ export function DeliveryAddressStep({
                 id="notes"
                 value={formData.notes}
                 onChange={(e) => onChange("notes", e.target.value)}
-                placeholder="Ej: tocar timbre, entregar después de las 18 hs, etc."
+                placeholder="Ej: podés especificar cómo querés el corte, por ejemplo: bife para milanesa, bife para la plancha, grosor del corte, etc."
                 className="min-h-[110px] pl-10"
                 disabled={disabled}
               />
