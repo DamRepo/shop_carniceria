@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RepeatOrderButton } from "@/components/repeat-order-button";
+import { TransferProofCard } from "@/components/orders/transfer-proof-card";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ type OrderItem = {
   lineTotal: number;
   product?: { id: string; name: string; slug: string; unitType: "PER_KG" | "PER_UNIT" } | null;
 };
+
+type TransferStatus = "AWAITING_PROOF" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED";
 
 type Order = {
   id: string;
@@ -31,8 +34,8 @@ type Order = {
   | "READY"
   | "COMPLETED"
   | "CANCELLED";
-  paymentStatus: "PENDING" | "PENDING_LOCAL" | "PAID" | "FAILED" | "CANCELLED";
-  paymentMethod: "MERCADO_PAGO" | "CASH";
+  paymentStatus: "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+  paymentMethod: "MERCADO_PAGO" | "CASH" | "BANK_TRANSFER";
   deliveryMethod: "PICKUP" | "DELIVERY";
   total: number;
   createdAt: string;
@@ -40,6 +43,10 @@ type Order = {
   pickupTimeSlot?: string | null;
   pickupNotes?: string | null;
   address?: string | null;
+  transferCode?: string | null;
+  transferStatus?: TransferStatus | null;
+  transferProofUrl?: string | null;
+  transferRejectNote?: string | null;
   items: OrderItem[];
 };
 
@@ -95,11 +102,28 @@ function statusLabel(s: Order["status"]) {
   }
 }
 
-function paymentLabel(ps: Order["paymentStatus"], pm: Order["paymentMethod"]) {
+function paymentLabel(
+  ps: Order["paymentStatus"],
+  pm: Order["paymentMethod"],
+  ts?: TransferStatus | null
+) {
   if (pm === "CASH") {
-    return ps === "PENDING" || ps === "PENDING_LOCAL"
-      ? "Pago pendiente en local"
-      : "Pago en local";
+    return ps === "PENDING" ? "Pago pendiente en local" : "Pago en local";
+  }
+
+  if (pm === "BANK_TRANSFER") {
+    switch (ts) {
+      case "AWAITING_PROOF":
+        return "Transferencia — sin comprobante";
+      case "PENDING_REVIEW":
+        return "Transferencia — en revisión";
+      case "CONFIRMED":
+        return "Transferencia acreditada";
+      case "REJECTED":
+        return "Transferencia rechazada";
+      default:
+        return "Transferencia pendiente";
+    }
   }
 
   switch (ps) {
@@ -108,7 +132,6 @@ function paymentLabel(ps: Order["paymentStatus"], pm: Order["paymentMethod"]) {
     case "FAILED":
       return "Pago fallido";
     case "PENDING":
-    case "PENDING_LOCAL":
       return "Pago pendiente";
     case "CANCELLED":
       return "Pago cancelado";
@@ -178,6 +201,10 @@ async function getOrdersForSession(args: {
     pickupTimeSlot: o.pickupTimeSlot ?? null,
     pickupNotes: o.pickupNotes ?? null,
     address: o.address ?? null,
+    transferCode: o.transferCode ?? null,
+    transferStatus: (o.transferStatus ?? null) as Order["transferStatus"],
+    transferProofUrl: o.transferProofUrl ?? null,
+    transferRejectNote: o.transferRejectNote ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (o.items ?? []).map((it: any) => ({
       id: it.id,
@@ -259,7 +286,7 @@ export default async function MisComprasPage() {
                       {statusLabel(o.status)}
                     </Badge>
                     <Badge variant="outline">
-                      {paymentLabel(o.paymentStatus, o.paymentMethod)}
+                      {paymentLabel(o.paymentStatus, o.paymentMethod, o.transferStatus)}
                     </Badge>
                   </div>
                   <div className="text-2xl font-bold">{formatARS(o.total)}</div>
@@ -276,6 +303,16 @@ export default async function MisComprasPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
+                {o.paymentMethod === "BANK_TRANSFER" && o.transferStatus && (
+                  <TransferProofCard
+                    orderId={o.id}
+                    transferCode={o.transferCode ?? null}
+                    transferStatus={o.transferStatus}
+                    transferProofUrl={o.transferProofUrl ?? null}
+                    transferRejectNote={o.transferRejectNote ?? null}
+                  />
+                )}
+
                 <div className="rounded-lg border p-3">
                   <div className="text-sm font-medium mb-2">Entrega</div>
 

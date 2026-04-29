@@ -698,20 +698,16 @@ export default function HomePage() {
               ))}
             </div>
           ) : offers.length > 0 ? (
-            <div className="flex items-stretch gap-4 md:gap-6">
-              <div className="min-w-0 flex-1">
-                <ProductRowSlider
-                  items={offers}
-                  renderItem={(product) => (
-                    <HomeSliderCard
-                      product={product}
-                      showOfferCountdown
-                      showOfferBadge
-                      discountBadgeMode="bottom-left"
-                    />
-                  )}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+              {offers.map((product) => (
+                <HomeSliderCard
+                  key={product.id}
+                  product={product}
+                  showOfferCountdown
+                  showOfferBadge
+                  discountBadgeMode="bottom-left"
                 />
-              </div>
+              ))}
             </div>
           ) : (
             <div className="rounded-xl border bg-muted/20 py-10 text-center text-muted-foreground">

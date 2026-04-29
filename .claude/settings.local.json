@@ -15,7 +15,16 @@
       "Bash(npx next:*)",
       "Bash(xargs -I{} sh -c 'head -1 \"{}\" | grep -qv \"use client\" && echo \"MISSING: {}\"')",
       "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && head -3 \"{}\"')",
-      "Bash(xargs head:*)"
+      "Bash(xargs head:*)",
+      "Bash(mkdir -p \"app/api/admin/transfers/[id]/confirm\")",
+      "Bash(mkdir -p \"app/api/admin/transfers/[id]/reject\")",
+      "Bash(mkdir -p \"C:/dev/shop_carniceria/app/api/admin/proof/[orderId]\")",
+      "Bash(mkdir -p \"C:/dev/shop_carniceria/app/api/admin/orders/[id]/mark-cash-paid\")",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(npx eslint *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(xargs -I {} bash -c \"wc -l {} && echo '---'\")"
     ]
   }
 }

@@ -118,9 +118,8 @@ export default function ProductosClient() {
       try {
         const res = await fetch("/api/products", { cache: "no-store" });
         if (!res.ok) {
-          const msg = `Error ${res.status} al cargar productos`;
-          console.error("[ProductosClient]", msg);
-          if (alive) setError(msg);
+          console.error("[ProductosClient] Error", res.status, "al cargar productos");
+          if (alive) setError("No pudimos cargar los productos. Intentá de nuevo.");
           return;
         }
         const data = (await res.json()) as ProductWithCategory[];

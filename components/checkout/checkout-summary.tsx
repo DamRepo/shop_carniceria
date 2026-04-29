@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  CreditCard,
-  Loader2,
-  ShieldCheck,
-  Truck,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight, ShieldCheck, Truck } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,11 +12,9 @@ interface CheckoutSummaryProps {
   total: number;
   deliveryCost: number;
   deliveryMethod: "PICKUP" | "DELIVERY";
-  submitting?: boolean;
   canPay?: boolean;
   onBack?: () => void;
-  onMercadoPago: () => void;
-  onCashOrder: () => void;
+  onContinue: () => void;
 }
 
 export function CheckoutSummary({
@@ -31,14 +23,11 @@ export function CheckoutSummary({
   total,
   deliveryCost,
   deliveryMethod,
-  submitting = false,
   canPay = false,
   onBack,
-  onMercadoPago,
-  onCashOrder,
+  onContinue,
 }: CheckoutSummaryProps) {
   const isDelivery = deliveryMethod === "DELIVERY";
-  const shippingAmount = isDelivery ? deliveryCost : 0;
 
   return (
     <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
@@ -47,6 +36,7 @@ export function CheckoutSummary({
       </CardHeader>
 
       <CardContent className="space-y-5 p-5 md:p-6">
+        {/* Totals */}
         <div className="space-y-3 rounded-2xl border bg-background p-4">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
@@ -55,31 +45,26 @@ export function CheckoutSummary({
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Precio sin impuestos</span>
-            <span className="text-muted-foreground">
-              {formatPrice(subtotalNet)}
-            </span>
+            <span className="text-muted-foreground">{formatPrice(subtotalNet)}</span>
           </div>
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
               {isDelivery ? "Envío a domicilio" : "Retiro en local"}
             </span>
-
             <span className="font-medium">
-              {isDelivery ? formatPrice(shippingAmount) : "Gratis"}
+              {isDelivery ? formatPrice(deliveryCost) : "Gratis"}
             </span>
           </div>
         </div>
 
+        {/* Total */}
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-2xl font-bold text-primary">
-                {formatPrice(total)}
-              </p>
+              <p className="text-2xl font-bold text-primary">{formatPrice(total)}</p>
             </div>
-
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               {isDelivery ? (
                 <Truck className="h-5 w-5" />
@@ -93,60 +78,35 @@ export function CheckoutSummary({
         {!canPay && (
           <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
             <p className="text-sm leading-6 text-muted-foreground">
-              Completá los pasos anteriores para habilitar las opciones de pago.
+              Completá los pasos anteriores para continuar al pago.
             </p>
           </div>
         )}
 
+        {/* Actions */}
         <div className="space-y-3">
           <Button
             type="button"
             size="lg"
             className="h-12 w-full rounded-xl text-sm font-semibold"
-            disabled={submitting || !canPay}
-            onClick={onMercadoPago}
+            disabled={!canPay}
+            onClick={onContinue}
           >
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Procesando...
-              </>
-            ) : (
-              <>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Finalizar con Mercado Pago
-              </>
-            )}
+            Continuar al pago
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 
-          <Button
-            type="button"
-            size="lg"
-            variant="outline"
-            className="h-12 w-full rounded-xl text-sm font-semibold"
-            disabled={submitting || !canPay}
-            onClick={onCashOrder}
-          >
-            <Wallet className="mr-2 h-4 w-4" />
-            {isDelivery
-              ? "Confirmar pedido y pagar al recibir"
-              : "Pagar en el local"}
-          </Button>
-        </div>
-
-        {onBack ? (
-          <div className="pt-1">
+          {onBack && (
             <Button
               type="button"
               variant="ghost"
               className="w-full rounded-xl"
               onClick={onBack}
-              disabled={submitting}
             >
               Atrás
             </Button>
-          </div>
-        ) : null}
+          )}
+        </div>
 
         <p className="text-center text-xs leading-5 text-muted-foreground">
           Al confirmar el pedido, aceptás nuestros términos y condiciones.

@@ -29,13 +29,12 @@ export default async function MpSuccessPage({
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
-      {/* ✅ Limpia carrito SOLO cuando ya está confirmado */}
       {confirmed ? <ClearCartOnMount /> : null}
 
       <Card>
         <CardHeader>
           <CardTitle>
-            {confirmed ? "Pago aprobado ✅" : "Estamos confirmando tu pago… ⏳"}
+            {confirmed ? "¡Pago aprobado! ✅" : "Estamos confirmando tu pago... ⏳"}
           </CardTitle>
         </CardHeader>
 
@@ -48,18 +47,13 @@ export default async function MpSuccessPage({
               <p>
                 Total: <b>{formatPrice(order.total)}</b>
               </p>
-              <p>
-                Estado en sistema: <b>{order.status}</b>
-              </p>
 
               {!confirmed ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Mercado Pago te redirigió correctamente. Ahora estamos esperando la
-                    confirmación final por webhook (puede tardar unos segundos).
+                    Esto puede tardar unos segundos.
                   </p>
 
-                  {/* 🔁 refresh simple (sin componente extra) */}
                   <div className="flex gap-3">
                     <Button asChild variant="outline">
                       <Link href={`/checkout/mp/success?orderId=${orderId}`}>
@@ -85,7 +79,7 @@ export default async function MpSuccessPage({
             </>
           ) : (
             <>
-              <p>No pude leer la orden (falta orderId en la URL).</p>
+              <p>Hubo un problema. Contactanos por WhatsApp.</p>
               <Link href="/productos">
                 <Button>Volver a productos</Button>
               </Link>
@@ -93,11 +87,6 @@ export default async function MpSuccessPage({
           )}
         </CardContent>
       </Card>
-
-      <p className="text-xs text-muted-foreground mt-4">
-        Nota: el estado final se confirma por webhook. Si el estado queda en PENDING,
-        tocá “Actualizar estado”.
-      </p>
     </div>
   );
 }

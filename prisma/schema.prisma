@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-}
+ }
 
 datasource db {
   provider = "postgresql"
@@ -138,6 +138,15 @@ model Order {
   cancellationReason String?
   cancelledBy        String?
 
+  // Bank transfer fields
+  transferCode          String?         @unique // Format: CN-YYYY-NNNNNN
+  transferStatus        TransferStatus?
+  transferProofUrl      String?         // Cloudinary URL of the payment proof
+  transferProofMimeType String?         // MIME type of the proof (image/jpeg, application/pdf, etc.)
+  transferConfirmedAt   DateTime?
+  transferRejectedAt    DateTime?
+  transferRejectNote    String?         // Admin's rejection reason
+
   subtotal     Int
   deliveryCost Int @default(0)
   total        Int
@@ -221,6 +230,11 @@ model CheckoutSession {
   @@index([expiresAt])
 }
 
+model TransferCodeSequence {
+  year       Int @id
+  lastNumber Int @default(0)
+}
+
 enum UnitType {
   PER_KG
   PER_UNIT
@@ -248,13 +262,20 @@ enum UserRole {
 }
 
 enum PaymentMethod {
-  MERCADO_PAGO
-  CASH
+  MERCADO_PAGO  // Credit/debit card via Mercado Pago
+  CASH          // Cash payment at pickup or delivery
+  BANK_TRANSFER // Bank transfer (CVU/alias)
+}
+
+enum TransferStatus {
+  AWAITING_PROOF // Customer hasn't uploaded proof yet
+  PENDING_REVIEW // Proof uploaded, admin must verify
+  CONFIRMED      // Admin confirmed payment received
+  REJECTED       // Admin rejected (mismatch or not found)
 }
 
 enum PaymentStatus {
   PENDING
-  PENDING_LOCAL
   PAID
   FAILED
   CANCELLED

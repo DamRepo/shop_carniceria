@@ -613,36 +613,30 @@ export function Header() {
                       <DropdownMenuSeparator className="bg-zinc-800" />
 
                       <DropdownMenuItem
-                        asChild
                         className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        onClick={() => router.push("/perfil")}
                       >
-                        <Link href="/perfil" className="flex items-center">
-                          <UserCircle className="h-4 w-4 mr-2" />
-                          Mi perfil
-                        </Link>
+                        <UserCircle className="h-4 w-4 mr-2" />
+                        Mi perfil
                       </DropdownMenuItem>
 
                       {session.user?.role !== "ADMIN" && (
                         <DropdownMenuItem
-                          asChild
                           className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                          onClick={() => router.push("/mis-compras")}
                         >
-                          <Link href="/mis-compras" className="flex items-center">
-                            <Package className="h-4 w-4 mr-2" />
-                            Mis compras
-                          </Link>
+                          <Package className="h-4 w-4 mr-2" />
+                          Mis compras
                         </DropdownMenuItem>
                       )}
 
                       {session.user?.role === "ADMIN" && (
                         <DropdownMenuItem
-                          asChild
                           className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                          onClick={() => router.push("/admin")}
                         >
-                          <Link href="/admin" className="flex items-center">
-                            <LayoutDashboard className="h-4 w-4 mr-2" />
-                            Dashboard Admin
-                          </Link>
+                          <LayoutDashboard className="h-4 w-4 mr-2" />
+                          Dashboard Admin
                         </DropdownMenuItem>
                       )}
 

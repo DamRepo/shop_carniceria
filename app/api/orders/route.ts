@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { sendOrderConfirmationEmail } from "@/lib/mail/actions";
+import { sendOrderConfirmationEmail, sendTransferInstructionsEmail } from "@/lib/mail/actions";
 import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
 import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
+import { generateTransferCode, formatTransferAmount } from "@/lib/transfer-code";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -118,6 +119,10 @@ export async function POST(request: Request) {
     const email = normalizeString(body?.email)?.toLowerCase();
     const deliveryMethod = body?.deliveryMethod;
 
+    const rawPaymentMethod = body?.paymentMethod;
+    const paymentMethod: "CASH" | "BANK_TRANSFER" =
+      rawPaymentMethod === "BANK_TRANSFER" ? "BANK_TRANSFER" : "CASH";
+
     if (deliveryMethod !== "PICKUP" && deliveryMethod !== "DELIVERY") {
       throw new HttpError(400, "Método de entrega inválido");
     }
@@ -177,15 +182,28 @@ export async function POST(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const byId = new Map<string, any>((products as any[]).map((p: any) => [p.id, p]));
 
+    const existingIds = new Set(products.map((p: any) => p.id));
+    const missingIds = ids.filter((id) => !existingIds.has(id));
+
+    console.log(`[orders] Buscando: [${ids.join(", ")}]`);
+    console.log(`[orders] Encontrados: [${[...existingIds].join(", ")}]`);
+
+    if (missingIds.length > 0) {
+      console.error(`[orders] ❌ Productos no encontrados/inactivos: [${missingIds.join(", ")}]`);
+      return NextResponse.json(
+        {
+          error: "Algunos productos ya no están disponibles",
+          missingProducts: missingIds,
+          availableProducts: [...existingIds],
+        },
+        { status: 400 }
+      );
+    }
+
     let subtotalCents = 0;
 
     const orderItems = normalizedItems.map((i) => {
-      const p = byId.get(i.productId);
-
-      if (!p) {
-        throw new HttpError(400, "Producto no encontrado");
-      }
-
+      const p = byId.get(i.productId)!;
       validateProductQuantity(p, i.quantity);
 
       const priceCents = getEffectivePrice(p);
@@ -249,6 +267,11 @@ export async function POST(request: Request) {
         }
       }
 
+      const transferCode =
+        paymentMethod === "BANK_TRANSFER"
+          ? await generateTransferCode(tx)
+          : null;
+
       return await tx.order.create({
         data: {
           userId: safeUserId,
@@ -262,21 +285,32 @@ export async function POST(request: Request) {
           pickupDate,
           pickupTimeSlot,
           pickupNotes,
-          paymentMethod: "CASH",
+          paymentMethod,
           paymentStatus: "PENDING",
-          status: "PENDING",
+          status: paymentMethod === "BANK_TRANSFER" ? "PENDING_PAYMENT" : "PENDING",
           subtotal: subtotalCents,
           deliveryCost: deliveryCostCents,
           total: totalCents,
           items: { create: orderItems },
+          ...(transferCode && {
+            transferCode,
+            transferStatus: "PENDING_REVIEW",
+          }),
         },
       });
     });
 
     // EMAIL (no bloquea)
     if (email) {
-      try {
-        await sendOrderConfirmationEmail({
+      if (paymentMethod === "BANK_TRANSFER" && created.transferCode) {
+        sendTransferInstructionsEmail({
+          to: email,
+          customerName,
+          transferCode: created.transferCode,
+          totalText: formatTransferAmount(totalCents),
+        }).catch((e) => console.error("Email transferencia falló:", e));
+      } else {
+        sendOrderConfirmationEmail({
           to: email,
           customerName,
           orderId: created.orderNumber,
@@ -286,9 +320,7 @@ export async function POST(request: Request) {
             unitPrice: it.unitPrice / 100,
           })),
           totalText: `$${(totalCents / 100).toFixed(2)}`,
-        });
-      } catch (e) {
-        console.log("Email falló:", e);
+        }).catch((e) => console.log("Email falló:", e));
       }
     }
 
@@ -300,7 +332,9 @@ export async function POST(request: Request) {
         phone,
         email,
         deliveryMethod: deliveryMethod as "PICKUP" | "DELIVERY",
+        paymentMethod,
         address,
+        addressDetails,
         pickupDate: created.pickupDate,
         pickupTimeSlot,
         subtotalCents,
@@ -316,7 +350,11 @@ export async function POST(request: Request) {
     }).catch((e) => console.error("Telegram falló:", e));
 
     return NextResponse.json(
-      { orderId: created.id, orderNumber: created.orderNumber },
+      {
+        orderId: created.id,
+        orderNumber: created.orderNumber,
+        transferCode: created.transferCode ?? null,
+      },
       { status: 201 }
     );
   } catch (e: unknown) {

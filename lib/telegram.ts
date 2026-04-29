@@ -20,6 +20,7 @@ type BuildTelegramOrderMessageParams = {
   phone: string;
   email?: string | null;
   deliveryMethod: "PICKUP" | "DELIVERY";
+  paymentMethod?: "CASH" | "BANK_TRANSFER" | "MERCADO_PAGO";
 
   address?: string | null;
   addressDetails?: string | null;
@@ -142,6 +143,13 @@ export function buildTelegramOrderMessage(
       ? "🚚 Envío a domicilio"
       : "🏪 Retiro en local";
 
+  const paymentLabel =
+    params.paymentMethod === "BANK_TRANSFER"
+      ? "🏦 Transferencia bancaria"
+      : params.paymentMethod === "MERCADO_PAGO"
+        ? "💳 Mercado Pago"
+        : "💵 Efectivo";
+
   const itemsText =
     params.items && params.items.length > 0
       ? params.items
@@ -162,6 +170,7 @@ export function buildTelegramOrderMessage(
     `<b>Teléfono:</b> ${phone}\n` +
     (email ? `<b>Email:</b> ${email}\n` : "") +
     `<b>Modalidad:</b> ${delivery}\n` +
+    `<b>Pago:</b> ${paymentLabel}\n` +
     (address ? `<b>Dirección:</b> ${address}\n` : "") +
     (addressDetails ? `<b>Detalle dirección:</b> ${addressDetails}\n` : "") +
     (pickupDate ? `<b>Fecha retiro:</b> ${pickupDate}\n` : "") +

@@ -435,7 +435,13 @@ export async function POST(req: Request) {
 
     const totalCents = subtotalCents + deliveryCostCents;
 
+    if (deliveryMethod === "DELIVERY") {
+      console.log("[preference] DELIVERY subtotal/delivery/total centavos:", subtotalCents, deliveryCostCents, totalCents);
+    }
+
     const reservationExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    console.log("[preference] Starting DB transaction. method:", deliveryMethod, "deliveryCost:", deliveryCostCents);
 
     const { order, cs } = await prisma.$transaction(async (tx: any) => {
       // Revalidación atómica antes de reservar
@@ -488,6 +494,8 @@ export async function POST(req: Request) {
         }
       }
 
+      console.log("[preference][tx] Stock reserved. Creating order…");
+
       const order = await tx.order.create({
         data: {
           userId: userId ?? null,
@@ -535,6 +543,8 @@ export async function POST(req: Request) {
         },
       });
 
+      console.log("[preference][tx] Order created:", order.id, ". Creating CheckoutSession…");
+
       const cs = await tx.checkoutSession.create({
         data: {
           userId: userId ?? null,
@@ -574,6 +584,8 @@ export async function POST(req: Request) {
           reservationReleased: false,
         },
       });
+
+      console.log("[preference][tx] CheckoutSession created:", cs.id, ". Transaction complete.");
 
       return { order, cs };
     });
@@ -658,20 +670,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const pref = await mpRes.json();
+    let pref: Record<string, unknown>;
+    try {
+      pref = await mpRes.json();
+    } catch (parseErr) {
+      console.error("[preference] MP response not valid JSON. status:", mpRes.status, parseErr);
+      await rollbackMpFailure("mp_json_parse_error");
+      return NextResponse.json(
+        { error: "Respuesta inesperada de Mercado Pago. Intentá de nuevo." },
+        { status: 502 }
+      );
+    }
+
+    if (!pref?.init_point || !pref?.id) {
+      console.error("[preference] MP response missing init_point or id. pref:", JSON.stringify(pref).slice(0, 500));
+      await rollbackMpFailure("mp_missing_init_point");
+      return NextResponse.json(
+        { error: "Mercado Pago no devolvió el link de pago. Intentá de nuevo." },
+        { status: 502 }
+      );
+    }
 
     await prisma.$transaction([
       prisma.checkoutSession.update({
         where: { id: cs.id },
         data: {
-          mpPreferenceId: pref?.id ?? null,
+          mpPreferenceId: (pref.id as string) ?? null,
           mpStatus: "preference_created",
         },
       }),
       prisma.order.update({
         where: { id: order.id },
         data: {
-          mpPreferenceId: pref?.id ?? null,
+          mpPreferenceId: (pref.id as string) ?? null,
           mpExternalReference: order.id,
           mpStatus: "preference_created",
         },
@@ -682,13 +713,20 @@ export async function POST(req: Request) {
       csId: cs.id,
       orderId: order.id,
       orderNumber: order.orderNumber,
-      preferenceId: pref.id,
-      initPoint: pref.init_point,
+      preferenceId: pref.id as string,
+      initPoint: pref.init_point as string,
     });
   } catch (e: unknown) {
-    console.error("MP preference error:", e);
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.error("[preference] Unhandled error:", {
+      type: (e as any)?.constructor?.name,
+      message: errMsg,
+      code: (e as any)?.code,
+      meta: (e as any)?.meta,
+      stack: e instanceof Error ? e.stack?.split("\n").slice(0, 6).join("\n") : undefined,
+    });
     return NextResponse.json(
-      { error: "Error creando preferencia de pago" },
+      { error: "Error creando preferencia de pago", detail: errMsg },
       { status: 500 }
     );
   }

@@ -1,23 +1,57 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  CheckCircle,
-  Home,
-  ShoppingBag,
-  Loader2,
+  Building2,
   CalendarDays,
+  Check,
+  CheckCircle,
   Clock3,
+  Copy,
+  Home,
+  Loader2,
   MapPin,
   Receipt,
-  Truck,
+  ShoppingBag,
   Store,
+  Truck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { TRANSFER_INFO } from "@/lib/transfer-info";
+import { formatPrice } from "@/lib/utils-format";
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div>
+      <p className="mb-1 text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2.5">
+        <span className="flex-1 truncate font-mono text-sm font-semibold">{value}</span>
+        <button
+          type="button"
+          aria-label={`Copiar ${label}`}
+          onClick={() => {
+            navigator.clipboard.writeText(value).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+          className="shrink-0 rounded-lg p-1 transition-colors hover:bg-muted"
+        >
+          {copied ? (
+            <Check className="h-4 w-4 text-green-500" />
+          ) : (
+            <Copy className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function formatPickupDateEs(dateString: string | null) {
   if (!dateString) return null;
@@ -35,15 +69,11 @@ function formatPickupDateEs(dateString: string | null) {
 function buildDeliveryAddress({
   address,
   addressDetails,
-  city,
-  postalCode,
 }: {
   address: string | null;
   addressDetails: string | null;
-  city: string | null;
-  postalCode: string | null;
 }) {
-  const parts = [address, addressDetails, city, postalCode]
+  const parts = [address, addressDetails]
     .map((v) => (v ?? "").trim())
     .filter(Boolean);
 
@@ -53,20 +83,23 @@ function buildDeliveryAddress({
 function OrderConfirmedContent() {
   const searchParams = useSearchParams();
 
-  const orderNumber =
-    searchParams?.get?.("orderNumber") || searchParams?.get?.("orderId");
+  const transferCode = searchParams?.get?.("code");
+  const orderNumberParam = searchParams?.get?.("orderNumber");
+  const orderIdParam = searchParams?.get?.("orderId");
+  const displayCode = transferCode || orderNumberParam || orderIdParam;
 
   const deliveryMethod =
     (searchParams?.get?.("deliveryMethod") as "PICKUP" | "DELIVERY" | null) ??
     "PICKUP";
+
+  const paymentMethod = searchParams?.get?.("paymentMethod");
+  const totalParam = searchParams?.get?.("total");
 
   const pickupDate = searchParams?.get?.("pickupDate");
   const pickupTimeSlot = searchParams?.get?.("pickupTimeSlot");
 
   const address = searchParams?.get?.("address");
   const addressDetails = searchParams?.get?.("addressDetails");
-  const city = searchParams?.get?.("city");
-  const postalCode = searchParams?.get?.("postalCode");
 
   const formattedPickupDate = useMemo(
     () => formatPickupDateEs(pickupDate),
@@ -74,17 +107,12 @@ function OrderConfirmedContent() {
   );
 
   const fullDeliveryAddress = useMemo(
-    () =>
-      buildDeliveryAddress({
-        address,
-        addressDetails,
-        city,
-        postalCode,
-      }),
-    [address, addressDetails, city, postalCode]
+    () => buildDeliveryAddress({ address, addressDetails }),
+    [address, addressDetails]
   );
 
   const isDelivery = deliveryMethod === "DELIVERY";
+  const isBankTransfer = paymentMethod === "BANK_TRANSFER";
 
   const infoMessage = useMemo(() => {
     if (isDelivery) {
@@ -125,13 +153,60 @@ function OrderConfirmedContent() {
             </p>
           </div>
 
-          {orderNumber && (
+          {displayCode && (
             <div className="rounded-2xl border bg-muted/40 p-4 md:p-5">
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Receipt className="h-4 w-4" />
                 <span>Número de pedido</span>
               </div>
-              <p className="mt-2 font-mono text-2xl font-bold">{orderNumber}</p>
+              <p className="mt-2 font-mono text-2xl font-bold">{displayCode}</p>
+            </div>
+          )}
+
+          {isBankTransfer && (
+            <div className="space-y-3 text-left">
+              {/* Estado */}
+              <div className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-900/20">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                  Transferencia en revisión
+                </p>
+              </div>
+
+              {/* Datos bancarios */}
+              <div className="space-y-3 rounded-2xl border bg-background p-4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold">Datos para la transferencia</p>
+                </div>
+
+                {totalParam && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-center">
+                    <p className="mb-0.5 text-xs text-muted-foreground">Monto a transferir</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {formatPrice(Number(totalParam))}
+                    </p>
+                  </div>
+                )}
+
+                <CopyField label="CVU" value={TRANSFER_INFO.cvu} />
+                <CopyField label="Alias" value={TRANSFER_INFO.alias} />
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Titular</p>
+                  <p className="text-sm font-semibold">{TRANSFER_INFO.name}</p>
+                </div>
+              </div>
+
+              <p className="text-center text-sm text-muted-foreground">
+                Verificaremos tu pago. El estado lo podés seguir desde{" "}
+                <Link
+                  href="/mis-compras"
+                  className="font-medium underline underline-offset-4"
+                >
+                  Mis compras
+                </Link>
+                .
+              </p>
             </div>
           )}
 

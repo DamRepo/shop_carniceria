@@ -34,7 +34,7 @@ export default function ForgotPasswordClient() {
       toast.success("Si ese email existe, te enviamos un enlace para restablecer tu contraseña.");
       setEmail("");
     } catch (err: any) {
-      toast.error(err?.message ?? "Error inesperado");
+      toast.error(err?.message ?? "Algo salió mal. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }

@@ -133,9 +133,8 @@ export default function OfertasClient() {
         });
 
         if (!res.ok) {
-          const msg = `Error ${res.status} al cargar ofertas`;
-          console.error("[OfertasPage]", msg);
-          if (alive) setOffersError(msg);
+          console.error("[OfertasPage] Error", res.status, "al cargar ofertas");
+          if (alive) setOffersError("No pudimos cargar las ofertas. Intentá de nuevo.");
           return;
         }
 

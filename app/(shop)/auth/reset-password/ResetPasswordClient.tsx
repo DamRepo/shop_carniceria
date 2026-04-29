@@ -23,7 +23,7 @@ export default function ResetPasswordClient() {
     e.preventDefault();
 
     if (!token) {
-      toast.error("Falta el token en el enlace.");
+      toast.error("El enlace para restablecer tu contraseña no es válido.");
       return;
     }
     if (password.length < 6) {
@@ -46,14 +46,14 @@ export default function ResetPasswordClient() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error || "Token inválido o expirado");
+        throw new Error(data?.error || "El enlace expiró o no es válido. Solicitá uno nuevo.");
       }
 
       toast.success("Contraseña actualizada. Iniciá sesión con tu nueva clave.");
       router.replace("/auth/login");
       router.refresh();
     } catch (err: any) {
-      toast.error(err?.message ?? "Error inesperado");
+      toast.error(err?.message ?? "Algo salió mal. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +73,7 @@ export default function ResetPasswordClient() {
         <CardContent>
           {!token && (
             <p className="text-sm text-red-400 mb-4">
-              Este enlace no tiene token o está roto.
+              El enlace no es válido o ya expiró. Solicitá uno nuevo.
             </p>
           )}
 

@@ -1,14 +1,11 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "./db";
 import bcrypt from "bcryptjs";
 import { normalizeEmail } from "./normalize";
 import { rateLimit } from "./rate-limit";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-
   session: {
     strategy: "jwt",
   },
@@ -98,11 +95,11 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session?.user) {
         (session.user as any).role = token.role;
-        (session.user as any).id = token.id;
+        // token.sub is always set by NextAuth to user.id; token.id added in jwt callback
+        (session.user as any).id = (token.id ?? token.sub) as string | undefined;
         (session.user as any).phone = token.phone ?? null;
         (session.user as any).image = token.image ?? null;
         (session.user as any).username = token.username ?? null;
-        // Keep session.user.name in sync with token.name
         if (token.name) session.user.name = token.name;
       }
       return session;

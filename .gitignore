@@ -24,3 +24,5 @@ Thumbs.db
 
 .vercel/
 .turbo/
+# Script logs
+logs/

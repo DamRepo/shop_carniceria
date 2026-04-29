@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { ShoppingCart, ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/store";
+import { useCheckoutStore } from "@/lib/checkout-store";
 import { netFromGrossCents } from "@/lib/utils-format";
 import { toast } from "sonner";
 
@@ -34,36 +35,15 @@ function getTodayLocalDateString() {
   return local.toISOString().split("T")[0];
 }
 
-type CartItemLike = {
-  id: string;
-  quantity: number;
-  unitType?: "PER_KG" | "PER_UNIT";
-  price?: number;
-  vatRate?: number;
-};
-
-function normalizeCheckoutQuantity(item: CartItemLike) {
-  const qty = Number(item.quantity ?? 0);
-
-  if (!Number.isFinite(qty) || qty <= 0) return 0;
-
-
-  if (item.unitType === "PER_KG") {
-    return qty;
-  }
-
-  return qty;
-}
-
 export default function CheckoutPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
   const items = useCartStore((state) => state?.items);
   const checkoutTotal = useCartStore((state) => state?.getTotalPrice?.() ?? 0);
+  const storedFormData = useCheckoutStore((s) => s.formData);
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
-  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     customerName: "",
@@ -78,6 +58,26 @@ export default function CheckoutPage() {
     pickupTimeSlot: "",
     pickupNotes: "",
   });
+
+  // Restore form from checkout store when navigating back from metodo-pago
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !storedFormData) return;
+    restoredRef.current = true;
+    setFormData((prev) => ({
+      customerName: storedFormData.customerName || prev.customerName,
+      phone: storedFormData.phone || prev.phone,
+      email: storedFormData.email || prev.email,
+      deliveryMethod: storedFormData.deliveryMethod || prev.deliveryMethod,
+      deliveryZone: storedFormData.deliveryZone || prev.deliveryZone,
+      address: storedFormData.address || prev.address,
+      addressDetails: storedFormData.addressDetails || prev.addressDetails,
+      notes: storedFormData.notes || prev.notes,
+      pickupDate: storedFormData.pickupDate || prev.pickupDate,
+      pickupTimeSlot: storedFormData.pickupTimeSlot || prev.pickupTimeSlot,
+      pickupNotes: storedFormData.pickupNotes || prev.pickupNotes,
+    }));
+  }, [storedFormData]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -166,148 +166,10 @@ export default function CheckoutPage() {
     return false;
   };
 
-  const validateCheckoutFinal = () => {
-    if ((items?.length ?? 0) === 0) {
-      toast.error("Tu carrito está vacío");
-      return false;
-    }
-
-    if (!validateContactStep()) return false;
-    if (!validateDeliveryDetailsStep()) return false;
-
-    return true;
-  };
-
-  const buildRequestBody = () => {
-    const orderItems = (items ?? [])
-      .map((item) => ({
-        productId: item.id,
-        quantity: normalizeCheckoutQuantity(item as CartItemLike),
-      }))
-      .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
-
-    return {
-      customerName: formData.customerName.trim(),
-      phone: formData.phone.trim(),
-      email: formData.email.trim(),
-      deliveryMethod: formData.deliveryMethod,
-      address:
-        formData.deliveryMethod === "DELIVERY" ? formData.address.trim() : "",
-      addressDetails:
-        formData.deliveryMethod === "DELIVERY"
-          ? formData.addressDetails.trim()
-          : "",
-      notes: formData.notes.trim(),
-      pickupDate:
-        formData.deliveryMethod === "PICKUP" ? formData.pickupDate : "",
-      pickupTimeSlot:
-        formData.deliveryMethod === "PICKUP" ? formData.pickupTimeSlot : "",
-      pickupNotes:
-        formData.deliveryMethod === "PICKUP"
-          ? formData.pickupNotes.trim()
-          : "",
-      deliveryZone:
-        formData.deliveryMethod === "DELIVERY" ? formData.deliveryZone : "",
-      items: orderItems,
-    };
-  };
-
-  const handleMercadoPago = async () => {
-    if (!validateCheckoutFinal()) return;
-
-    setSubmitting(true);
-
-    try {
-      const res = await fetch("/api/mercadopago/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRequestBody()),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        toast.error(data?.error ?? "No se pudo iniciar el pago");
-        return;
-      }
-
-      const initPoint = data?.initPoint as string | undefined;
-
-      if (!initPoint) {
-        toast.error("Mercado Pago no devolvió el link de pago");
-        return;
-      }
-
-      window.location.href = initPoint;
-    } catch (error) {
-      console.error("Error starting MercadoPago:", error);
-      toast.error("Error al iniciar el pago");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCashOrder = async () => {
-    if (!validateCheckoutFinal()) return;
-
-    setSubmitting(true);
-
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...buildRequestBody(),
-          paymentMethod: "CASH",
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        toast.error(data?.error ?? "No se pudo confirmar el pedido");
-        return;
-      }
-
-      toast.success(
-        formData.deliveryMethod === "DELIVERY"
-          ? "Pedido confirmado. Lo recibirás por delivery."
-          : "Pedido confirmado. Pagás en el local."
-      );
-
-      useCartStore.getState().clearCart();
-
-      const params = new URLSearchParams();
-
-      if (data?.orderNumber) params.set("orderNumber", data.orderNumber);
-      if (data?.orderId) params.set("orderId", data.orderId);
-
-      params.set("deliveryMethod", formData.deliveryMethod);
-      if (formData.deliveryMethod === "DELIVERY") {
-        if (formData.address) params.set("address", formData.address);
-        if (formData.addressDetails)
-          params.set("addressDetails", formData.addressDetails);
-      }
-
-      if (formData.deliveryMethod === "PICKUP") {
-        if (formData.pickupDate) params.set("pickupDate", formData.pickupDate);
-        if (formData.pickupTimeSlot) {
-          params.set("pickupTimeSlot", formData.pickupTimeSlot);
-        }
-      }
-
-      router.push(`/orden-confirmada?${params.toString()}`);
-    } catch (error) {
-      console.error("Error creating cash order:", error);
-      toast.error("Error al confirmar el pedido");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const subtotal = checkoutTotal;
   const deliveryCost =
-    formData.deliveryMethod === "DELIVERY" && isValidShippingZone(formData.deliveryZone)
+    formData.deliveryMethod === "DELIVERY" &&
+    isValidShippingZone(formData.deliveryZone)
       ? getShippingCost(formData.deliveryZone)
       : 0;
   const total = subtotal + deliveryCost;
@@ -317,6 +179,21 @@ export default function CheckoutPage() {
     const vatRate = item.vatRate ?? 0.21;
     return sum + netFromGrossCents(itemTotal, vatRate);
   }, 0);
+
+  const handleContinueToPay = () => {
+    if ((items?.length ?? 0) === 0) {
+      toast.error("Tu carrito está vacío");
+      return;
+    }
+
+    if (!validateContactStep()) return;
+    if (!validateDeliveryDetailsStep()) return;
+
+    useCheckoutStore.getState().setFormData(formData);
+    useCheckoutStore.getState().setTotals({ subtotal, subtotalNet, deliveryCost, total });
+
+    router.push("/checkout/metodo-pago");
+  };
 
   const minPickupDate = useMemo(() => getTodayLocalDateString(), []);
 
@@ -363,7 +240,7 @@ export default function CheckoutPage() {
             Finalizar compra
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Completá tus datos y elegí cómo recibir y pagar tu pedido.
+            Completá tus datos y elegí cómo recibir tu pedido.
           </p>
         </div>
       </div>
@@ -378,7 +255,7 @@ export default function CheckoutPage() {
                 if (!validateContactStep()) return;
                 setCurrentStep(2);
               }}
-              disabled={submitting}
+              disabled={false}
             />
           )}
 
@@ -403,7 +280,7 @@ export default function CheckoutPage() {
                   if (!validateDeliveryDetailsStep()) return;
                   setCurrentStep(4);
                 }}
-                disabled={submitting}
+                disabled={false}
               />
             ) : (
               <DeliveryAddressStep
@@ -414,7 +291,7 @@ export default function CheckoutPage() {
                   if (!validateDeliveryDetailsStep()) return;
                   setCurrentStep(4);
                 }}
-                disabled={submitting}
+                disabled={false}
               />
             ))}
 
@@ -423,9 +300,7 @@ export default function CheckoutPage() {
               items={items ?? []}
               deliveryMethod={formData.deliveryMethod}
               address={
-                formData.deliveryMethod === "DELIVERY"
-                  ? formData.address
-                  : ""
+                formData.deliveryMethod === "DELIVERY" ? formData.address : ""
               }
               addressDetails={
                 formData.deliveryMethod === "DELIVERY"
@@ -457,11 +332,9 @@ export default function CheckoutPage() {
             total={total}
             deliveryCost={deliveryCost}
             deliveryMethod={formData.deliveryMethod}
-            submitting={submitting}
             canPay={currentStep === 4}
             onBack={currentStep === 4 ? () => setCurrentStep(3) : undefined}
-            onMercadoPago={handleMercadoPago}
-            onCashOrder={handleCashOrder}
+            onContinue={handleContinueToPay}
           />
         </div>
       </div>

@@ -81,6 +81,14 @@ export async function GET(req: Request) {
         cancellationReason: true,
         cancelledBy: true,
 
+        transferCode: true,
+        transferStatus: true,
+        transferProofUrl: true,
+        transferProofMimeType: true,
+        transferConfirmedAt: true,
+        transferRejectedAt: true,
+        transferRejectNote: true,
+
         subtotal: true,
         deliveryCost: true,
         total: true,

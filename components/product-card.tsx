@@ -100,6 +100,7 @@ function getOfferQtyLabel(product: ProductDTO) {
 export function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const addItem = useCartStore((state) => state.addItem);
+  const cartItems = useCartStore((state) => state.items);
   const [imgError, setImgError] = useState(false);
 
   const canBuy = (product.stock ?? 0) > 0;
@@ -130,11 +131,26 @@ export function ProductCard({ product }: ProductCardProps) {
     netVolumeMl: product.netVolumeMl,
   });
 
+  function wouldExceedStock(addQty: number): boolean {
+    const stock = product.stock ?? 0;
+    if (stock <= 0) return true;
+    const existing = cartItems.find((i) => i.id === product.id);
+    const existingQty = existing?.quantity ?? 0;
+    const totalQty = existingQty + addQty;
+    // stock is stored in grams for PER_KG, units for PER_UNIT
+    const totalRaw =
+      (product.unitType ?? "PER_KG") === "PER_KG"
+        ? Math.round(totalQty * 1000)
+        : Math.round(totalQty);
+    return totalRaw > stock;
+  }
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (!canBuy) return toast.error("Producto sin stock");
+    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
 
     addItem({
       id: product.id,
@@ -161,6 +177,7 @@ export function ProductCard({ product }: ProductCardProps) {
     e.stopPropagation();
 
     if (!canBuy) return toast.error("Producto sin stock");
+    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
 
     addItem({
       id: product.id,

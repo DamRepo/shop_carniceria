@@ -1,20 +1,168 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock3, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { CheckoutFormData } from "@/components/checkout/types";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DAY_NAMES_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+interface SlotGroupDef {
+  label: string;
+  emoji: string;
+  minMinutes: number;
+  maxMinutes: number;
+}
+
+const SLOT_GROUPS: SlotGroupDef[] = [
+  { label: "Mañana",   emoji: "🌅", minMinutes: 0,    maxMinutes: 719  },
+  { label: "Mediodía", emoji: "🌞", minMinutes: 720,  maxMinutes: 839  },
+  { label: "Tarde",    emoji: "🌆", minMinutes: 840,  maxMinutes: 1079 },
+  { label: "Noche",    emoji: "🌙", minMinutes: 1080, maxMinutes: 1439 },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getSlotStartMinutes(slot: string): number | null {
+  const match = slot.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+function parseSlot(slot: string): { start: string; end: string | null } {
+  const m = slot.match(/(\d{1,2}:\d{2})\s*a\s*(\d{1,2}:\d{2})/i);
+  if (m) return { start: m[1], end: m[2] };
+  const start = slot.match(/(\d{1,2}:\d{2})/)?.[1] ?? slot;
+  return { start, end: null };
+}
+
+function getTodayLocalString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function parseLocalDate(s: string): Date {
+  const [y, mo, d] = s.split("-").map(Number);
+  return new Date(y, mo - 1, d);
+}
+
+function generateDays(count = 7): { dateString: string; date: Date }[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { dateString: ds, date: d };
+  });
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function DayCard({
+  label,
+  dateDisplay,
+  isSelected,
+  isDisabled,
+  onClick,
+}: {
+  label: string;
+  dateDisplay: string;
+  isSelected: boolean;
+  isDisabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={isDisabled ? undefined : onClick}
+      disabled={isDisabled}
+      className={cn(
+        "flex min-w-[68px] flex-1 flex-col items-center gap-0.5 rounded-2xl border-2 px-2 py-3 text-center transition-all select-none",
+        isDisabled
+          ? "cursor-not-allowed border-border/30 opacity-40"
+          : isSelected
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "cursor-pointer border-border/60 hover:border-primary/40 hover:bg-muted/30 active:scale-[0.97]"
+      )}
+    >
+      <span
+        className={cn(
+          "text-[11px] font-semibold uppercase tracking-wide leading-none",
+          isSelected ? "text-primary" : "text-muted-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          "text-sm font-bold leading-tight",
+          isSelected ? "text-primary" : "text-foreground"
+        )}
+      >
+        {dateDisplay}
+      </span>
+    </button>
+  );
+}
+
+function SlotCard({
+  slot,
+  isSelected,
+  isDisabled,
+  onClick,
+}: {
+  slot: string;
+  isSelected: boolean;
+  isDisabled: boolean;
+  onClick: () => void;
+}) {
+  const { start, end } = parseSlot(slot);
+
+  return (
+    <button
+      type="button"
+      onClick={isDisabled ? undefined : onClick}
+      disabled={isDisabled}
+      className={cn(
+        "flex flex-col items-center justify-center rounded-2xl border-2 px-2 py-3 text-center transition-all select-none",
+        isDisabled
+          ? "cursor-not-allowed border-border/30 opacity-40"
+          : isSelected
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "cursor-pointer border-border/60 hover:border-primary/40 hover:bg-muted/30 active:scale-[0.97]"
+      )}
+    >
+      <span
+        className={cn(
+          "text-base font-bold leading-tight tabular-nums",
+          isSelected ? "text-primary" : "text-foreground"
+        )}
+      >
+        {start}
+      </span>
+      {end && (
+        <span
+          className={cn(
+            "text-xs leading-tight tabular-nums",
+            isSelected ? "text-primary/80" : "text-muted-foreground"
+          )}
+        >
+          a {end}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface PickupStepProps {
   formData: CheckoutFormData;
@@ -26,35 +174,7 @@ interface PickupStepProps {
   disabled?: boolean;
 }
 
-function parseLocalDate(dateString: string) {
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function getTodayLocalString() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getSlotStartMinutes(slot: string) {
-  // Soporta formatos tipo:
-  // "07:30 a 09:30"
-  // "07:30 - 09:30"
-  // "07:30"
-  const match = slot.match(/(\d{1,2}):(\d{2})/);
-
-  if (!match) return null;
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
-
-  return hours * 60 + minutes;
-}
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export function PickupStep({
   formData,
@@ -71,34 +191,54 @@ export function PickupStep({
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const effectiveMinPickupDate =
-    minPickupDate > todayString ? minPickupDate : todayString;
-
   const isTodaySelected = formData.pickupDate === todayString;
 
+  const effectiveMinDate = minPickupDate > todayString ? minPickupDate : todayString;
+
+  // Generate 7 upcoming days with metadata
+  const days = useMemo(() => {
+    return generateDays(7).map(({ dateString, date }, i) => {
+      const isToday = i === 0;
+
+      // Today becomes disabled when all slots have already started
+      const todayExhausted =
+        isToday &&
+        pickupTimeSlots.every((slot) => {
+          const mins = getSlotStartMinutes(slot);
+          return mins !== null && mins <= currentMinutes;
+        });
+
+      const dayLabel =
+        i === 0 ? "Hoy" : i === 1 ? "Mañana" : DAY_NAMES_SHORT[date.getDay()];
+      const dateDisplay = `${date.getDate()}/${date.getMonth() + 1}`;
+
+      return {
+        dateString,
+        date,
+        dayLabel,
+        dateDisplay,
+        isDisabled: todayExhausted || dateString < effectiveMinDate,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupTimeSlots, currentMinutes, effectiveMinDate]);
+
+  // Slot options — disabled if today is selected and the slot already started
   const slotOptions = useMemo(() => {
     return pickupTimeSlots.map((slot) => {
       const slotStartMinutes = getSlotStartMinutes(slot);
-
       const isPastToday =
         isTodaySelected &&
         slotStartMinutes !== null &&
         slotStartMinutes <= currentMinutes;
-
-      return {
-        value: slot,
-        disabled: isPastToday,
-      };
+      return { value: slot, disabled: isPastToday };
     });
   }, [pickupTimeSlots, isTodaySelected, currentMinutes]);
 
+  // Detect if the currently-selected slot became invalid (time passed)
   const selectedSlotIsInvalid = useMemo(() => {
     if (!formData.pickupTimeSlot) return false;
-
-    const found = slotOptions.find(
-      (option) => option.value === formData.pickupTimeSlot
-    );
-
+    const found = slotOptions.find((o) => o.value === formData.pickupTimeSlot);
     return found ? found.disabled : false;
   }, [formData.pickupTimeSlot, slotOptions]);
 
@@ -109,14 +249,22 @@ export function PickupStep({
     }
   }, [selectedSlotIsInvalid, onChange]);
 
-  const handleDateChange = (value: string) => {
+  const handleDateSelect = (dateString: string) => {
     setTimeError(null);
-    onChange("pickupDate", value);
+    onChange("pickupDate", dateString);
+
+    // Clear time slot if it would be invalid on the newly-selected day
+    if (dateString === todayString && formData.pickupTimeSlot) {
+      const mins = getSlotStartMinutes(formData.pickupTimeSlot);
+      if (mins !== null && mins <= currentMinutes) {
+        onChange("pickupTimeSlot", "");
+      }
+    }
   };
 
-  const handleSlotChange = (value: string) => {
+  const handleSlotSelect = (slot: string) => {
     setTimeError(null);
-    onChange("pickupTimeSlot", value);
+    onChange("pickupTimeSlot", slot);
   };
 
   const handleContinue = () => {
@@ -141,7 +289,6 @@ export function PickupStep({
     }
 
     const slotStartMinutes = getSlotStartMinutes(formData.pickupTimeSlot);
-
     if (
       formData.pickupDate === todayString &&
       slotStartMinutes !== null &&
@@ -154,6 +301,17 @@ export function PickupStep({
     onContinue();
   };
 
+  // Group slots by time period, preserving only groups that have slots
+  const groupedSlots = useMemo(() => {
+    return SLOT_GROUPS.map((g) => ({
+      ...g,
+      slots: slotOptions.filter((o) => {
+        const mins = getSlotStartMinutes(o.value);
+        return mins !== null && mins >= g.minMinutes && mins <= g.maxMinutes;
+      }),
+    })).filter((g) => g.slots.length > 0);
+  }, [slotOptions]);
+
   return (
     <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
       <CardHeader className="border-b bg-muted/30">
@@ -165,53 +323,51 @@ export function PickupStep({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-5 p-5 md:p-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="pickupDate">Día de retiro *</Label>
-            <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="pickupDate"
-                type="date"
-                min={effectiveMinPickupDate}
-                value={formData.pickupDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="h-11 rounded-xl pl-10"
-                disabled={disabled}
+      <CardContent className="space-y-6 p-5 md:p-6">
+
+        {/* ── Day selector ─────────────────────────────────────────── */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Día de retiro *</Label>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {days.map((day) => (
+              <DayCard
+                key={day.dateString}
+                label={day.dayLabel}
+                dateDisplay={day.dateDisplay}
+                isSelected={formData.pickupDate === day.dateString}
+                isDisabled={disabled || day.isDisabled}
+                onClick={() => handleDateSelect(day.dateString)}
               />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="pickupTimeSlot">Horario de retiro *</Label>
-            <Select
-              value={formData.pickupTimeSlot}
-              onValueChange={handleSlotChange}
-              disabled={disabled}
-            >
-              <SelectTrigger id="pickupTimeSlot" className="h-11 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="Elegí una franja horaria" />
-                </div>
-              </SelectTrigger>
-
-              <SelectContent>
-                {slotOptions.map((slot) => (
-                  <SelectItem
-                    key={slot.value}
-                    value={slot.value}
-                    disabled={slot.disabled}
-                  >
-                    {slot.value}
-                    {slot.disabled ? " (ya pasó)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            ))}
           </div>
         </div>
+
+        {/* ── Time slot selector (shows after day is chosen) ────────── */}
+        {formData.pickupDate && (
+          <div className="space-y-4">
+            <Label className="text-sm font-medium">Horario de retiro *</Label>
+            <div className="space-y-4">
+              {groupedSlots.map((group) => (
+                <div key={group.label} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.emoji} {group.label}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {group.slots.map((slot) => (
+                      <SlotCard
+                        key={slot.value}
+                        slot={slot.value}
+                        isSelected={formData.pickupTimeSlot === slot.value}
+                        isDisabled={disabled || slot.disabled}
+                        onClick={() => handleSlotSelect(slot.value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {timeError && (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3">
@@ -219,6 +375,7 @@ export function PickupStep({
           </div>
         )}
 
+        {/* ── Notes ────────────────────────────────────────────────── */}
         <div className="space-y-2">
           <Label htmlFor="pickupNotes">Nota para el retiro (opcional)</Label>
           <div className="relative">
@@ -239,7 +396,7 @@ export function PickupStep({
           <p className="text-sm leading-6 text-muted-foreground">
             Elegí cuándo pensás pasar a buscar el pedido. Después también vas a
             poder ver esta información en{" "}
-            <span className="font-medium">“Mis compras”</span>.
+            <span className="font-medium">"Mis compras"</span>.
           </p>
         </div>
 
