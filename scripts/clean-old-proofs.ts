@@ -10,7 +10,10 @@
  *   npx tsx --require dotenv/config scripts/clean-old-proofs.ts --dry-run
  *
  * Cron (every 90 days at 03:00):
- *   0 3 1 */3 * cd /path/to/app && npx tsx --require dotenv/config scripts/clean-old-proofs.ts >> logs/cron.log 2>&1
+ * @example
+ * ```
+ * 0 3 1 * /3 * cd /path/to/app && npx tsx --require dotenv/config scripts/clean-old-proofs.ts >> logs/cron.log 2>&1
+ * ```
  *
  * Rules:
  *   - Only touches orders with paymentStatus=PAID AND transferStatus=CONFIRMED
