@@ -292,6 +292,18 @@ export async function POST(req: Request) {
 
     const session = await getServerSession(authOptions).catch(() => null);
     const userId = (session?.user as any)?.id as string | undefined;
+
+    // Require email for guest checkout preferences
+    if (!userId) {
+      const guestEmail = body?.email?.trim?.();
+      if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+        return NextResponse.json(
+          { error: "El email es requerido para continuar como invitado" },
+          { status: 400 }
+        );
+      }
+    }
+
     const sessionEmail =
       typeof (session?.user as any)?.email === "string"
         ? ((session?.user as any).email as string)

@@ -268,6 +268,16 @@ export default function MetodoPagoPage() {
       useCartStore.getState().clearCart();
       clearCheckout();
 
+      // Store guest contact in sessionStorage instead of URL params
+      const guestContactData = {
+        name: formData.customerName ?? "",
+        email: formData.email ?? "",
+        phone: formData.phone ?? "",
+      };
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("carniceria_guest_contact", JSON.stringify(guestContactData));
+      }
+
       const params = new URLSearchParams();
       if (data?.orderNumber) params.set("orderNumber", data.orderNumber);
       if (data?.orderId) params.set("orderId", data.orderId);

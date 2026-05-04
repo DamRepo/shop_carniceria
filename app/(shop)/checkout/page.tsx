@@ -124,9 +124,16 @@ export default function CheckoutPage() {
     });
   };
 
+  const isGuest = status !== "authenticated" && status !== "loading";
+
   const validateContactStep = () => {
     if (!formData.customerName.trim() || !formData.phone.trim()) {
       toast.error("Por favor completá nombre y teléfono");
+      return false;
+    }
+
+    if (isGuest && !formData.email?.trim()) {
+      toast.error("Por favor ingresá tu email para recibir la confirmación del pedido");
       return false;
     }
 
@@ -256,6 +263,7 @@ export default function CheckoutPage() {
                 setCurrentStep(2);
               }}
               disabled={false}
+              isGuest={isGuest}
             />
           )}
 

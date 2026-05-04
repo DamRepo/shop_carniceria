@@ -114,6 +114,17 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null);
 
+    // Require email for guest orders (no userId means no account to contact)
+    if (!safeUserId) {
+      const guestEmail = body?.email?.trim?.();
+      if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+        return NextResponse.json(
+          { error: "El email es requerido para continuar como invitado" },
+          { status: 400 }
+        );
+      }
+    }
+
     const customerName = normalizeString(body?.customerName);
     const phone = normalizeString(body?.phone);
     const email = normalizeString(body?.email)?.toLowerCase();

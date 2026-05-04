@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Trash2, Minus, Plus, ShoppingCart, ArrowRight } from "lucide-react";
+import { Trash2, Minus, Plus, ShoppingCart } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
@@ -43,8 +42,6 @@ const getOfferRuleLabel = (item: Partial<CartItem>) => {
 };
 
 export default function CartPage() {
-  const router = useRouter();
-
   const { data: session, status } = useSession();
   const userId = (session as any)?.user?.id as string | undefined;
 
@@ -58,8 +55,6 @@ export default function CartPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      clearCart();
-      prevUserIdRef.current = undefined;
       return;
     }
 
@@ -153,27 +148,6 @@ export default function CartPage() {
           <ShoppingCart className="mx-auto h-24 w-24 text-muted-foreground" />
           <h1 className="text-2xl font-bold">Cargando...</h1>
           <p className="text-muted-foreground">Verificando sesión</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "unauthenticated") {
-    return (
-      <div className="container mx-auto max-w-7xl px-4 py-20">
-        <div className="space-y-4 text-center">
-          <ShoppingCart className="mx-auto h-24 w-24 text-muted-foreground" />
-          <h1 className="text-3xl font-bold">
-            Iniciá sesión para ver tu carrito
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            Tu carrito está ligado a tu cuenta.
-          </p>
-          <Link href="/auth/login">
-            <Button size="lg" className="mt-4">
-              Ir a login
-            </Button>
-          </Link>
         </div>
       </div>
     );
@@ -362,15 +336,25 @@ export default function CartPage() {
             </CardContent>
 
             <CardFooter className="p-6 pt-0">
-              <Button
-                onClick={() => router.push("/checkout")}
-                size="lg"
-                className="w-full"
-                type="button"
-              >
-                Proceder al pago
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              {status === "authenticated" ? (
+                <Button className="w-full rounded-xl" asChild size="lg">
+                  <Link href="/checkout">Proceder al pago</Link>
+                </Button>
+              ) : (
+                <div className="flex w-full flex-col gap-2">
+                  <Button className="w-full rounded-xl" asChild size="lg">
+                    <Link href="/checkout">Continuar como invitado</Link>
+                  </Button>
+                  <Button variant="outline" className="w-full rounded-xl" asChild size="lg">
+                    <Link href="/auth/login?redirectTo=/checkout">
+                      Iniciar sesión
+                    </Link>
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground">
+                    Con una cuenta podés ver el historial de tus compras
+                  </p>
+                </div>
+              )}
             </CardFooter>
           </Card>
 

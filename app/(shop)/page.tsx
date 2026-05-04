@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,6 @@ import { ProductCard } from "@/components/product-card";
 import { FeaturedCategoryCardVertical } from "@/components/featured-category-card-vertical";
 import { PromoDoubleBanner } from "@/components/promo-double-banner";
 import { FeaturedCategoryCardHorizontal } from "@/components/featured-category-card-horizontal";
-import { ShoppingCart } from "lucide-react";
 import {
   Beef,
   Award,
@@ -22,6 +22,8 @@ import {
   Star,
   Sparkles,
   Flame,
+  ShoppingCart,
+  Zap,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -148,6 +150,13 @@ type HomeSliderCardProps = {
   discountBadgeMode?: "top-right" | "bottom-left";
 };
 
+function getInitialQty(product: ProductWithSale): number {
+  const isOnSaleFlag = (product.isOnSale ?? false) === true;
+  if (!isOnSaleFlag) return 1;
+  const min = Number(product.minPurchaseQty ?? 1);
+  return Number.isFinite(min) && min > 0 ? min : 1;
+}
+
 function HomeSliderCard({
   product,
   showFeaturedBadge = false,
@@ -155,8 +164,11 @@ function HomeSliderCard({
   showOfferBadge = true,
   discountBadgeMode = "top-right",
 }: HomeSliderCardProps) {
+  const router = useRouter();
   const addItem = useCartStore((state) => state.addItem);
+  const cartItems = useCartStore((state) => state.items);
 
+  const initialQty = getInitialQty(product);
   const priceInfo = getPriceInfo(product);
   const effectivePrice = getEffectivePrice(product);
   const vatRate = getVatRate(product);
@@ -176,22 +188,34 @@ function HomeSliderCard({
 
   const showLowStock = product.stock > 0 && product.stock < 10;
   const noStock = product.stock === 0;
+  const canBuy = !noStock;
+
+  function wouldExceedStock(addQty: number): boolean {
+    const stock = product.stock ?? 0;
+    if (stock <= 0) return true;
+    const existing = cartItems.find((i) => i.id === product.id);
+    const existingQty = existing?.quantity ?? 0;
+    const totalQty = existingQty + addQty;
+    const totalRaw =
+      (product.unitType ?? "PER_KG") === "PER_KG"
+        ? Math.round(totalQty * 1000)
+        : Math.round(totalQty);
+    return totalRaw > stock;
+  }
 
   const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (noStock) {
-      toast.error("Producto sin stock");
-      return;
-    }
+    if (!canBuy) return toast.error("Producto sin stock");
+    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
 
     addItem({
       id: product.id,
       name: product.name,
       slug: product.slug,
       price: effectivePrice,
-      quantity: 1,
+      quantity: initialQty,
       unitType: product.unitType ?? "PER_KG",
       image: product.image ?? undefined,
       vatRate,
@@ -199,9 +223,33 @@ function HomeSliderCard({
 
     toast.success(
       `${product.name} agregado al carrito${
-        (product.unitType ?? "PER_KG") === "PER_KG" ? " (1 kg)" : " (1 un)"
+        (product.unitType ?? "PER_KG") === "PER_KG"
+          ? ` (${initialQty} kg)`
+          : ` (${initialQty} un)`
       }`
     );
+  };
+
+  const handleBuyNow = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!canBuy) return toast.error("Producto sin stock");
+    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
+
+    addItem({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: effectivePrice,
+      quantity: initialQty,
+      unitType: product.unitType ?? "PER_KG",
+      image: product.image ?? undefined,
+      vatRate,
+    });
+
+    toast.success("Producto agregado, redirigiendo al checkout...");
+    setTimeout(() => router.push("/checkout"), 450);
   };
 
   return (
@@ -349,16 +397,28 @@ function HomeSliderCard({
             ) : null}
           </div>
 
-          <div className="mt-auto pt-2 sm:pt-4">
+          <div className="mt-auto pt-2 sm:pt-4 flex flex-col gap-2">
             <Button
               type="button"
-              size="sm"
-              className="w-full text-[12px] sm:text-sm font-semibold py-1.5 sm:py-2 h-auto"
+              size="lg"
+              className="w-full"
+              variant="outline"
               onClick={handleAddToCart}
-              disabled={noStock}
+              disabled={!canBuy}
             >
-              <ShoppingCart className="mr-1 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
-              {noStock ? "Agotado" : "Agregar"}
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Agregar al carrito
+            </Button>
+
+            <Button
+              type="button"
+              size="lg"
+              className="w-full bg-primary hover:bg-primary/90"
+              onClick={handleBuyNow}
+              disabled={!canBuy}
+            >
+              <Zap className="mr-2 h-4 w-4" />
+              Comprar ahora
             </Button>
           </div>
         </div>

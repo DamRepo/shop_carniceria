@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Tag, Beef, AlertTriangle } from "lucide-react";
+import { Tag, Beef, AlertTriangle, ShoppingCart, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,8 @@ import {
   netFromGrossCents,
 } from "@/lib/utils-format";
 import { computeUnitPrice } from "@/lib/unitPrice";
+import { useCartStore } from "@/lib/store";
+import { toast } from "sonner";
 
 type UnitType = "PER_KG" | "PER_UNIT";
 
@@ -116,6 +119,10 @@ function calcDiscountPercent(original: number, sale: number) {
 }
 
 export default function OfertasClient() {
+  const router = useRouter();
+  const addItem = useCartStore((state) => state.addItem);
+  const cartItems = useCartStore((state) => state.items);
+
   const [offers, setOffers] = useState<ProductWithCategory[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState<string | null>(null);
@@ -210,6 +217,7 @@ export default function OfertasClient() {
               const effectivePrice = getEffectivePrice(product);
               const vatRate = getVatRate(product);
               const netPrice = netFromGrossCents(effectivePrice, vatRate);
+              const canBuy = (product.stock ?? 0) > 0;
 
               const discount =
                 priceInfo.hasSale &&
@@ -219,6 +227,77 @@ export default function OfertasClient() {
                   ? product.discountPercent ??
                     calcDiscountPercent(priceInfo.originalPrice, priceInfo.salePrice)
                   : null;
+
+              const initialQty =
+                product.unitType === "PER_KG"
+                  ? Number(product.minPurchaseQty ?? 1) > 0
+                    ? Number(product.minPurchaseQty)
+                    : 1
+                  : Number(product.minPurchaseQty ?? 1) > 0
+                  ? Number(product.minPurchaseQty)
+                  : 1;
+
+              function wouldExceedStock(addQty: number): boolean {
+                const stock = product.stock ?? 0;
+                if (stock <= 0) return true;
+                const existing = cartItems.find((i) => i.id === product.id);
+                const existingQty = existing?.quantity ?? 0;
+                const totalQty = existingQty + addQty;
+                const totalRaw =
+                  (product.unitType ?? "PER_KG") === "PER_KG"
+                    ? Math.round(totalQty * 1000)
+                    : Math.round(totalQty);
+                return totalRaw > stock;
+              }
+
+              const handleAddToCart = (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!canBuy) return toast.error("Producto sin stock");
+                if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
+
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  slug: product.slug,
+                  price: effectivePrice,
+                  quantity: initialQty,
+                  unitType: product.unitType ?? "PER_KG",
+                  image: product.image ?? undefined,
+                  vatRate,
+                });
+
+                toast.success(
+                  `${product.name} agregado al carrito${
+                    (product.unitType ?? "PER_KG") === "PER_KG"
+                      ? ` (${initialQty} kg)`
+                      : ` (${initialQty} un)`
+                  }`
+                );
+              };
+
+              const handleBuyNow = (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!canBuy) return toast.error("Producto sin stock");
+                if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
+
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  slug: product.slug,
+                  price: effectivePrice,
+                  quantity: initialQty,
+                  unitType: product.unitType ?? "PER_KG",
+                  image: product.image ?? undefined,
+                  vatRate,
+                });
+
+                toast.success("Producto agregado, redirigiendo al checkout...");
+                setTimeout(() => router.push("/checkout"), 450);
+              };
 
               return (
                 <motion.div
@@ -294,7 +373,6 @@ export default function OfertasClient() {
                           {formatPrice(product.price)}
                         </span>
                       )}
-
                     </div>
 
                     {(() => {
@@ -311,15 +389,30 @@ export default function OfertasClient() {
                       precio sin impuestos nacionales: {formatPrice(netPrice)}
                     </p>
 
-                    <Link href={`/productos/${product.slug}`} className="block">
+                    <div className="flex flex-col gap-2">
                       <Button
-                        size="sm"
-                        className="w-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                        onClick={handleAddToCart}
+                        disabled={!canBuy}
+                        className="w-full"
+                        variant="outline"
+                        size="lg"
                         type="button"
                       >
-                        Ver oferta
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        Agregar al carrito
                       </Button>
-                    </Link>
+
+                      <Button
+                        onClick={handleBuyNow}
+                        disabled={!canBuy}
+                        className="w-full bg-primary hover:bg-primary/90"
+                        size="lg"
+                        type="button"
+                      >
+                        <Zap className="mr-2 h-4 w-4" />
+                        Comprar ahora
+                      </Button>
+                    </div>
                   </div>
                 </motion.div>
               );

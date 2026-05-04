@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   Building2,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TRANSFER_INFO } from "@/lib/transfer-info";
 import { formatPrice } from "@/lib/utils-format";
+import { GuestRegisterPrompt } from "@/components/features/guest-register-prompt";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -82,6 +84,7 @@ function buildDeliveryAddress({
 
 function OrderConfirmedContent() {
   const searchParams = useSearchParams();
+  const { status } = useSession();
 
   const transferCode = searchParams?.get?.("code");
   const orderNumberParam = searchParams?.get?.("orderNumber");
@@ -100,6 +103,22 @@ function OrderConfirmedContent() {
 
   const address = searchParams?.get?.("address");
   const addressDetails = searchParams?.get?.("addressDetails");
+
+  const [guestContact, setGuestContact] = useState<{ name: string; email: string; phone: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const raw = sessionStorage.getItem("carniceria_guest_contact");
+      if (raw) {
+        try {
+          setGuestContact(JSON.parse(raw));
+          sessionStorage.removeItem("carniceria_guest_contact"); // limpiar después de leer
+        } catch { /* ignore */ }
+      }
+    }
+  }, []);
+
+  const isGuest = status === "unauthenticated";
 
   const formattedPickupDate = useMemo(
     () => formatPickupDateEs(pickupDate),
@@ -198,14 +217,20 @@ function OrderConfirmedContent() {
               </div>
 
               <p className="text-center text-sm text-muted-foreground">
-                Verificaremos tu pago. El estado lo podés seguir desde{" "}
-                <Link
-                  href="/mis-compras"
-                  className="font-medium underline underline-offset-4"
-                >
-                  Mis compras
-                </Link>
-                .
+                {isGuest ? (
+                  "Verificaremos tu pago y te notificaremos por email."
+                ) : (
+                  <>
+                    Verificaremos tu pago. El estado lo podés seguir desde{" "}
+                    <Link
+                      href="/mis-compras"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Mis compras
+                    </Link>
+                    .
+                  </>
+                )}
               </p>
             </div>
           )}
@@ -243,14 +268,20 @@ function OrderConfirmedContent() {
 
                 <div className="rounded-xl border border-dashed bg-muted/20 p-4">
                   <p className="text-sm leading-6 text-muted-foreground">
-                    El estado de tu pedido lo podés seguir desde{" "}
-                    <Link
-                      href="/mis-compras"
-                      className="font-medium underline underline-offset-4"
-                    >
-                      Mis compras
-                    </Link>
-                    . Te lo enviaremos a la dirección indicada en tu pedido.
+                    {isGuest ? (
+                      "Te enviaremos el pedido a la dirección indicada y te notificaremos por email."
+                    ) : (
+                      <>
+                        El estado de tu pedido lo podés seguir desde{" "}
+                        <Link
+                          href="/mis-compras"
+                          className="font-medium underline underline-offset-4"
+                        >
+                          Mis compras
+                        </Link>
+                        . Te lo enviaremos a la dirección indicada en tu pedido.
+                      </>
+                    )}
                   </p>
                 </div>
               </>
@@ -290,15 +321,21 @@ function OrderConfirmedContent() {
 
                 <div className="rounded-xl border border-dashed bg-muted/20 p-4">
                   <p className="text-sm leading-6 text-muted-foreground">
-                    El estado de tu pedido lo podés seguir desde{" "}
-                    <Link
-                      href="/mis-compras"
-                      className="font-medium underline underline-offset-4"
-                    >
-                      Mis compras
-                    </Link>
-                    . Cuando llegue el momento del retiro, pasá por el local
-                    dentro de la franja horaria elegida.
+                    {isGuest ? (
+                      "Cuando llegue el momento del retiro, pasá por el local dentro de la franja horaria elegida."
+                    ) : (
+                      <>
+                        El estado de tu pedido lo podés seguir desde{" "}
+                        <Link
+                          href="/mis-compras"
+                          className="font-medium underline underline-offset-4"
+                        >
+                          Mis compras
+                        </Link>
+                        . Cuando llegue el momento del retiro, pasá por el local
+                        dentro de la franja horaria elegida.
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -314,6 +351,14 @@ function OrderConfirmedContent() {
               </p>
             </div>
           </div>
+
+          {isGuest && guestContact?.email && (
+            <GuestRegisterPrompt
+              name={guestContact.name}
+              email={guestContact.email}
+              phone={guestContact.phone}
+            />
+          )}
 
           <div className="flex flex-col justify-center gap-4 pt-2 sm:flex-row">
             <Link href="/">
