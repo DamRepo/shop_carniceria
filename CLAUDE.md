@@ -213,3 +213,31 @@ TELEGRAM_BOT_TOKEN         # Bot de Telegram
 TELEGRAM_CHAT_ID           # Chat ID para notificaciones
 NEXT_PUBLIC_WHATSAPP_NUMBER
 ```
+
+## Reglas de calidad para agentes
+
+### TypeScript
+- **Nunca usar `any`**. Si el tipo no se conoce, usar `unknown` y narrowing, o definir una interfaz.
+- Antes de usar una propiedad de un objeto, verificar que esté declarada en su tipo. Si no está, agregarla.
+- Siempre correr `npm run typecheck` antes de dar una tarea por terminada.
+- Los tipos locales (como intersecciones `Product & {...}`) deben incluir TODAS las propiedades que se usen en el bloque de código.
+
+### ESLint
+- Nunca dejar variables, imports o parámetros declarados sin usar.
+- Si un parámetro es requerido por la firma pero no se usa, prefijar con `_` (ej: `_request`).
+- Nunca dejar `console.log` en código de producción.
+
+### Antes de terminar cualquier tarea
+1. Correr `npm run check` (typecheck + lint).
+2. Si hay errores de TypeScript → corregirlos, no ignorarlos.
+3. Si hay warnings de ESLint → evaluar si son ignorables o requieren fix.
+4. Nunca usar `// @ts-ignore` o `// eslint-disable` sin justificación explícita en un comentario.
+
+### Consistencia con el modelo de datos
+- El schema fuente de verdad es `prisma/schema.prisma`.
+- Antes de crear tipos locales que extiendan `Product`, `Order`, `User`, etc., verificar los campos reales en el schema.
+- Si el schema tiene `minPurchaseQty`, ese campo debe estar en todos los tipos que extienden `Product`.
+
+### Seguridad
+- Nunca exponer variables de entorno al cliente (`NEXT_PUBLIC_` solo para datos públicos).
+- Nunca logear datos sensibles (passwords, tokens, datos de tarjetas).
