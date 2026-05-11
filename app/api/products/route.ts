@@ -121,8 +121,7 @@ export async function GET(req: Request) {
       },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const normalizedProducts = (products ?? []).map((product: any) => ({
+    const normalizedProducts = (products ?? []).map((product) => ({
       ...product,
       stock: stockFromDb(product.unitType, product.stock),
     }));

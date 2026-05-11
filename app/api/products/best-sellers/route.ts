@@ -67,10 +67,9 @@ export async function GET() {
       },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sorted = (products as any[])
-      .sort((a: any, b: any) => (rankMap.get(a.id) ?? 99) - (rankMap.get(b.id) ?? 99))
-      .map((p: any) => ({
+    const sorted = products
+      .sort((a, b) => (rankMap.get(a.id) ?? 99) - (rankMap.get(b.id) ?? 99))
+      .map((p) => ({
         ...p,
         stock: stockFromDb(p.unitType, p.stock),
         isOnSale: p.isOnSale && (!p.saleEndDate || p.saleEndDate > now),

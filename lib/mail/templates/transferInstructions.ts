@@ -21,8 +21,6 @@ export function transferInstructionsTemplate(params: {
     `  CVU: ${TRANSFER_INFO.cvu}`,
     `  Titular: ${TRANSFER_INFO.name}`,
     ``,
-    `Una vez realizada la transferencia, subí el comprobante desde "Mis pedidos" en nuestra web para que podamos verificarlo rápidamente.`,
-    ``,
     `Cualquier duda, escribinos por WhatsApp.`,
   ].join("\n");
 
@@ -72,15 +70,6 @@ export function transferInstructionsTemplate(params: {
                   <td style="padding:10px 16px;font-weight:600;">${esc(TRANSFER_INFO.name)}</td>
                 </tr>
               </table>
-
-              <!-- Próximo paso -->
-              <div style="background:#e8f5e9;border-left:4px solid #4caf50;padding:14px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">
-                <p style="margin:0;font-size:13px;color:#2e7d32;">
-                  <strong>📸 Próximo paso:</strong> Una vez que hayas realizado la transferencia,
-                  subí el comprobante desde <strong>Mis pedidos</strong> en nuestra web para que
-                  podamos verificarlo rápidamente.
-                </p>
-              </div>
 
               <p style="color:#555;font-size:13px;margin:0;">
                 Cualquier duda, escribinos por WhatsApp.

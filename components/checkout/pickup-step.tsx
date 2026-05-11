@@ -396,7 +396,7 @@ export function PickupStep({
           <p className="text-sm leading-6 text-muted-foreground">
             Elegí cuándo pensás pasar a buscar el pedido. Después también vas a
             poder ver esta información en{" "}
-            <span className="font-medium">"Mis compras"</span>.
+            <span className="font-medium">&quot;Mis compras&quot;</span>.
           </p>
         </div>
 

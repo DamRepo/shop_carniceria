@@ -21,19 +21,23 @@ const paymentMethods = [
 
 export function Footer() {
   return (
-    <footer className="mt-20 w-full bg-zinc-950 text-zinc-300">
+    <footer className="mt-20 w-full bg-charcoal text-smoke border-t-2 border-primary">
       <div className="mx-auto max-w-screen-2xl px-6 py-14">
 
-        {/* columnas */}
+        {/* Columnas */}
         <div className="grid gap-12 md:grid-cols-3">
 
-          {/* marca */}
-          <div className="space-y-5">
-            <h2 className="text-xl font-semibold text-white">
+          {/* Marca */}
+          <div className="border-l-2 border-primary pl-4 space-y-5">
+            <h2 className="font-display text-3xl tracking-widest text-foreground">
               Carnicería El Negro
             </h2>
 
-            <p className="text-sm leading-6 text-zinc-400 max-w-xs">
+            <p className="font-serif italic text-sm text-smoke">
+              Desde hace más de 7 años. San José de Feliciano.
+            </p>
+
+            <p className="text-sm leading-6 text-smoke max-w-xs">
               Compra online de forma simple y segura. Elegí tus productos y
               coordiná retiro o entrega.
             </p>
@@ -41,8 +45,8 @@ export function Footer() {
             <div className="space-y-3 text-sm">
 
               <div className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 text-red-500 mt-1" />
-                <p>
+                <MapPin className="h-4 w-4 text-primary mt-1 shrink-0" />
+                <p className="text-smoke">
                   Calle Sarmiento N°403
                   <br />
                   San José de Feliciano, Entre Ríos
@@ -50,18 +54,18 @@ export function Footer() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-red-500" />
+                <Phone className="h-4 w-4 text-primary shrink-0" />
                 <a
                   href="tel:+5493458556104"
-                  className="hover:text-white transition"
+                  className="hover:text-foreground transition-colors"
                 >
                   +54 9 3458 556104
                 </a>
               </div>
 
               <div className="flex items-start gap-2">
-                <Clock className="h-4 w-4 text-red-500 mt-1" />
-                <p>
+                <Clock className="h-4 w-4 text-primary mt-1 shrink-0" />
+                <p className="text-smoke">
                   Lunes a Sábado: 7:30 - 13:00 / 16:00 - 21:00
                   <br />
                   Domingos: 8:30 - 13:00
@@ -71,9 +75,9 @@ export function Footer() {
             </div>
           </div>
 
-          {/* links */}
+          {/* Links */}
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">
+            <h3 className="font-sans uppercase tracking-widest text-xs text-smoke mb-4">
               Información
             </h3>
 
@@ -81,7 +85,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/terminos-y-condiciones"
-                  className="hover:text-white transition"
+                  className="hover:text-foreground transition-colors"
                 >
                   Términos y condiciones
                 </Link>
@@ -90,7 +94,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/politica-de-privacidad"
-                  className="hover:text-white transition"
+                  className="hover:text-foreground transition-colors"
                 >
                   Política de privacidad
                 </Link>
@@ -99,7 +103,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/soporte"
-                  className="hover:text-white transition"
+                  className="hover:text-foreground transition-colors"
                 >
                   Soporte
                 </Link>
@@ -107,34 +111,35 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* arrepentimiento */}
+          {/* Atención al cliente */}
           <div className="space-y-6">
 
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+            <h3 className="font-sans uppercase tracking-widest text-xs text-smoke">
               Atención al cliente
             </h3>
 
-            <p className="text-sm text-zinc-400 leading-6">
+            <p className="text-sm text-smoke leading-6">
               Si tuviste un problema con tu compra online podés comunicarte con
               nosotros o solicitar la cancelación.
             </p>
 
             <Link
               href="/arrepentimiento"
-              className="inline-flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white hover:bg-red-700 transition"
+              className="inline-flex items-center gap-2 rounded-none bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-blood-dark transition-colors"
             >
               <RotateCcw className="h-4 w-4" />
               Botón de arrepentimiento
             </Link>
 
-            {/* redes */}
+            {/* Redes sociales */}
             <div className="flex gap-3 pt-2">
 
               <a
                 href="https://wa.me/5493458556104"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-green-500 transition"
+                aria-label="WhatsApp"
+                className="flex h-10 w-10 items-center justify-center border border-iron hover:border-green-500 hover:text-green-500 transition-colors"
               >
                 <MessageCircle className="h-4 w-4" />
               </a>
@@ -143,7 +148,8 @@ export function Footer() {
                 href="https://www.instagram.com/elnegrocarniceria/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-pink-500 transition"
+                aria-label="Instagram"
+                className="flex h-10 w-10 items-center justify-center border border-iron hover:border-pink-500 hover:text-pink-500 transition-colors"
               >
                 <Instagram className="h-4 w-4" />
               </a>
@@ -152,7 +158,8 @@ export function Footer() {
                 href="https://www.facebook.com/sergio744470"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 hover:border-blue-500 transition"
+                aria-label="Facebook"
+                className="flex h-10 w-10 items-center justify-center border border-iron hover:border-blue-500 hover:text-blue-500 transition-colors"
               >
                 <Facebook className="h-4 w-4" />
               </a>
@@ -162,13 +169,13 @@ export function Footer() {
           </div>
         </div>
 
-        {/* separador */}
-        <div className="border-t border-zinc-800 my-10"></div>
+        {/* Separador */}
+        <div className="border-t border-iron my-10" />
 
-        {/* pagos centrados */}
+        {/* Pagos centrados */}
         <div className="flex flex-col items-center gap-4">
 
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
+          <div className="flex items-center gap-2 text-sm text-smoke">
             <CreditCard className="h-4 w-4" />
             Medios de pago aceptados
           </div>
@@ -177,7 +184,7 @@ export function Footer() {
             {paymentMethods.map((method) => (
               <div
                 key={method.name}
-                className="relative h-10 w-16 rounded-md bg-white p-1"
+                className="relative h-10 w-16 rounded-none bg-white p-1"
               >
                 <Image
                   src={method.logo}
@@ -189,11 +196,14 @@ export function Footer() {
             ))}
           </div>
 
-          <p className="text-sm text-zinc-500 pt-4 text-center">
-            © {new Date().getFullYear()} Carnicería El Negro. Todos los derechos reservados.
-          </p>
-
         </div>
+      </div>
+
+      {/* Bottom bar */}
+      <div className="bg-black py-4">
+        <p className="text-xs text-smoke text-center">
+          © {new Date().getFullYear()} Carnicería El Negro. Todos los derechos reservados.
+        </p>
       </div>
     </footer>
   );

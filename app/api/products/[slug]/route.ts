@@ -138,8 +138,7 @@ export async function GET(
       stock: stockFromDb(product.unitType, product.stock),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const normalizedRelated = (related as any[]).map((item: any) => ({
+    const normalizedRelated = related.map((item) => ({
       ...item,
       stock: stockFromDb(item.unitType, item.stock),
     }));

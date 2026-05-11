@@ -68,8 +68,7 @@ export async function GET(
     const shuffled = [...products].sort(() => Math.random() - 0.5);
     const randomProducts = shuffled.slice(0, 6);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const normalizedProducts = (randomProducts as any[]).map((product: any) => ({
+    const normalizedProducts = randomProducts.map((product) => ({
       ...product,
       stock: stockFromDb(product.unitType, product.stock),
     }));

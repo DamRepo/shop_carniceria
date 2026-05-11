@@ -55,11 +55,11 @@ import { formatPrice } from "@/lib/utils-format";
 type MenuItem =
   | { type: "link"; href: string; label: string }
   | {
-      type: "dropdown";
-      href: string;
-      label: string;
-      items: { href: string; label: string }[];
-    };
+    type: "dropdown";
+    href: string;
+    label: string;
+    items: { href: string; label: string }[];
+  };
 
 type SearchProduct = {
   id: string;
@@ -299,7 +299,7 @@ export function Header() {
   }, [showDropdown]);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-black/95 backdrop-blur supports-[backdrop-filter]:bg-black/90">
+    <header className="sticky top-0 z-50 w-full bg-[#0D0D0D]/98 backdrop-blur supports-[backdrop-filter]:bg-[#0D0D0D]/95 border-b border-iron">
       <Suspense fallback={null}>
         <SearchParamsSync
           setCategory={setActiveCategory}
@@ -309,7 +309,7 @@ export function Header() {
       </Suspense>
 
       {/* ===================== FILA 1 ===================== */}
-      <div className="border-b border-zinc-800 shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
+      <div className="border-b border-iron shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
         <div className="container mx-auto max-w-7xl px-4 py-2">
 
           {/* ✅ MOBILE TOP BAR (estilo Meli) */}
@@ -340,21 +340,21 @@ export function Header() {
                     }}
                     onFocus={() => setSearchOpen(true)}
                     placeholder="Buscar productos..."
-                    className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
+                    className="pl-9 h-10 bg-iron/60 border-iron text-bone placeholder:text-smoke"
                   />
                 </form>
 
                 {showDropdown && (
                   <div
-                    className="absolute mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl overflow-hidden z-50"
+                    className="absolute mt-2 w-full rounded-xl border border-iron bg-charcoal shadow-xl overflow-hidden z-50"
                     onMouseDown={(e) => e.preventDefault()}
                   >
-                    <div className="px-3 py-2 text-xs text-zinc-400 border-b border-zinc-800">
+                    <div className="px-3 py-2 text-xs text-smoke border-b border-iron">
                       {searchLoading
                         ? "Buscando..."
                         : results.length > 0
-                        ? `${results.length} resultado(s)`
-                        : "Sin resultados"}
+                          ? `${results.length} resultado(s)`
+                          : "Sin resultados"}
                     </div>
 
                     <div className="max-h-80 overflow-auto">
@@ -363,9 +363,9 @@ export function Header() {
                           key={p.id}
                           href={`/productos/${p.slug}`}
                           onClick={closeSearch}
-                          className="flex items-center gap-3 px-3 py-3 hover:bg-zinc-900 transition-colors"
+                          className="flex items-center gap-3 px-3 py-3 hover:bg-iron transition-colors"
                         >
-                          <div className="h-10 w-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden relative shrink-0">
+                          <div className="h-10 w-10 rounded-lg bg-iron border border-iron/60 overflow-hidden relative shrink-0">
                             {p.image ? (
                               <Image
                                 src={p.image}
@@ -376,10 +376,10 @@ export function Header() {
                             ) : null}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-zinc-100 line-clamp-2">
+                            <div className="text-sm font-medium text-bone line-clamp-2">
                               {p.name}
                             </div>
-                            <div className="text-xs text-zinc-400">
+                            <div className="text-xs text-smoke">
                               {formatPrice(p.price)}
                             </div>
                           </div>
@@ -387,12 +387,12 @@ export function Header() {
                       ))}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                    <div className="px-3 py-2 border-t border-iron flex items-center justify-between gap-2">
                       {results.length >= 2 && (
                         <button
                           type="button"
                           onClick={goToSearchResults}
-                          className="text-xs text-red-400 hover:text-red-300 font-medium truncate text-left"
+                          className="text-xs text-primary hover:text-primary/80 font-medium truncate text-left"
                         >
                           Ver todos los resultados para &ldquo;{q.trim()}&rdquo;
                         </button>
@@ -400,7 +400,7 @@ export function Header() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400 shrink-0 ml-auto"
+                        className="text-smoke hover:bg-iron hover:text-primary shrink-0 ml-auto"
                         onClick={closeSearch}
                         type="button"
                       >
@@ -416,14 +416,14 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="relative hover:bg-zinc-900 text-zinc-200"
+                  className="relative hover:bg-iron text-bone"
                   type="button"
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {mounted && (totalItems ?? 0) > 0 && (
                     <span
                       className={[
-                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center",
+                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-xs font-bold text-primary-foreground flex items-center justify-center",
                         "transition-transform duration-150",
                         cartBumped ? "scale-125" : "scale-100",
                       ].join(" ")}
@@ -438,7 +438,7 @@ export function Header() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="shrink-0 hover:bg-zinc-900 text-zinc-200"
+                className="shrink-0 hover:bg-iron text-bone"
                 onClick={() => {
                   setMobileMenuOpen((v) => !v);
                   if (mobileMenuOpen) setMobileCatsOpen(false);
@@ -468,10 +468,10 @@ export function Header() {
               </div>
 
               <div className="flex flex-col leading-tight">
-                <span className="text-[13px] sm:text-sm font-semibold text-white">
+                <span className="font-display text-base tracking-widest text-white">
                   Carnicería El Negro
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-zinc-400">
+                <span className="font-sans text-[9px] text-smoke uppercase tracking-widest">
                   Fábrica de embutidos
                 </span>
               </div>
@@ -481,7 +481,7 @@ export function Header() {
             <div className="hidden lg:block" ref={searchBoxDesktopRef}>
               <div className="relative max-w-3xl mx-auto">
                 <form onSubmit={handleSearchSubmit} className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-smoke" />
                   <Input
                     value={q}
                     onChange={(e) => {
@@ -490,21 +490,21 @@ export function Header() {
                     }}
                     onFocus={() => setSearchOpen(true)}
                     placeholder="Buscar productos..."
-                    className="pl-9 h-10 bg-zinc-950/40 border-zinc-800 text-zinc-200 placeholder:text-zinc-500"
+                    className="pl-9 h-10 bg-iron/60 border-iron text-bone placeholder:text-smoke"
                   />
                 </form>
 
                 {showDropdown && (
                   <div
-                    className="absolute mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl overflow-hidden"
+                    className="absolute mt-2 w-full rounded-xl border border-iron bg-charcoal shadow-xl overflow-hidden"
                     onMouseDown={(e) => e.preventDefault()}
                   >
-                    <div className="px-3 py-2 text-xs text-zinc-400 border-b border-zinc-800">
+                    <div className="px-3 py-2 text-xs text-smoke border-b border-iron">
                       {searchLoading
                         ? "Buscando..."
                         : results.length > 0
-                        ? `${results.length} resultado(s)`
-                        : "Sin resultados"}
+                          ? `${results.length} resultado(s)`
+                          : "Sin resultados"}
                     </div>
 
                     <div className="max-h-80 overflow-auto">
@@ -513,9 +513,9 @@ export function Header() {
                           key={p.id}
                           href={`/productos/${p.slug}`}
                           onClick={closeSearch}
-                          className="flex items-center gap-3 px-3 py-3 hover:bg-zinc-900 transition-colors"
+                          className="flex items-center gap-3 px-3 py-3 hover:bg-iron transition-colors"
                         >
-                          <div className="h-10 w-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden relative shrink-0">
+                          <div className="h-10 w-10 rounded-lg bg-iron border border-iron/60 overflow-hidden relative shrink-0">
                             {p.image ? (
                               <Image
                                 src={p.image}
@@ -527,10 +527,10 @@ export function Header() {
                           </div>
 
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-zinc-100 line-clamp-2">
+                            <div className="text-sm font-medium text-bone line-clamp-2">
                               {p.name}
                             </div>
-                            <div className="text-xs text-zinc-400">
+                            <div className="text-xs text-smoke">
                               {formatPrice(p.price)}
                             </div>
                           </div>
@@ -538,12 +538,12 @@ export function Header() {
                       ))}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                    <div className="px-3 py-2 border-t border-iron flex items-center justify-between gap-2">
                       {results.length >= 2 && (
                         <button
                           type="button"
                           onClick={goToSearchResults}
-                          className="text-xs text-red-400 hover:text-red-300 font-medium truncate text-left"
+                          className="text-xs text-primary hover:text-primary/80 font-medium truncate text-left"
                         >
                           Ver todos los resultados para &ldquo;{q.trim()}&rdquo;
                         </button>
@@ -551,7 +551,7 @@ export function Header() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-300 hover:bg-zinc-900 hover:text-red-400 shrink-0 ml-auto"
+                        className="text-smoke hover:bg-iron hover:text-primary shrink-0 ml-auto"
                         onClick={closeSearch}
                         type="button"
                       >
@@ -573,15 +573,16 @@ export function Header() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="gap-2 hover:bg-zinc-900 text-zinc-200"
+                        className="gap-2 hover:bg-iron text-bone"
                       >
                         {(session.user as { image?: string | null }).image ? (
-                          <img
+                          <Image
                             src={(session.user as { image?: string | null }).image!}
                             alt={session.user?.name ?? "Avatar"}
                             width={32}
                             height={32}
                             className="w-8 h-8 rounded-full object-cover shrink-0"
+                            unoptimized
                           />
                         ) : (
                           <span className="w-8 h-8 rounded-full bg-red-600 text-white text-xs font-semibold flex items-center justify-center shrink-0 select-none">
@@ -599,21 +600,21 @@ export function Header() {
 
                     <DropdownMenuContent
                       align="end"
-                      className="w-56 bg-zinc-900 border-zinc-800"
+                      className="w-56 bg-charcoal border-iron"
                     >
                       <div className="px-2 py-1.5">
                         <p className="text-sm font-medium text-white">
                           {session.user?.name}
                         </p>
-                        <p className="text-xs text-zinc-400">
+                        <p className="text-xs text-smoke">
                           {session.user?.email}
                         </p>
                       </div>
 
-                      <DropdownMenuSeparator className="bg-zinc-800" />
+                      <DropdownMenuSeparator className="bg-iron" />
 
                       <DropdownMenuItem
-                        className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
                         onClick={() => router.push("/perfil")}
                       >
                         <UserCircle className="h-4 w-4 mr-2" />
@@ -622,7 +623,7 @@ export function Header() {
 
                       {session.user?.role !== "ADMIN" && (
                         <DropdownMenuItem
-                          className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                          className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
                           onClick={() => router.push("/mis-compras")}
                         >
                           <Package className="h-4 w-4 mr-2" />
@@ -632,7 +633,7 @@ export function Header() {
 
                       {session.user?.role === "ADMIN" && (
                         <DropdownMenuItem
-                          className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                          className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
                           onClick={() => router.push("/admin")}
                         >
                           <LayoutDashboard className="h-4 w-4 mr-2" />
@@ -640,10 +641,10 @@ export function Header() {
                         </DropdownMenuItem>
                       )}
 
-                      <DropdownMenuSeparator className="bg-zinc-800" />
+                      <DropdownMenuSeparator className="bg-iron" />
 
                       <DropdownMenuItem
-                        className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                        className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
                         onClick={() => signOut()}
                       >
                         <LogOut className="h-4 w-4 mr-2" />
@@ -657,7 +658,7 @@ export function Header() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="hover:bg-zinc-900 text-zinc-200"
+                        className="hover:bg-iron text-bone"
                       >
                         <User className="h-4 w-4 mr-1" />
                         Login
@@ -666,7 +667,7 @@ export function Header() {
                     <Link href="/auth/register">
                       <Button
                         size="sm"
-                        className="bg-red-600 hover:bg-red-700 text-white"
+                        className="bg-primary hover:bg-blood-dark text-primary-foreground rounded-none"
                       >
                         Registrarse
                       </Button>
@@ -680,14 +681,14 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="relative hover:bg-zinc-900 text-zinc-200"
+                  className="relative hover:bg-iron text-bone"
                   type="button"
                 >
                   <ShoppingCart className="h-5 w-5" />
                   {mounted && (totalItems ?? 0) > 0 && (
                     <span
                       className={[
-                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-bold text-white flex items-center justify-center",
+                        "absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-xs font-bold text-primary-foreground flex items-center justify-center",
                         "transition-transform duration-150",
                         cartBumped ? "scale-125" : "scale-100",
                       ].join(" ")}
@@ -703,7 +704,7 @@ export function Header() {
       </div>
 
       {/* ===================== FILA 2 (TU MENÚ DE ABAJO EN PC) ===================== */}
-      <div className="bg-zinc-900/70 border-b border-zinc-800">
+      <div className="bg-iron/50 border-b border-iron">
         <div className="container mx-auto max-w-7xl px-4">
           {/* Desktop nav */}
           <nav className="hidden lg:flex items-center justify-center gap-2 py-2 flex-wrap">
@@ -713,7 +714,7 @@ export function Header() {
                   type="button"
                   className={[
                     "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap",
-                    "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                    "text-bone hover:text-primary hover:bg-iron/60",
                   ].join(" ")}
                 >
                   Categorías
@@ -723,19 +724,19 @@ export function Header() {
 
               <DropdownMenuContent
                 align="start"
-                className="w-72 bg-zinc-900 border-zinc-800"
+                className="w-72 bg-charcoal border-iron"
               >
                 {catsLoading ? (
-                  <div className="px-3 py-2 text-sm text-zinc-400">Cargando...</div>
+                  <div className="px-3 py-2 text-sm text-smoke">Cargando...</div>
                 ) : navCategories.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-zinc-400">Sin categorías</div>
+                  <div className="px-3 py-2 text-sm text-smoke">Sin categorías</div>
                 ) : (
                   <div className="max-h-96 overflow-auto py-1">
                     {navCategories.map((parent) => (
                       <div key={parent.id} className="px-1">
                         <DropdownMenuItem
                           asChild
-                          className="cursor-pointer text-zinc-200 focus:text-white focus:bg-zinc-800 hover:text-red-400 font-semibold"
+                          className="cursor-pointer text-bone focus:text-white focus:bg-iron hover:text-primary font-semibold"
                         >
                           <Link href={`/productos?category=${encodeURIComponent(parent.slug)}`}>
                             {parent.name}
@@ -743,12 +744,12 @@ export function Header() {
                         </DropdownMenuItem>
 
                         {parent.children?.length ? (
-                          <div className="ml-3 mb-2 border-l border-zinc-800">
+                          <div className="ml-3 mb-2 border-l border-iron">
                             {parent.children.map((child) => (
                               <DropdownMenuItem
                                 key={child.id}
                                 asChild
-                                className="cursor-pointer text-zinc-300 focus:text-white focus:bg-zinc-800 hover:text-red-400"
+                                className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
                               >
                                 <Link href={`/productos?category=${encodeURIComponent(child.slug)}`}>
                                   {child.name}
@@ -758,7 +759,7 @@ export function Header() {
                           </div>
                         ) : null}
 
-                        <DropdownMenuSeparator className="bg-zinc-800" />
+                        <DropdownMenuSeparator className="bg-iron" />
                       </div>
                     ))}
                   </div>
@@ -777,8 +778,8 @@ export function Header() {
                     className={[
                       "px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap",
                       active
-                        ? "bg-red-500/10 text-red-400 border-b-2 border-red-500"
-                        : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                        ? "text-primary border-b-2 border-primary bg-transparent"
+                        : "text-bone hover:text-primary hover:bg-iron/60",
                     ].join(" ")}
                   >
                     {item.label}
@@ -792,14 +793,14 @@ export function Header() {
 
           {/* Mobile menu (hamburguesa) */}
           {mobileMenuOpen && (
-            <div className="lg:hidden border-t border-zinc-800 py-2">
+            <div className="lg:hidden border-t border-iron py-2">
               <nav className="flex flex-col gap-1">
 
-                {/* ✅ Cuenta arriba del menú */}
+                {/* Cuenta arriba del menú */}
                 <div className="px-2 pb-2">
                   {status === "authenticated" && session ? (
-                    <div className="rounded-md border border-zinc-800 bg-zinc-950/40 overflow-hidden">
-                      <div className="px-3 py-2 text-xs text-zinc-400">
+                    <div className="rounded-sm border border-iron bg-charcoal overflow-hidden">
+                      <div className="px-3 py-2 text-xs text-smoke">
                         {session.user?.name || "Usuario"}
                       </div>
 
@@ -811,7 +812,7 @@ export function Header() {
                               setMobileMenuOpen(false);
                               setMobileCatsOpen(false);
                             }}
-                            className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                            className="block px-3 py-3 text-sm text-bone hover:text-primary hover:bg-iron/60"
                           >
                             Mi perfil
                           </Link>
@@ -821,7 +822,7 @@ export function Header() {
                               setMobileMenuOpen(false);
                               setMobileCatsOpen(false);
                             }}
-                            className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                            className="block px-3 py-3 text-sm text-bone hover:text-primary hover:bg-iron/60"
                           >
                             Mis compras
                           </Link>
@@ -835,7 +836,7 @@ export function Header() {
                             setMobileMenuOpen(false);
                             setMobileCatsOpen(false);
                           }}
-                          className="block px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                          className="block px-3 py-3 text-sm text-bone hover:text-primary hover:bg-iron/60"
                         >
                           Dashboard Admin
                         </Link>
@@ -848,7 +849,7 @@ export function Header() {
                           setMobileCatsOpen(false);
                           signOut();
                         }}
-                        className="w-full text-left px-3 py-3 text-sm text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                        className="w-full text-left px-3 py-3 text-sm text-bone hover:text-primary hover:bg-iron/60"
                       >
                         Cerrar sesión
                       </button>
@@ -861,7 +862,7 @@ export function Header() {
                           setMobileMenuOpen(false);
                           setMobileCatsOpen(false);
                         }}
-                        className="text-center px-3 py-2 text-sm font-medium rounded-md border border-zinc-800 text-zinc-200 hover:text-red-400 hover:bg-zinc-900/60"
+                        className="text-center px-3 py-2 text-sm font-medium rounded-sm border border-iron text-bone hover:text-primary hover:bg-iron/60"
                       >
                         Login
                       </Link>
@@ -872,7 +873,7 @@ export function Header() {
                           setMobileMenuOpen(false);
                           setMobileCatsOpen(false);
                         }}
-                        className="text-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700"
+                        className="text-center px-3 py-2 text-sm font-medium rounded-none bg-primary text-primary-foreground hover:bg-blood-dark"
                       >
                         Registrarse
                       </Link>
@@ -881,15 +882,15 @@ export function Header() {
                 </div>
 
                 {/* Categorías (mobile acordeón) */}
-                <div className="rounded-md overflow-hidden">
+                <div className="rounded-sm overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setMobileCatsOpen((v) => !v)}
                     className={[
-                      "w-full px-4 py-3 text-sm font-medium rounded-md transition-all flex items-center justify-between",
+                      "w-full px-4 py-3 text-sm font-medium rounded-sm transition-all flex items-center justify-between",
                       mobileCatsOpen
-                        ? "bg-red-500/10 text-red-400"
-                        : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                        ? "bg-primary/10 text-primary"
+                        : "text-bone hover:text-primary hover:bg-iron/60",
                     ].join(" ")}
                   >
                     <span>Categorías</span>
@@ -897,11 +898,11 @@ export function Header() {
                   </button>
 
                   {mobileCatsOpen && (
-                    <div className="mt-1 ml-3 mr-1 border-l border-zinc-800">
+                    <div className="mt-1 ml-3 mr-1 border-l border-iron">
                       {catsLoading ? (
-                        <div className="px-4 py-2 text-sm text-zinc-400">Cargando...</div>
+                        <div className="px-4 py-2 text-sm text-smoke">Cargando...</div>
                       ) : navCategories.length === 0 ? (
-                        <div className="px-4 py-2 text-sm text-zinc-400">Sin categorías</div>
+                        <div className="px-4 py-2 text-sm text-smoke">Sin categorías</div>
                       ) : (
                         navCategories.map((parent) => (
                           <div key={parent.id} className="py-1">
@@ -911,13 +912,13 @@ export function Header() {
                                 setMobileMenuOpen(false);
                                 setMobileCatsOpen(false);
                               }}
-                              className="block px-4 py-2 text-sm rounded-md transition-colors text-zinc-200 hover:text-red-400 hover:bg-zinc-800/40 font-semibold"
+                              className="block px-4 py-2 text-sm rounded-sm transition-colors text-bone hover:text-primary hover:bg-iron/40 font-semibold"
                             >
                               {parent.name}
                             </Link>
 
                             {parent.children?.length ? (
-                              <div className="ml-3 border-l border-zinc-800">
+                              <div className="ml-3 border-l border-iron">
                                 {parent.children.map((child) => (
                                   <Link
                                     key={child.id}
@@ -926,8 +927,8 @@ export function Header() {
                                       setMobileMenuOpen(false);
                                       setMobileCatsOpen(false);
                                     }}
-                                    className="block px-4 py-2 text-sm rounded-md transition-colors text-zinc-300 hover:text-red-400 hover:bg-zinc-800/40"
-                                    >
+                                    className="block px-4 py-2 text-sm rounded-sm transition-colors text-smoke hover:text-primary hover:bg-iron/40"
+                                  >
                                     {child.name}
                                   </Link>
                                 ))}
@@ -954,10 +955,10 @@ export function Header() {
                           setMobileCatsOpen(false);
                         }}
                         className={[
-                          "px-4 py-3 text-sm font-medium rounded-md transition-all",
+                          "px-4 py-3 text-sm font-medium rounded-sm transition-all",
                           active
-                            ? "bg-red-500/10 text-red-400 border-l-2 border-red-500"
-                            : "text-zinc-200 hover:text-red-400 hover:bg-zinc-800/60",
+                            ? "text-primary border-l-2 border-primary bg-transparent"
+                            : "text-bone hover:text-primary hover:bg-iron/60",
                         ].join(" ")}
                       >
                         {item.label}

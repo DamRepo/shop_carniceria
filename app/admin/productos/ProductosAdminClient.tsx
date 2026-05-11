@@ -670,7 +670,7 @@ export function ProductosAdminClient({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Precio por unidad de medida</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">Al estilo DIA · "Precio por 1 Kg $ 9.050". Dejá "un × 1" si no aplica.</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Al estilo DIA · &quot;Precio por 1 Kg $ 9.050&quot;. Dejá &quot;un × 1&quot; si no aplica.</p>
                   </div>
                   {unitPricePreview && (
                     <span className="flex-shrink-0 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1">

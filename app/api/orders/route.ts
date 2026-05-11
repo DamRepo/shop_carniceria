@@ -190,10 +190,10 @@ export async function POST(request: Request) {
       where: { id: { in: ids }, isActive: true },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const byId = new Map<string, any>((products as any[]).map((p: any) => [p.id, p]));
+    type ProductRow = (typeof products)[number];
+    const byId = new Map<string, ProductRow>(products.map((p) => [p.id, p]));
 
-    const existingIds = new Set(products.map((p: any) => p.id));
+    const existingIds = new Set(products.map((p) => p.id));
     const missingIds = ids.filter((id) => !existingIds.has(id));
 
     console.log(`[orders] Buscando: [${ids.join(", ")}]`);

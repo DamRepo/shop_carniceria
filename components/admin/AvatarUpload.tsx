@@ -131,6 +131,7 @@ export function AvatarUpload({ size = "sm", onChanged }: AvatarUploadProps) {
         disabled={uploading}
       >
         {displaySrc ? (
+          // eslint-disable-next-line @next/next/no-img-element -- displaySrc puede ser un blob URL durante preview de upload, no compatible con next/image
           <img
             src={displaySrc}
             alt={name}

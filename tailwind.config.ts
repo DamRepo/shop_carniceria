@@ -16,6 +16,11 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Bebas Neue', 'Impact', 'sans-serif'],
+        serif: ['Playfair Display', 'Georgia', 'serif'],
+        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -50,11 +55,22 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        blood: '#9B1C1C',
+        'blood-dark': '#7F1D1D',
+        bone: '#F5EDE0',
+        charcoal: '#1A1A1A',
+        iron: '#2A2A2A',
+        ember: '#C2410C',
+        smoke: '#9A8E84',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      boxShadow: {
+        'glow-red': '0 0 20px rgba(155,28,28,0.4)',
+        'glow-red-sm': '0 0 10px rgba(155,28,28,0.25)',
       },
       keyframes: {
         'accordion-down': {

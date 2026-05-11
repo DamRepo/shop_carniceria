@@ -46,7 +46,11 @@
       "Bash(Get-ChildItem -Path \"C:/dev/shop_carniceria/components\" -Recurse -File)",
       "Bash(Select-Object FullName)",
       "Bash(Format-Table -AutoSize)",
-      "Bash(Get-ChildItem \"C:\\\\dev\\\\shop_carniceria\\\\prisma\\\\migrations\\\\\" | Select-Object Name | Sort-Object Name *)"
+      "Bash(Get-ChildItem \"C:\\\\dev\\\\shop_carniceria\\\\prisma\\\\migrations\\\\\" | Select-Object Name | Sort-Object Name *)",
+      "Bash(Get-ChildItem \"C:\\\\dev\\\\shop_carniceria\" -Filter \".eslint*\")",
+      "Bash(Select-Object Name)",
+      "Read(//c/Users/Damian/.claude/**)",
+      "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\shop_carniceria\" -Recurse -Force)"
     ]
   },
   "enableAllProjectMcpServers": true,

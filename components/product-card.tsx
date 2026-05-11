@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Zap, Tag } from "lucide-react";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -196,19 +195,23 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Link href={`/productos/${product.slug}`} className="block h-full">
-      <Card
+      <article
         className="
           group h-full flex flex-col overflow-hidden
-          transition-all hover:shadow-lg hover:shadow-primary/20 hover:border-primary/50
+          border border-iron hover:border-primary/60
+          bg-card
+          transition-shadow duration-200 hover:shadow-glow-red-sm
+          rounded-sm
         "
       >
-        <div className="relative bg-muted overflow-hidden h-[220px] md:h-[240px]">
+        {/* Image */}
+        <div className="relative bg-charcoal overflow-hidden h-[200px] md:h-[220px]">
           {product.image && !imgError ? (
             <Image
               src={product.image}
               alt={product.name}
               fill
-              className="object-cover object-[center_30%] transition-transform group-hover:scale-[1.03]"
+              className="object-cover object-[center_30%] transition-all duration-300 group-hover:scale-[1.03] group-hover:brightness-110"
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               onError={() => setImgError(true)}
             />
@@ -220,13 +223,13 @@ export function ProductCard({ product }: ProductCardProps) {
 
           {offerActive && (
             <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1">
-              <Badge className="bg-red-600 hover:bg-red-700 text-white rounded-full px-3 py-1 shadow-md">
+              <Badge className="bg-blood hover:bg-blood-dark text-white rounded-none px-2 py-0.5 text-[10px] uppercase tracking-wide shadow-md">
                 <Tag className="h-3 w-3 mr-1" />
                 Oferta
               </Badge>
 
               {discount !== null && (
-                <Badge className="bg-black text-white font-bold rounded-full px-3 py-1 shadow-md">
+                <Badge className="bg-black text-white font-bold rounded-none px-2 py-0.5 text-[10px] shadow-md">
                   -{discount}%
                 </Badge>
               )}
@@ -234,20 +237,21 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
 
           {product.stock > 0 && product.stock <= 10 && (
-            <Badge className="absolute top-2 left-2 z-20 bg-amber-500 hover:bg-amber-600 text-white text-[11px] px-2 py-0.5">
+            <Badge className="absolute top-2 left-2 z-20 bg-amber-500 hover:bg-amber-600 text-white text-[11px] px-2 py-0.5 rounded-none">
               Últimas unidades
             </Badge>
           )}
 
           {product.stock <= 0 && (
-            <Badge className="absolute top-2 left-2 z-20 bg-red-600 hover:bg-red-700 text-white text-[11px] px-2 py-0.5">
+            <Badge className="absolute top-2 left-2 z-20 bg-blood hover:bg-blood-dark text-white text-[11px] px-2 py-0.5 rounded-none">
               Agotado
             </Badge>
           )}
         </div>
 
-        <CardContent className="p-3 flex-1 flex flex-col gap-1.5">
-          <h3 className="font-medium text-[14px] leading-snug line-clamp-2">
+        {/* Content */}
+        <div className="p-3 flex-1 flex flex-col gap-1.5">
+          <h3 className="font-sans font-semibold text-[13px] md:text-[15px] leading-snug line-clamp-2 text-foreground">
             {product.name}
           </h3>
 
@@ -256,26 +260,26 @@ export function ProductCard({ product }: ProductCardProps) {
           </p>
 
           {offerQtyLabel ? (
-            <p className="text-xs font-medium text-red-600">
+            <p className="text-xs font-medium text-primary">
               {offerQtyLabel}
             </p>
           ) : null}
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0.5">
             <div className="leading-tight">
               {offerActive && finalPrice !== product.price ? (
                 <>
                   <span className="block text-xs text-muted-foreground line-through">
                     {formatPrice(product.price)}
                   </span>
-                  <span className="block text-xl font-medium text-primary">
+                  <span className="block font-display text-3xl text-primary leading-none">
                     {formatPrice(finalPrice)}
                   </span>
                 </>
               ) : (
                 <>
                   <span className="block text-xs text-muted-foreground">{" "}</span>
-                  <span className="block text-xl font-medium text-primary">
+                  <span className="block font-display text-3xl text-primary leading-none">
                     {formatPrice(product.price)}
                   </span>
                 </>
@@ -300,13 +304,14 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
 
           <div className="mt-auto" />
-        </CardContent>
+        </div>
 
-        <CardFooter className="p-3 pt-0 flex flex-col gap-2">
+        {/* Footer buttons */}
+        <div className="p-3 pt-0 flex flex-col gap-2">
           <Button
             onClick={handleAddToCart}
             disabled={!canBuy}
-            className="w-full"
+            className="w-full rounded-none border-primary text-primary hover:bg-primary hover:text-primary-foreground"
             variant="outline"
             size="lg"
             type="button"
@@ -318,15 +323,15 @@ export function ProductCard({ product }: ProductCardProps) {
           <Button
             onClick={handleBuyNow}
             disabled={!canBuy}
-            className="w-full bg-primary hover:bg-primary/90"
+            className="w-full rounded-none bg-primary hover:bg-blood-dark text-primary-foreground font-semibold"
             size="lg"
             type="button"
           >
             <Zap className="mr-2 h-4 w-4" />
             Comprar ahora
           </Button>
-        </CardFooter>
-      </Card>
+        </div>
+      </article>
     </Link>
   );
 }

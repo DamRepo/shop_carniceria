@@ -90,8 +90,7 @@ export async function GET() {
         estimatedReadyAt: est.readyAt.toISOString(),
         estimatedReadyNote: est.note,
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        items: (o.items ?? []).map((item: any) => ({
+        items: (o.items ?? []).map((item) => ({
           ...item,
           createdAt: item.createdAt.toISOString(),
         })),

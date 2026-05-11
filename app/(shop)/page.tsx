@@ -48,6 +48,7 @@ type ProductWithSale = Product & {
   discountPercent?: number | null;
   vatRate?: number | null;
   category?: { vatRate?: number | null } | null;
+  minPurchaseQty?: number | null;
 };
 
 const features = [
@@ -528,7 +529,7 @@ export default function HomePage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col items-center space-y-4 text-center sm:space-y-6"
           >
-            <h1 className="text-2xl font-bold sm:text-3xl md:text-4xl">
+            <h1 className="font-display text-4xl sm:text-5xl md:text-6xl tracking-wider">
               Carnicería <span className="text-primary">El Negro</span>
             </h1>
 
@@ -538,17 +539,6 @@ export default function HomePage() {
               bolsillo.
             </p>
 
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <Link href="/ofertas">
-                <Button
-                  size="lg"
-                  className="bg-primary px-10 text-lg hover:bg-primary/80 transition-colors"
-                >
-                  <Tag className="mr-2 h-5 w-5" />
-                  Ver Ofertas
-                </Button>
-              </Link>
-            </div>
           </motion.div>
         </div>
       </section>
@@ -563,7 +553,7 @@ export default function HomePage() {
           >
             <div className="mb-4 flex items-center justify-center gap-2">
               <Star className="h-8 w-8 text-primary" fill="currentColor" />
-              <h2 className="text-3xl font-bold md:text-4xl">
+              <h2 className="font-display text-4xl md:text-5xl tracking-wider">
                 Productos Destacados
               </h2>
               <Star className="h-8 w-8 text-primary" fill="currentColor" />
@@ -633,7 +623,7 @@ export default function HomePage() {
           >
             <div className="mb-4 flex items-center justify-center gap-2">
               <Flame className="h-8 w-8 text-orange-500" fill="currentColor" />
-              <h2 className="text-3xl font-bold md:text-4xl">Más Vendidos</h2>
+              <h2 className="font-display text-4xl md:text-5xl tracking-wider">Más Vendidos</h2>
               <Flame className="h-8 w-8 text-orange-500" fill="currentColor" />
             </div>
             <p className="text-lg text-muted-foreground">
@@ -677,7 +667,7 @@ export default function HomePage() {
             transition={{ duration: 0.6 }}
             className="mb-6 text-center sm:mb-12"
           >
-            <h2 className="mb-4 text-3xl font-bold md:text-4xl">
+            <h2 className="mb-4 font-display text-4xl md:text-5xl tracking-wider">
               ¿Por qué elegirnos?
             </h2>
             <p className="text-lg text-muted-foreground">
@@ -697,7 +687,7 @@ export default function HomePage() {
                     inView1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
                   }
                   transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className="flex min-w-[200px] shrink-0 flex-col items-center rounded-lg border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md sm:min-w-0 sm:p-6"
+                  className="flex min-w-[200px] shrink-0 flex-col items-center rounded-sm border border-iron hover:border-primary/40 bg-charcoal p-4 text-center transition-shadow hover:shadow-glow-red-sm sm:min-w-0 sm:p-6"
                 >
                   <Icon className="mb-3 h-8 w-8 text-primary sm:mb-4 sm:h-12 sm:w-12" />
                   <h3 className="mb-1 text-base font-semibold sm:mb-2 sm:text-xl">
@@ -723,8 +713,8 @@ export default function HomePage() {
               </span>
             </div>
 
-            <h2 className="text-3xl font-bold md:text-4xl">
-              🔥 Ofertas de la semana
+            <h2 className="font-display text-4xl md:text-5xl tracking-wider">
+              Ofertas de la semana
             </h2>
 
             <p className="mt-2 text-muted-foreground">
@@ -805,9 +795,9 @@ export default function HomePage() {
                 : { opacity: 0, scale: 0.95 }
             }
             transition={{ duration: 0.6 }}
-            className="rounded-2xl border bg-gradient-to-r from-primary/10 to-secondary/10 p-5 text-center sm:p-8 md:p-12"
+            className="border border-iron border-l-4 border-l-primary bg-[#0D0D0D] p-5 text-center sm:p-8 md:p-12"
           >
-            <h2 className="mb-3 text-2xl font-bold sm:mb-4 sm:text-3xl md:text-4xl">
+            <h2 className="mb-3 font-display text-3xl sm:mb-4 sm:text-4xl md:text-5xl tracking-wider">
               Pedí ahora y retirá en el día
             </h2>
             <p className="mx-auto mb-5 max-w-2xl text-base text-muted-foreground sm:mb-8 sm:text-lg">
@@ -833,7 +823,7 @@ export default function HomePage() {
           >
             <div className="mb-4 flex items-center justify-center gap-2">
               <Sparkles className="h-7 w-7 text-primary" />
-              <h2 className="text-3xl font-bold md:text-4xl">
+              <h2 className="font-display text-4xl md:text-5xl tracking-wider">
                 Descubrí más productos
               </h2>
               <Sparkles className="h-7 w-7 text-primary" />

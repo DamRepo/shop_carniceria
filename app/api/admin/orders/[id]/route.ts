@@ -68,6 +68,7 @@ export async function PATCH(
         confirmedAt: true,
         cancelledAt: true,
         paymentStatus: true,
+        items: { select: { productId: true, quantity: true } },
       },
     });
 
@@ -125,10 +126,26 @@ export async function PATCH(
       data.cancelledBy = null;
     }
 
-    // Optimistic lock: solo actualiza si el status no cambió desde que lo leímos
-    const { count } = await prisma.order.updateMany({
-      where: { id: orderId, status: current.status },
-      data,
+    // Optimistic lock + restauración de stock en una sola transacción
+    const { count } = await prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: { id: orderId, status: current.status },
+        data,
+      });
+
+      if (result.count > 0 && isCancelling && !current.cancelledAt) {
+        for (const item of current.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: { increment: item.quantity },
+              reservedStock: { decrement: item.quantity },
+            },
+          });
+        }
+      }
+
+      return result;
     });
 
     if (count === 0) {

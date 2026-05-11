@@ -187,8 +187,7 @@ async function getOrdersForSession(args: {
     },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (orders as any[]).map((o: any) => ({
+  return orders.map((o) => ({
     id: o.id,
     orderNumber: o.orderNumber,
     status: o.status as Order["status"],
@@ -205,8 +204,7 @@ async function getOrdersForSession(args: {
     transferStatus: (o.transferStatus ?? null) as Order["transferStatus"],
     transferProofUrl: o.transferProofUrl ?? null,
     transferRejectNote: o.transferRejectNote ?? null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items: (o.items ?? []).map((it: any) => ({
+    items: (o.items ?? []).map((it) => ({
       id: it.id,
       quantity: Number(it.quantity ?? 0),
       unitPrice: it.unitPrice,
