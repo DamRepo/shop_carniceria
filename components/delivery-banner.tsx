@@ -11,7 +11,11 @@ export function DeliveryBanner() {
 
   useEffect(() => {
     const now = new Date();
-    const hour = now.getHours();
+    const arStr = now.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires", weekday: "short", hour: "numeric", hour12: false });
+    const parts = arStr.split(", ");
+    const weekday = parts[0];
+    const hour = parseInt(parts[1], 10);
+    if (weekday === "Sun") return;
     setVisible(hour >= OPEN_HOUR && hour < CUTOFF_HOUR);
   }, []);
 

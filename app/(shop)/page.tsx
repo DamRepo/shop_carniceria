@@ -1,14 +1,10 @@
 ﻿"use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { HeroSlider } from "@/components/hero-slider";
-import { CountdownTimer } from "@/components/countdown-timer";
 import { ProductRowSlider } from "@/components/product-row-slider";
 import { ProductCard } from "@/components/product-card";
 import { FeaturedCategoryCardVertical } from "@/components/featured-category-card-vertical";
@@ -22,21 +18,12 @@ import {
   Star,
   Sparkles,
   Flame,
-  ShoppingCart,
-  Zap,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { toast } from "sonner";
 
-import {
-  formatPrice,
-  getVatRate,
-  netFromGrossCents,
-} from "@/lib/utils-format";
-import { computeUnitPrice } from "@/lib/unitPrice";
-import { useCartStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 import { StoreLocation } from "@/components/store-location";
 
@@ -70,52 +57,6 @@ const features = [
   },
 ];
 
-function getPriceInfo(p: ProductWithSale | Product) {
-  const anyP = p as Partial<ProductWithSale> & {
-    price?: number;
-    unitType?: string;
-  };
-
-  const unitLabel = anyP.unitType === "PER_KG" ? "kg" : "unidad";
-  const price = typeof anyP.price === "number" ? anyP.price : null;
-
-  const originalPrice =
-    typeof anyP.originalPrice === "number" ? anyP.originalPrice : price;
-
-  const salePrice = typeof anyP.salePrice === "number" ? anyP.salePrice : null;
-
-  const discountPercent =
-    typeof anyP.discountPercent === "number" ? anyP.discountPercent : null;
-
-  const computedSalePrice =
-    salePrice === null && discountPercent !== null && originalPrice !== null
-      ? Math.round(originalPrice * (1 - discountPercent / 100))
-      : salePrice;
-
-  const isOnSaleFlag = (anyP.isOnSale ?? false) === true;
-
-  const hasSale =
-    isOnSaleFlag &&
-    originalPrice !== null &&
-    computedSalePrice !== null &&
-    computedSalePrice < originalPrice;
-
-  return {
-    unitLabel,
-    hasSale,
-    originalPrice,
-    salePrice: computedSalePrice,
-    normalPrice: price,
-  };
-}
-
-function getEffectivePrice(p: ProductWithSale | Product): number {
-  const info = getPriceInfo(p);
-  if (info.hasSale && typeof info.salePrice === "number") return info.salePrice;
-  if (typeof info.normalPrice === "number") return info.normalPrice;
-  return 0;
-}
-
 /** Adapta ProductWithSale al DTO que espera ProductCard (normaliza saleEndDate a string). */
 function adaptForCard(p: ProductWithSale) {
   return {
@@ -141,291 +82,6 @@ function adaptForCard(p: ProductWithSale) {
     measurementUnit: (p as { measurementUnit?: string | null }).measurementUnit ?? null,
     unitMultiplier: (p as { unitMultiplier?: number | null }).unitMultiplier ?? null,
   };
-}
-
-type HomeSliderCardProps = {
-  product: ProductWithSale;
-  showFeaturedBadge?: boolean;
-  showOfferCountdown?: boolean;
-  showOfferBadge?: boolean;
-  discountBadgeMode?: "top-right" | "bottom-left";
-};
-
-function getInitialQty(product: ProductWithSale): number {
-  const isOnSaleFlag = (product.isOnSale ?? false) === true;
-  if (!isOnSaleFlag) return 1;
-  const min = Number(product.minPurchaseQty ?? 1);
-  return Number.isFinite(min) && min > 0 ? min : 1;
-}
-
-function HomeSliderCard({
-  product,
-  showFeaturedBadge = false,
-  showOfferCountdown = false,
-  showOfferBadge = true,
-  discountBadgeMode = "top-right",
-}: HomeSliderCardProps) {
-  const router = useRouter();
-  const addItem = useCartStore((state) => state.addItem);
-  const cartItems = useCartStore((state) => state.items);
-
-  const initialQty = getInitialQty(product);
-  const priceInfo = getPriceInfo(product);
-  const effectivePrice = getEffectivePrice(product);
-  const vatRate = getVatRate(product);
-  const netPrice = netFromGrossCents(effectivePrice, vatRate);
-
-  const discount =
-    priceInfo.hasSale &&
-    typeof priceInfo.originalPrice === "number" &&
-    typeof priceInfo.salePrice === "number" &&
-    priceInfo.salePrice < priceInfo.originalPrice
-      ? Math.round(
-          ((priceInfo.originalPrice - priceInfo.salePrice) /
-            priceInfo.originalPrice) *
-            100
-        )
-      : null;
-
-  const showLowStock = product.stock > 0 && product.stock < 10;
-  const noStock = product.stock === 0;
-  const canBuy = !noStock;
-
-  function wouldExceedStock(addQty: number): boolean {
-    const stock = product.stock ?? 0;
-    if (stock <= 0) return true;
-    const existing = cartItems.find((i) => i.id === product.id);
-    const existingQty = existing?.quantity ?? 0;
-    const totalQty = existingQty + addQty;
-    const totalRaw =
-      (product.unitType ?? "PER_KG") === "PER_KG"
-        ? Math.round(totalQty * 1000)
-        : Math.round(totalQty);
-    return totalRaw > stock;
-  }
-
-  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!canBuy) return toast.error("Producto sin stock");
-    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
-
-    addItem({
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: effectivePrice,
-      quantity: initialQty,
-      unitType: product.unitType ?? "PER_KG",
-      image: product.image ?? undefined,
-      vatRate,
-    });
-
-    toast.success(
-      `${product.name} agregado al carrito${
-        (product.unitType ?? "PER_KG") === "PER_KG"
-          ? ` (${initialQty} kg)`
-          : ` (${initialQty} un)`
-      }`
-    );
-  };
-
-  const handleBuyNow = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!canBuy) return toast.error("Producto sin stock");
-    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
-
-    addItem({
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: effectivePrice,
-      quantity: initialQty,
-      unitType: product.unitType ?? "PER_KG",
-      image: product.image ?? undefined,
-      vatRate,
-    });
-
-    toast.success("Producto agregado, redirigiendo al checkout...");
-    setTimeout(() => router.push("/checkout"), 450);
-  };
-
-  return (
-    <Link href={`/productos/${product.slug}`} className="block h-full">
-      <motion.article
-        className="
-          group flex h-full flex-col overflow-hidden rounded-xl border bg-card
-          transition-colors duration-200 hover:border-primary/40
-        "
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="relative aspect-square overflow-hidden bg-muted">
-          {product.image ? (
-            <Image
-              src={product.image}
-              alt={product.name}
-              fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 220px"
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Beef className="h-16 w-16 text-muted-foreground" />
-            </div>
-          )}
-
-          {showFeaturedBadge ? (
-            <Badge className="absolute right-2 top-2 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5">
-              <Star className="h-2.5 w-2.5 sm:mr-1" fill="currentColor" />
-              <span className="hidden sm:inline">Destacado</span>
-            </Badge>
-          ) : null}
-
-          {showOfferCountdown && product.saleEndDate ? (
-            <div className="absolute left-1/2 top-2 z-20 w-[88%] max-w-[240px] -translate-x-1/2">
-              <CountdownTimer
-                endDate={
-                  product.saleEndDate instanceof Date
-                    ? product.saleEndDate.toISOString()
-                    : String(product.saleEndDate)
-                }
-              />
-            </div>
-          ) : null}
-
-          {showOfferBadge &&
-          priceInfo.hasSale &&
-          discountBadgeMode === "top-right" ? (
-            <div className="absolute right-2 top-2 z-20 flex flex-col items-end gap-1">
-              <Badge className="bg-red-600 text-white text-[10px] px-1.5 py-0.5">
-                <Tag className="mr-1 h-2.5 w-2.5" />
-                Oferta
-              </Badge>
-              {discount !== null ? (
-                <Badge className="bg-black font-bold text-white text-[10px] px-1.5 py-0.5">
-                  -{discount}%
-                </Badge>
-              ) : null}
-            </div>
-          ) : null}
-
-          {showOfferBadge &&
-          priceInfo.hasSale &&
-          discountBadgeMode === "bottom-left" ? (
-            <div className="absolute bottom-2 left-2 z-20 flex flex-col gap-1">
-              <Badge className="w-fit bg-red-600 text-white shadow-sm text-[10px] px-1.5 py-0.5">
-                <Tag className="mr-1 h-2.5 w-2.5" />
-                Oferta
-              </Badge>
-              {discount !== null ? (
-                <Badge className="w-fit bg-black font-bold text-white shadow-sm text-[10px] px-1.5 py-0.5">
-                  -{discount}%
-                </Badge>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex flex-1 flex-col p-2 sm:p-4">
-          <h3
-            className="
-              line-clamp-2 overflow-hidden text-[12px] sm:text-[17px] font-semibold
-              leading-snug transition-colors group-hover:text-primary
-            "
-            title={product.name}
-          >
-            {product.name}
-          </h3>
-
-          <div className="mt-1.5">
-            {priceInfo.hasSale && typeof priceInfo.salePrice === "number" ? (
-              <>
-                <div className="flex items-center gap-1 overflow-hidden">
-                  <span className="truncate text-[11px] sm:text-sm text-muted-foreground line-through">
-                    {formatPrice(priceInfo.originalPrice ?? product.price)}
-                  </span>
-                  {discount !== null && discount >= 5 ? (
-                    <span className="shrink-0 rounded-full bg-red-600/10 px-1 py-0.5 text-[9px] sm:text-[10px] font-bold text-red-600">
-                      -{discount}%
-                    </span>
-                  ) : null}
-                </div>
-                <span className="block truncate text-base sm:text-2xl font-bold text-primary">
-                  {formatPrice(priceInfo.salePrice)}
-                </span>
-              </>
-            ) : (
-              <span className="block truncate text-base sm:text-2xl font-bold text-primary">
-                {formatPrice(product.price)}
-              </span>
-            )}
-          </div>
-
-          {(() => {
-            if (!product.measurementUnit || product.unitMultiplier == null) return null;
-            const result = computeUnitPrice(effectivePrice, product.measurementUnit, product.unitMultiplier);
-            return result ? (
-              <p className="mt-0.5 truncate text-[10px] sm:text-[11px] font-medium text-muted-foreground hidden sm:block">
-                {result.label}
-              </p>
-            ) : null;
-          })()}
-
-          <p className="mt-0.5 text-[10px] sm:text-[11px] leading-tight text-muted-foreground hidden sm:block">
-            sin impuestos: {formatPrice(netPrice)}
-          </p>
-
-          <div className="mt-1.5">
-            {showLowStock ? (
-              <Badge
-                variant="outline"
-                className="border-orange-500 text-[10px] px-1.5 py-0.5 text-orange-500"
-              >
-                Últimas
-              </Badge>
-            ) : noStock ? (
-              <Badge
-                variant="outline"
-                className="border-red-500 text-[10px] px-1.5 py-0.5 text-red-500"
-              >
-                Agotado
-              </Badge>
-            ) : null}
-          </div>
-
-          <div className="mt-auto pt-2 sm:pt-4 flex flex-col gap-2">
-            <Button
-              type="button"
-              size="lg"
-              className="w-full"
-              variant="outline"
-              onClick={handleAddToCart}
-              disabled={!canBuy}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Agregar al carrito
-            </Button>
-
-            <Button
-              type="button"
-              size="lg"
-              className="w-full bg-primary hover:bg-primary/90"
-              onClick={handleBuyNow}
-              disabled={!canBuy}
-            >
-              <Zap className="mr-2 h-4 w-4" />
-              Comprar ahora
-            </Button>
-          </div>
-        </div>
-      </motion.article>
-    </Link>
-  );
 }
 
 export default function HomePage() {
@@ -466,7 +122,7 @@ export default function HomePage() {
 
     const fetchOffers = async () => {
       try {
-        const response = await fetch("/api/products?onSale=true&limit=4", { cache: "no-store" });
+        const response = await fetch("/api/products?onSale=true&limit=6", { cache: "no-store" });
         if (!response.ok) throw new Error("Error al cargar ofertas");
         const data = await response.json();
         setOffers(data);
@@ -542,6 +198,63 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      {(offersLoading || offers.length > 0) && (
+        <section className="w-full bg-background py-8 sm:py-16">
+          <div className="container mx-auto max-w-7xl px-4">
+            <div className="mb-6 text-center sm:mb-10">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-600/20 bg-red-600/10 px-4 py-2">
+                <Tag className="h-4 w-4 text-red-500" />
+                <span className="font-semibold text-red-500">
+                  Ofertas por tiempo limitado
+                </span>
+              </div>
+
+              <h2 className="font-display text-4xl md:text-5xl tracking-wider">
+                🔥 Ofertas de hoy
+              </h2>
+
+              <p className="mt-2 text-muted-foreground">
+                Aprovechá precios especiales antes de que se terminen.
+              </p>
+
+              <div className="mt-4">
+                <Link href="/ofertas">
+                  <Button
+                    variant="outline"
+                    className="border-zinc-700 hover:bg-zinc-900"
+                    type="button"
+                  >
+                    Ver todas las ofertas
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {offersLoading ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border bg-card p-4"
+                  >
+                    <div className="mb-4 aspect-square rounded-lg bg-muted" />
+                    <div className="mb-2 h-6 rounded bg-muted" />
+                    <div className="h-4 w-2/3 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ProductRowSlider
+                items={offers}
+                renderItem={(product) => (
+                  <ProductCard product={adaptForCard(product)} />
+                )}
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       <section ref={ref3} className="w-full bg-muted/30 py-8 sm:py-16">
         <div className="container mx-auto max-w-7xl px-4">
@@ -703,73 +416,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="w-full bg-background py-8 sm:py-16">
-        <div className="container mx-auto max-w-7xl px-4">
-          <div className="mb-6 text-center sm:mb-10">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-600/20 bg-red-600/10 px-4 py-2">
-              <Tag className="h-4 w-4 text-red-500" />
-              <span className="font-semibold text-red-500">
-                Ofertas por tiempo limitado
-              </span>
-            </div>
-
-            <h2 className="font-display text-4xl md:text-5xl tracking-wider">
-              Ofertas de la semana
-            </h2>
-
-            <p className="mt-2 text-muted-foreground">
-              Aprovechá precios especiales antes de que se terminen.
-            </p>
-
-            <div className="mt-4">
-              <Link href="/ofertas">
-                <Button
-                  variant="outline"
-                  className="border-zinc-700 hover:bg-zinc-900"
-                  type="button"
-                >
-                  Ver todas
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {offersLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-lg border bg-card p-4"
-                >
-                  <div className="mb-4 aspect-square rounded-lg bg-muted" />
-                  <div className="mb-2 h-6 rounded bg-muted" />
-                  <div className="h-4 w-2/3 rounded bg-muted" />
-                </div>
-              ))}
-            </div>
-          ) : offers.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-              {offers.map((product) => (
-                <HomeSliderCard
-                  key={product.id}
-                  product={product}
-                  showOfferCountdown
-                  showOfferBadge
-                  discountBadgeMode="bottom-left"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border bg-muted/20 py-10 text-center text-muted-foreground">
-              <p className="font-medium">Hoy no hay ofertas activas.</p>
-              <p className="text-sm">
-                Volvé más tarde: las promos cambian seguido.
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
-
       <PromoDoubleBanner
         left={{
           href: "/productos?category=pollo",
@@ -847,11 +493,7 @@ export default function HomePage() {
             <ProductRowSlider
               items={randomProducts}
               renderItem={(product) => (
-                <HomeSliderCard
-                  product={product}
-                  showOfferBadge
-                  discountBadgeMode="top-right"
-                />
+                <ProductCard product={adaptForCard(product)} />
               )}
             />
           ) : (

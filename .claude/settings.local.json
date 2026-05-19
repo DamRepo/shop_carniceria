@@ -50,7 +50,11 @@
       "Bash(Get-ChildItem \"C:\\\\dev\\\\shop_carniceria\" -Filter \".eslint*\")",
       "Bash(Select-Object Name)",
       "Read(//c/Users/Damian/.claude/**)",
-      "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\shop_carniceria\" -Recurse -Force)"
+      "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\shop_carniceria\" -Recurse -Force)",
+      "Bash(Start-Sleep -Seconds 2)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npm --prefix C:/dev/shop_carniceria run prisma:generate)",
+      "Bash(New-Item *)"
     ]
   },
   "enableAllProjectMcpServers": true,

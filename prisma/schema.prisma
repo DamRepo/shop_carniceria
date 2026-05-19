@@ -235,6 +235,15 @@ model TransferCodeSequence {
   lastNumber Int @default(0)
 }
 
+model Feedback {
+  id         Int      @id @default(autoincrement())
+  estrellas  Int?
+  encontro   Boolean?
+  compraria  String?
+  comentario String?
+  createdAt  DateTime @default(now())
+}
+
 enum UnitType {
   PER_KG
   PER_UNIT

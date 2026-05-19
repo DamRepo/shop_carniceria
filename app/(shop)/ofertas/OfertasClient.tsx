@@ -167,24 +167,27 @@ export default function OfertasClient() {
   }, [fetchKey]);
 
   return (
-    <section className="w-full py-16 bg-background">
-      <div className="container mx-auto max-w-7xl px-4">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-red-600/10 border border-red-600/20 rounded-full px-4 py-2 mb-4">
-            <Tag className="h-4 w-4 text-red-500" />
-            <span className="text-red-500 font-semibold">
-              Ofertas por tiempo limitado
+    <div className="w-full">
+      <div className="relative overflow-hidden bg-gradient-to-br from-red-950 via-red-900 to-black py-16 sm:py-24">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(220,38,38,0.25),transparent_70%)]" />
+        <div className="container relative mx-auto max-w-7xl px-4 text-center">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-600/20 px-4 py-1.5">
+            <Zap className="h-4 w-4 text-red-400" />
+            <span className="text-sm font-semibold uppercase tracking-wide text-red-300">
+              Tiempo limitado
             </span>
           </div>
-
-          <h1 className="text-3xl md:text-4xl font-bold">
-            🔥 Ofertas de la semana
+          <h1 className="mb-4 text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
+            Ofertas <span className="text-red-400">Especiales</span>
           </h1>
-
-          <p className="text-muted-foreground mt-2">
-            Aprovechá precios especiales antes de que se terminen.
+          <p className="mx-auto max-w-2xl text-lg text-red-100/70 sm:text-xl">
+            Aprovechá precios especiales antes de que se terminen. Las promos cambian seguido.
           </p>
         </div>
+      </div>
+
+      <section className="w-full bg-background py-12">
+        <div className="container mx-auto max-w-7xl px-4">
 
         {offersLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -426,7 +429,8 @@ export default function OfertasClient() {
             </p>
           </div>
         )}
-      </div>
-    </section>
+        </div>
+      </section>
+    </div>
   );
 }

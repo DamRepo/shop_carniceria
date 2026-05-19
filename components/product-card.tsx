@@ -14,6 +14,7 @@ import {
   getReferencePriceLabel,
 } from "@/lib/utils-format";
 import { UnitPriceTag } from "@/components/UnitPriceTag";
+import { CountdownTimer } from "@/components/countdown-timer";
 import { useCartStore } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -221,32 +222,47 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {offerActive && (
-            <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1">
-              <Badge className="bg-blood hover:bg-blood-dark text-white rounded-none px-2 py-0.5 text-[10px] uppercase tracking-wide shadow-md">
-                <Tag className="h-3 w-3 mr-1" />
-                Oferta
-              </Badge>
+          {/* Overlay: countdown primero (si aplica), badges debajo */}
+          <div className="absolute inset-x-0 top-0 z-20 p-2 flex flex-col gap-1">
+            {offerActive && product.saleEndDate && (
+              <div className="flex justify-center">
+                <div className="w-[80%] max-w-[220px]">
+                  <CountdownTimer endDate={product.saleEndDate} />
+                </div>
+              </div>
+            )}
 
-              {discount !== null && (
-                <Badge className="bg-black text-white font-bold rounded-none px-2 py-0.5 text-[10px] shadow-md">
-                  -{discount}%
+            <div className="flex items-start justify-between">
+              {/* Izquierda: OFERTA + descuento */}
+              <div className="flex flex-col items-start gap-1">
+                {offerActive && (
+                  <>
+                    <Badge className="bg-blood hover:bg-blood-dark text-white rounded-none px-2 py-0.5 text-[10px] uppercase tracking-wide shadow-md">
+                      <Tag className="h-3 w-3 mr-1" />
+                      Oferta
+                    </Badge>
+                    {discount !== null && (
+                      <Badge className="bg-black text-white font-bold rounded-none px-2 py-0.5 text-[10px] shadow-md">
+                        -{discount}%
+                      </Badge>
+                    )}
+                  </>
+                )}
+                {product.stock <= 0 && (
+                  <Badge className="bg-blood hover:bg-blood-dark text-white text-[11px] px-2 py-0.5 rounded-none">
+                    Agotado
+                  </Badge>
+                )}
+              </div>
+
+              {/* Derecha: Últimas unidades */}
+              {product.stock > 0 && product.stock <= 10 && (
+                <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[11px] px-2 py-0.5 rounded-none">
+                  Últimas unidades
                 </Badge>
               )}
             </div>
-          )}
-
-          {product.stock > 0 && product.stock <= 10 && (
-            <Badge className="absolute top-2 left-2 z-20 bg-amber-500 hover:bg-amber-600 text-white text-[11px] px-2 py-0.5 rounded-none">
-              Últimas unidades
-            </Badge>
-          )}
-
-          {product.stock <= 0 && (
-            <Badge className="absolute top-2 left-2 z-20 bg-blood hover:bg-blood-dark text-white text-[11px] px-2 py-0.5 rounded-none">
-              Agotado
-            </Badge>
-          )}
+          </div>
         </div>
 
         {/* Content */}
