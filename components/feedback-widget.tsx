@@ -10,35 +10,21 @@ import { cn } from "@/lib/utils";
 
 type ComprariaOption = "Si" | "Tal vez" | "No";
 
-interface FeedbackState {
-  estrellas: number | null;
-  encontro: boolean | null;
-  compraria: ComprariaOption | null;
-  comentario: string;
-}
-
 const STORAGE_KEY = "feedback_submitted";
 const MAX_COMMENT = 200;
 
 const COMPRARIA_OPTIONS: ComprariaOption[] = ["Si", "Tal vez", "No"];
 
-const INITIAL_STATE: FeedbackState = {
-  estrellas: null,
-  encontro: null,
-  compraria: null,
-  comentario: "",
-};
-
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
 interface StarRatingProps {
-  value: number | null;
+  value: number;
   onChange: (v: number) => void;
 }
 
 function StarRating({ value, onChange }: StarRatingProps) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const active = hovered ?? value;
+  const [hovered, setHovered] = useState(0);
+  const active = hovered || value;
 
   return (
     <div className="flex gap-1" role="group" aria-label="Calificación con estrellas">
@@ -50,13 +36,13 @@ function StarRating({ value, onChange }: StarRatingProps) {
           aria-pressed={value === n}
           className="transition-transform hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-[#0D0D0D] rounded"
           onMouseEnter={() => setHovered(n)}
-          onMouseLeave={() => setHovered(null)}
+          onMouseLeave={() => setHovered(0)}
           onClick={() => onChange(n)}
         >
           <Star
             className={cn(
               "h-7 w-7 transition-colors",
-              active !== null && n <= active
+              active > 0 && n <= active
                 ? "fill-yellow-400 text-yellow-400"
                 : "fill-zinc-700 text-zinc-600"
             )}
@@ -97,28 +83,29 @@ function OptionButton({ label, selected, onClick }: OptionButtonProps) {
 export function FeedbackWidget() {
   const [showTab, setShowTab] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<FeedbackState>(INITIAL_STATE);
 
-  const cardRef = useRef<HTMLDivElement>(null);
+  // Cada wrapper contiene el botón trigger Y el card → el click en el botón
+  // nunca cae "fuera" del contenedor, evitando el doble-toggle.
+  const desktopRef = useRef<HTMLDivElement>(null);
+  const mobileRef = useRef<HTMLDivElement>(null);
 
   // Mostrar pestaña/FAB después de 20 s (solo si no fue enviado antes)
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (localStorage.getItem(STORAGE_KEY)) return;
-
     const timer = setTimeout(() => setShowTab(true), 20_000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Cerrar al hacer click fuera del card
+  // Cerrar al hacer click fuera del widget completo (botón + card)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideDesktop = desktopRef.current?.contains(target) ?? false;
+      const insideMobile = mobileRef.current?.contains(target) ?? false;
+      if (!insideDesktop && !insideMobile) {
         setIsOpen(false);
       }
     };
@@ -127,44 +114,11 @@ export function FeedbackWidget() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  const isFormEmpty =
-    form.estrellas === null &&
-    form.encontro === null &&
-    form.compraria === null;
-
-  const handleSubmit = async () => {
-    if (isFormEmpty) return;
-
-    setSending(true);
-    setError(null);
-
-    const payload: Record<string, unknown> = {};
-    if (form.estrellas !== null) payload.estrellas = form.estrellas;
-    if (form.encontro !== null) payload.encontro = form.encontro;
-    if (form.compraria !== null) payload.compraria = form.compraria;
-    if (form.comentario.trim()) payload.comentario = form.comentario.trim();
-
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error("Error del servidor");
-
-      localStorage.setItem(STORAGE_KEY, "1");
-      setSubmitted(true);
-
-      setTimeout(() => {
-        setIsOpen(false);
-        setShowTab(false);
-      }, 2500);
-    } catch {
-      setError("Hubo un error, intentá de nuevo");
-    } finally {
-      setSending(false);
-    }
+  const handleSubmitSuccess = () => {
+    setTimeout(() => {
+      setIsOpen(false);
+      setShowTab(false);
+    }, 2500);
   };
 
   if (!showTab) return null;
@@ -172,7 +126,7 @@ export function FeedbackWidget() {
   return (
     <>
       {/* ── Pestaña desktop (md+) ──────────────────────────────────────────── */}
-      <div className="hidden md:block">
+      <div ref={desktopRef} className="hidden md:block">
         <button
           type="button"
           aria-label="Abrir formulario de opinión"
@@ -194,7 +148,6 @@ export function FeedbackWidget() {
 
         {/* Card desktop */}
         <div
-          ref={cardRef}
           role="dialog"
           aria-label="Formulario de feedback"
           aria-modal="false"
@@ -208,20 +161,14 @@ export function FeedbackWidget() {
           )}
         >
           <FeedbackCard
-            form={form}
-            setForm={setForm}
-            submitted={submitted}
-            sending={sending}
-            isFormEmpty={isFormEmpty}
-            error={error}
             onClose={() => setIsOpen(false)}
-            onSubmit={handleSubmit}
+            onSubmitSuccess={handleSubmitSuccess}
           />
         </div>
       </div>
 
       {/* ── FAB mobile (menos de md) ───────────────────────────────────────── */}
-      <div className="block md:hidden">
+      <div ref={mobileRef} className="block md:hidden">
         <button
           type="button"
           aria-label="Abrir formulario de opinión"
@@ -240,7 +187,6 @@ export function FeedbackWidget() {
 
         {/* Card mobile */}
         <div
-          ref={isOpen ? cardRef : undefined}
           role="dialog"
           aria-label="Formulario de feedback"
           aria-modal="false"
@@ -254,14 +200,8 @@ export function FeedbackWidget() {
           )}
         >
           <FeedbackCard
-            form={form}
-            setForm={setForm}
-            submitted={submitted}
-            sending={sending}
-            isFormEmpty={isFormEmpty}
-            error={error}
             onClose={() => setIsOpen(false)}
-            onSubmit={handleSubmit}
+            onSubmitSuccess={handleSubmitSuccess}
           />
         </div>
       </div>
@@ -272,26 +212,48 @@ export function FeedbackWidget() {
 // ─── Card interno (compartido entre desktop y mobile) ─────────────────────────
 
 interface FeedbackCardProps {
-  form: FeedbackState;
-  setForm: React.Dispatch<React.SetStateAction<FeedbackState>>;
-  submitted: boolean;
-  sending: boolean;
-  isFormEmpty: boolean;
-  error: string | null;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmitSuccess: () => void;
 }
 
-function FeedbackCard({
-  form,
-  setForm,
-  submitted,
-  sending,
-  isFormEmpty,
-  error,
-  onClose,
-  onSubmit,
-}: FeedbackCardProps) {
+function FeedbackCard({ onClose, onSubmitSuccess }: FeedbackCardProps) {
+  const [estrellas, setEstrellas] = useState(0);
+  const [encontro, setEncontro] = useState<boolean | null>(null);
+  const [compraria, setCompraria] = useState<ComprariaOption | null>(null);
+  const [comentario, setComentario] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setSending(true);
+    setError(null);
+
+    const payload: Record<string, unknown> = {};
+    if (estrellas > 0) payload.estrellas = estrellas;
+    if (encontro !== null) payload.encontro = encontro;
+    if (compraria !== null) payload.compraria = compraria;
+    if (comentario.trim()) payload.comentario = comentario.trim();
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Error del servidor");
+
+      localStorage.setItem(STORAGE_KEY, "1");
+      setSubmitted(true);
+      onSubmitSuccess();
+    } catch {
+      setError("Hubo un error, intentá de nuevo");
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (submitted) {
     return (
       <div className="flex flex-col items-center gap-3 p-6 text-center">
@@ -331,10 +293,7 @@ function FeedbackCard({
           <legend className="mb-2 text-xs font-medium text-zinc-400">
             ¿Cómo calificarías tu experiencia?
           </legend>
-          <StarRating
-            value={form.estrellas}
-            onChange={(v) => setForm((prev) => ({ ...prev, estrellas: v }))}
-          />
+          <StarRating value={estrellas} onChange={setEstrellas} />
         </fieldset>
 
         {/* Pregunta 2: ¿Encontró lo que buscaba? */}
@@ -345,23 +304,13 @@ function FeedbackCard({
           <div className="flex gap-2">
             <OptionButton
               label="Sí ✅"
-              selected={form.encontro === true}
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  encontro: prev.encontro === true ? null : true,
-                }))
-              }
+              selected={encontro === true}
+              onClick={() => setEncontro((prev) => (prev === true ? null : true))}
             />
             <OptionButton
               label="No ❌"
-              selected={form.encontro === false}
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  encontro: prev.encontro === false ? null : false,
-                }))
-              }
+              selected={encontro === false}
+              onClick={() => setEncontro((prev) => (prev === false ? null : false))}
             />
           </div>
         </fieldset>
@@ -376,13 +325,8 @@ function FeedbackCard({
               <OptionButton
                 key={opt}
                 label={opt}
-                selected={form.compraria === opt}
-                onClick={() =>
-                  setForm((prev) => ({
-                    ...prev,
-                    compraria: prev.compraria === opt ? null : opt,
-                  }))
-                }
+                selected={compraria === opt}
+                onClick={() => setCompraria((prev) => (prev === opt ? null : opt))}
               />
             ))}
           </div>
@@ -399,28 +343,23 @@ function FeedbackCard({
           </label>
           <Textarea
             id="feedback-comentario"
-            value={form.comentario}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                comentario: e.target.value.slice(0, MAX_COMMENT),
-              }))
-            }
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value.slice(0, MAX_COMMENT))}
             placeholder="Tu sugerencia..."
             maxLength={MAX_COMMENT}
             rows={3}
             className="resize-none border-zinc-700 bg-zinc-900 text-sm text-white placeholder:text-zinc-600 focus-visible:ring-primary"
           />
           <p className="mt-1 text-right text-xs text-zinc-600">
-            {form.comentario.length}/{MAX_COMMENT}
+            {comentario.length}/{MAX_COMMENT}
           </p>
         </div>
 
         {/* Botón enviar */}
         <Button
           type="button"
-          onClick={onSubmit}
-          disabled={isFormEmpty || sending}
+          onClick={handleSubmit}
+          disabled={sending}
           className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50"
         >
           {sending ? "Enviando..." : "Enviar opinión"}
