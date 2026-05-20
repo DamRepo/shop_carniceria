@@ -367,12 +367,12 @@ export default function OfertasClient() {
                           <span className="text-sm text-muted-foreground line-through">
                             {formatPrice(priceInfo.originalPrice ?? product.price)}
                           </span>
-                          <span className="text-2xl font-bold text-primary">
+                          <span className="text-lg sm:text-2xl font-bold text-primary">
                             {formatPrice(priceInfo.salePrice)}
                           </span>
                         </>
                       ) : (
-                        <span className="text-2xl font-bold text-primary">
+                        <span className="text-lg sm:text-2xl font-bold text-primary">
                           {formatPrice(product.price)}
                         </span>
                       )}

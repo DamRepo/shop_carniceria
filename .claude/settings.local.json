@@ -54,7 +54,8 @@
       "Bash(Start-Sleep -Seconds 2)",
       "Bash(taskkill //F //IM node.exe)",
       "Bash(npm --prefix C:/dev/shop_carniceria run prisma:generate)",
-      "Bash(New-Item *)"
+      "Bash(New-Item *)",
+      "PowerShell(npm run *)"
     ]
   },
   "enableAllProjectMcpServers": true,
