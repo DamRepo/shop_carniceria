@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { toStockQty } from "@/lib/stock-units";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,7 +69,14 @@ export async function PATCH(
         confirmedAt: true,
         cancelledAt: true,
         paymentStatus: true,
-        items: { select: { productId: true, quantity: true } },
+        paymentMethod: true,
+        items: {
+          select: {
+            productId: true,
+            quantity: true,
+            product: { select: { unitType: true } },
+          },
+        },
       },
     });
 
@@ -134,14 +142,33 @@ export async function PATCH(
       });
 
       if (result.count > 0 && isCancelling && !current.cancelledAt) {
+        // MERCADO_PAGO/TALO_PAY reservan stock en `reservedStock` al crear el
+        // checkout, y recién descuentan `stock` (junto con `reservedStock`) al
+        // confirmarse el pago. Si todavía no se confirmó, cancelar la orden
+        // debe liberar la reserva (reservedStock), porque `stock` nunca se tocó.
+        // CASH/BANK_TRANSFER, en cambio, descuentan `stock` directamente al
+        // crear la orden y nunca usan `reservedStock`; y una orden MP/Talo ya
+        // pagada ya resolvió su reserva junto con el descuento de stock — en
+        // ambos casos, cancelar debe devolver `stock`, no tocar `reservedStock`.
+        const reservationNeverConfirmed =
+          (current.paymentMethod === "MERCADO_PAGO" ||
+            current.paymentMethod === "TALO_PAY") &&
+          current.paymentStatus !== "PAID";
+
         for (const item of current.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: { increment: item.quantity },
-              reservedStock: { decrement: item.quantity },
-            },
-          });
+          const qty = toStockQty(item.product.unitType, item.quantity);
+
+          if (reservationNeverConfirmed) {
+            await tx.product.updateMany({
+              where: { id: item.productId, reservedStock: { gte: qty } },
+              data: { reservedStock: { decrement: qty } },
+            });
+          } else {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: qty } },
+            });
+          }
         }
       }
 
