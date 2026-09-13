@@ -142,17 +142,20 @@ export async function PATCH(
       });
 
       if (result.count > 0 && isCancelling && !current.cancelledAt) {
-        // MERCADO_PAGO/TALO_PAY reservan stock en `reservedStock` al crear el
-        // checkout, y recién descuentan `stock` (junto con `reservedStock`) al
-        // confirmarse el pago. Si todavía no se confirmó, cancelar la orden
-        // debe liberar la reserva (reservedStock), porque `stock` nunca se tocó.
+        // MERCADO_PAGO reserva stock en `reservedStock` al crear el checkout,
+        // y recién descuenta `stock` (junto con `reservedStock`) al confirmarse
+        // el pago. Si todavía no se confirmó, cancelar la orden debe liberar
+        // la reserva (reservedStock), porque `stock` nunca se tocó.
         // CASH/BANK_TRANSFER, en cambio, descuentan `stock` directamente al
-        // crear la orden y nunca usan `reservedStock`; y una orden MP/Talo ya
+        // crear la orden y nunca usan `reservedStock`; y una orden de MP ya
         // pagada ya resolvió su reserva junto con el descuento de stock — en
         // ambos casos, cancelar debe devolver `stock`, no tocar `reservedStock`.
+        //
+        // Nota: este build todavía no tiene TALO_PAY en el enum PaymentMethod
+        // (no está deployado en producción). Cuando se agregue, sumar acá la
+        // misma condición que MERCADO_PAGO.
         const reservationNeverConfirmed =
-          (current.paymentMethod === "MERCADO_PAGO" ||
-            current.paymentMethod === "TALO_PAY") &&
+          current.paymentMethod === "MERCADO_PAGO" &&
           current.paymentStatus !== "PAID";
 
         for (const item of current.items) {
