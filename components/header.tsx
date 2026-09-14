@@ -161,6 +161,7 @@ export function Header() {
       label: "Frutería y verdulería",
     },
     { type: "link", href: "/ofertas", label: "Ofertas" },
+    { type: "link", href: "/destacados", label: "Destacados" },
     { type: "link", href: "/sobre-nosotros", label: "Sobre nosotros" },
     {
       type: "link",
