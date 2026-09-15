@@ -65,7 +65,7 @@ function detectImageMime(buffer: Buffer): DetectedImageType | null {
   return null;
 }
 
-export async function uploadImages(files: File[]) {
+export async function uploadImages(files: File[], folder?: string) {
   if (!files.length) return [];
 
   const cloudinary = getCloudinary();
@@ -97,7 +97,7 @@ export async function uploadImages(files: File[]) {
     const dataUri = `data:${detectedMime};base64,${base64}`;
 
     const res = await cloudinary.uploader.upload(dataUri, {
-      folder: process.env.CLOUDINARY_FOLDER || "carniceria/products",
+      folder: folder || process.env.CLOUDINARY_FOLDER || "carniceria/products",
       resource_type: "image",
     });
 

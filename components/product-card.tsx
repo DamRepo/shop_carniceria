@@ -134,7 +134,9 @@ export function ProductCard({ product }: ProductCardProps) {
   function wouldExceedStock(addQty: number): boolean {
     const stock = product.stock ?? 0;
     if (stock <= 0) return true;
-    const existing = cartItems.find((i) => i.id === product.id);
+    const existing = cartItems.find(
+      (i) => i.type === "product" && i.productId === product.id
+    );
     const existingQty = existing?.quantity ?? 0;
     const totalQty = existingQty + addQty;
     // stock is stored in grams for PER_KG, units for PER_UNIT
@@ -153,7 +155,8 @@ export function ProductCard({ product }: ProductCardProps) {
     if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
 
     addItem({
-      id: product.id,
+      type: "product",
+      productId: product.id,
       name: product.name,
       slug: product.slug,
       price: finalPrice,
@@ -180,7 +183,8 @@ export function ProductCard({ product }: ProductCardProps) {
     if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
 
     addItem({
-      id: product.id,
+      type: "product",
+      productId: product.id,
       name: product.name,
       slug: product.slug,
       price: finalPrice,

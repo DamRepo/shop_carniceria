@@ -13,7 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCartStore } from "@/lib/store";
+import { useCartStore, type ProductCartItem } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { TRANSFER_INFO } from "@/lib/transfer-info";
 import { formatPrice } from "@/lib/utils-format";
@@ -85,10 +85,11 @@ export default function TransferenciaPage() {
 
     try {
       const orderItems = (items ?? [])
+        .filter((item): item is ProductCartItem => item.type === "product")
         .map((item) => {
           const qty = Number(item.quantity ?? 0);
           return {
-            productId: item.id,
+            productId: item.productId,
             quantity: Number.isFinite(qty) && qty > 0 ? qty : 0,
           };
         })
@@ -119,7 +120,7 @@ export default function TransferenciaPage() {
       if (!res.ok) {
         const missing: string[] = data?.missingProducts ?? [];
         if (missing.length > 0) {
-          missing.forEach((id) => useCartStore.getState().removeItem(id));
+          missing.forEach((id) => useCartStore.getState().removeItem("product", id));
           toast.error(
             `${missing.length === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
             { duration: 6000 }

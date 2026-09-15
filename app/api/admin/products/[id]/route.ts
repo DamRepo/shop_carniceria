@@ -569,6 +569,17 @@ export async function DELETE(
       });
     }
 
+    const comboItemCount = await prisma.comboItem.count({
+      where: { productId: id },
+    });
+
+    if (comboItemCount > 0) {
+      return NextResponse.json(
+        { error: "No se puede borrar: el producto está en un combo (activo o no). Sacalo del combo, o eliminá el combo, antes de borrar el producto." },
+        { status: 409 }
+      );
+    }
+
     await prisma.product.delete({
       where: { id },
     });

@@ -65,7 +65,8 @@ export function RepeatOrderButton({ items }: { items: RepeatItem[] }) {
             : p.price;
 
         addItem({
-          id: p.id,
+          type: "product",
+          productId: p.id,
           name: p.name,
           slug: p.slug,
           price: effectivePrice,

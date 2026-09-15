@@ -73,6 +73,7 @@ export async function PATCH(
         items: {
           select: {
             productId: true,
+            comboId: true,
             quantity: true,
             product: { select: { unitType: true } },
           },
@@ -156,6 +157,16 @@ export async function PATCH(
           current.paymentStatus !== "PAID";
 
         for (const item of current.items) {
+          if (!item.productId || !item.product) {
+            // Ítem de combo (sin producto asociado) — restaurar Combo.stock
+            // al cancelar todavía no está implementado (Paso 7).
+            console.warn(
+              "Cancelación de orden: OrderItem de combo sin restauración de stock implementada (Paso 7)",
+              { orderId, orderItemComboId: item.comboId }
+            );
+            continue;
+          }
+
           const qty = toStockQty(item.product.unitType, item.quantity);
 
           if (reservationNeverConfirmed) {

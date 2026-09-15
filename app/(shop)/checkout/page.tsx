@@ -7,7 +7,7 @@ import Link from "next/link";
 import { ShoppingCart, ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useCartStore } from "@/lib/store";
+import { useCartStore, getCartItemRefId } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { netFromGrossCents } from "@/lib/utils-format";
 import { toast } from "sonner";
@@ -305,7 +305,7 @@ export default function CheckoutPage() {
 
           {currentStep === 4 && (
             <CheckoutDetails
-              items={items ?? []}
+              items={(items ?? []).map((it) => ({ ...it, id: getCartItemRefId(it) }))}
               deliveryMethod={formData.deliveryMethod}
               address={
                 formData.deliveryMethod === "DELIVERY" ? formData.address : ""

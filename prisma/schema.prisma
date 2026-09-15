@@ -58,6 +58,7 @@ model Product {
   brand            String?
 
   orderItems OrderItem[]
+  comboItems ComboItem[]
   category   Category    @relation(fields: [categoryId], references: [id])
 
   @@index([categoryId])
@@ -66,6 +67,41 @@ model Product {
   @@index([isActive, createdAt])
   @@index([isOnSale])
   @@index([isFeatured])
+}
+
+model Combo {
+  id          String         @id @default(cuid())
+  name        String
+  slug        String         @unique
+  description String?
+  imageUrl    String?
+  stock       Int            @default(0)
+  priceType   ComboPriceType @default(FIXED)
+  priceValue  Int
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  items      ComboItem[]
+  orderItems OrderItem[]
+
+  @@index([isActive])
+  @@index([slug])
+}
+
+model ComboItem {
+  id        String   @id @default(cuid())
+  comboId   String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  combo   Combo   @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([comboId, productId])
+  @@index([comboId])
+  @@index([productId])
 }
 
 model PasswordResetToken {
@@ -176,17 +212,25 @@ model Order {
 model OrderItem {
   id        String   @id @default(cuid())
   orderId   String
-  productId String
+  productId String?
+  comboId   String?
   quantity  Float
   unitPrice Int
   lineTotal Int
+
+  // Snapshot del nombre al momento de la compra (el producto/combo puede
+  // renombrarse después). El precio ya se snapshotea via unitPrice/lineTotal.
+  itemNameSnapshot String?
+
   createdAt DateTime @default(now())
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  combo   Combo?   @relation(fields: [comboId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([productId])
+  @@index([comboId])
 }
 
 model CheckoutSession {
@@ -313,4 +357,9 @@ enum CheckoutSessionStatus {
   APPROVED
   FAILED
   EXPIRED
+}
+
+enum ComboPriceType {
+  FIXED
+  PERCENTAGE_DISCOUNT
 }

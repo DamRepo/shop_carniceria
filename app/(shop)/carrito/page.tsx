@@ -17,6 +17,7 @@ import {
 import {
   useCartStore,
   type CartItem,
+  getCartItemRefId,
   getItemRules,
   normalizeQtyWithRules,
   incrementByRules,
@@ -67,51 +68,24 @@ export default function CartPage() {
     }
   }, [status, userId, clearCart]);
 
-  const handleQuantityChange = (
-    item: {
-      id: string;
-      unitType: "PER_KG" | "PER_UNIT";
-      quantity: number;
-      minPurchaseQty?: number | null;
-      qtyStep?: number | null;
-      maxPurchaseQty?: number | null;
-      allowsDecimals?: boolean;
-    },
-    value: string
-  ) => {
+  const handleQuantityChange = (item: CartItem, value: string) => {
     if (value === "" || value === ".") return;
 
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return;
 
     const q = normalizeQtyWithRules(item, parsed);
-    updateQuantity(item.id, q);
+    updateQuantity(item.type, getCartItemRefId(item), q);
   };
 
-  const incrementQuantity = (item: {
-    id: string;
-    unitType: "PER_KG" | "PER_UNIT";
-    quantity: number;
-    minPurchaseQty?: number | null;
-    qtyStep?: number | null;
-    maxPurchaseQty?: number | null;
-    allowsDecimals?: boolean;
-  }) => {
+  const incrementQuantity = (item: CartItem) => {
     const next = incrementByRules(item);
-    updateQuantity(item.id, next);
+    updateQuantity(item.type, getCartItemRefId(item), next);
   };
 
-  const decrementQuantity = (item: {
-    id: string;
-    unitType: "PER_KG" | "PER_UNIT";
-    quantity: number;
-    minPurchaseQty?: number | null;
-    qtyStep?: number | null;
-    maxPurchaseQty?: number | null;
-    allowsDecimals?: boolean;
-  }) => {
+  const decrementQuantity = (item: CartItem) => {
     const next = decrementByRules(item);
-    updateQuantity(item.id, next);
+    updateQuantity(item.type, getCartItemRefId(item), next);
   };
 
   // totalPrice ya viene calculado desde el selector de Zustand
@@ -185,7 +159,7 @@ export default function CartPage() {
             const rules = getItemRules(item);
 
             return (
-              <Card key={item.id} className="overflow-hidden">
+              <Card key={`${item.type}-${getCartItemRefId(item)}`} className="overflow-hidden">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex gap-3">
                     {/* Imagen: ancho fijo, no crece ni encoge */}
@@ -209,16 +183,22 @@ export default function CartPage() {
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       {/* Fila: nombre + botón eliminar */}
                       <div className="flex items-start justify-between gap-2">
-                        <Link
-                          href={`/productos/${item.slug ?? ""}`}
-                          className="text-sm font-semibold leading-snug transition-colors hover:text-primary sm:text-base"
-                        >
-                          {item.name ?? "Producto"}
-                        </Link>
+                        {item.type === "combo" ? (
+                          <span className="text-sm font-semibold leading-snug sm:text-base">
+                            {item.name ?? "Combo"}
+                          </span>
+                        ) : (
+                          <Link
+                            href={`/productos/${item.slug ?? ""}`}
+                            className="text-sm font-semibold leading-snug transition-colors hover:text-primary sm:text-base"
+                          >
+                            {item.name ?? "Producto"}
+                          </Link>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => removeItem(item.id)}
+                          onClick={() => removeItem(item.type, getCartItemRefId(item))}
                           className="h-7 w-7 flex-none text-destructive hover:text-destructive"
                           type="button"
                         >

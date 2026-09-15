@@ -14,7 +14,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCartStore } from "@/lib/store";
+import { useCartStore, type ProductCartItem } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ import { toast } from "sonner";
 
 type PaymentMethod = "MERCADO_PAGO" | "TALO_PAY" | "CASH";
 
-type CartItemLike = { id: string; quantity: number };
+type CartItemLike = { quantity: number };
 
 function normalizeQty(item: CartItemLike) {
   const qty = Number(item.quantity ?? 0);
@@ -147,8 +147,9 @@ export default function MetodoPagoPage() {
 
   const buildOrderBody = (paymentMethod: "CASH") => {
     const orderItems = (items ?? [])
+      .filter((item): item is ProductCartItem => item.type === "product")
       .map((item) => ({
-        productId: item.id,
+        productId: item.productId,
         quantity: normalizeQty(item as CartItemLike),
       }))
       .filter((i) => i.quantity > 0);
@@ -172,8 +173,9 @@ export default function MetodoPagoPage() {
 
   const buildMPBody = () => {
     const orderItems = (items ?? [])
+      .filter((item): item is ProductCartItem => item.type === "product")
       .map((item) => ({
-        productId: item.id,
+        productId: item.productId,
         quantity: normalizeQty(item as CartItemLike),
       }))
       .filter((i) => i.quantity > 0);
@@ -197,7 +199,7 @@ export default function MetodoPagoPage() {
   const handleOrderError = (data: any) => {
     const missing: string[] = data?.missingProducts ?? [];
     if (missing.length > 0) {
-      missing.forEach((id) => useCartStore.getState().removeItem(id));
+      missing.forEach((id) => useCartStore.getState().removeItem("product", id));
       toast.error(
         `${missing.length === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
         { duration: 6000 }

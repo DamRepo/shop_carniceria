@@ -253,7 +253,8 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     }
 
     addItem({
-      id: product.id,
+      type: "product",
+      productId: product.id,
       name: product.name,
       slug: product.slug,
       price: finalUnitPrice, // ✅ respeta oferta

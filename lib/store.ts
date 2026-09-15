@@ -2,8 +2,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeKgQuantity } from "@/lib/utils-format";
 
-export interface CartItem {
-  id: string;
+export type CartItemType = "product" | "combo";
+
+interface CartItemCommon {
   name: string;
   slug: string;
   price: number; // centavos (precio final bruto)
@@ -21,11 +22,38 @@ export interface CartItem {
   allowsDecimals?: boolean;
 }
 
+export interface ProductCartItem extends CartItemCommon {
+  type: "product";
+  productId: string;
+}
+
+export interface ComboCartItem extends CartItemCommon {
+  type: "combo";
+  comboId: string;
+}
+
+export type CartItem = ProductCartItem | ComboCartItem;
+
+/** Id de referencia del ítem, sin importar si es producto o combo. */
+export function getCartItemRefId(item: CartItem): string {
+  return item.type === "combo" ? item.comboId : item.productId;
+}
+
+function isValidCartItem(it: unknown): it is CartItem {
+  if (!it || typeof it !== "object") return false;
+  const o = it as Record<string, unknown>;
+
+  if (o.type === "product") return typeof o.productId === "string" && o.productId.length > 0;
+  if (o.type === "combo") return typeof o.comboId === "string" && o.comboId.length > 0;
+
+  return false;
+}
+
 interface CartStore {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  removeItem: (type: CartItemType, refId: string) => void;
+  updateQuantity: (type: CartItemType, refId: string, quantity: number) => void;
   clearCart: () => void;
 
   getTotalItems: () => number;
@@ -224,7 +252,10 @@ export const useCartStore = create<CartStore>()(
 
       addItem: (newItem) => {
         const items = get().items;
-        const existingItem = items.find((item) => item.id === newItem.id);
+        const refId = getCartItemRefId(newItem);
+        const existingItem = items.find(
+          (item) => item.type === newItem.type && getCartItemRefId(item) === refId
+        );
 
         const normalizedIncoming: CartItem = {
           ...newItem,
@@ -296,7 +327,7 @@ export const useCartStore = create<CartStore>()(
 
           set({
             items: items.map((item) =>
-              item.id === newItem.id
+              item.type === newItem.type && getCartItemRefId(item) === refId
                 ? {
                     ...mergedBase,
                     quantity: nextQty,
@@ -313,19 +344,27 @@ export const useCartStore = create<CartStore>()(
         });
       },
 
-      removeItem: (id) => {
-        set({ items: get().items.filter((item) => item.id !== id) });
+      removeItem: (type, refId) => {
+        set({
+          items: get().items.filter(
+            (item) => !(item.type === type && getCartItemRefId(item) === refId)
+          ),
+        });
       },
 
-      updateQuantity: (id, quantity) => {
-        const item = get().items.find((i) => i.id === id);
+      updateQuantity: (type, refId, quantity) => {
+        const item = get().items.find(
+          (i) => i.type === type && getCartItemRefId(i) === refId
+        );
         if (!item) return;
 
         const nextQty = normalizeQtyWithRules(item, quantity);
 
         set({
           items: get().items.map((i) =>
-            i.id === id ? { ...i, quantity: nextQty } : i
+            i.type === type && getCartItemRefId(i) === refId
+              ? { ...i, quantity: nextQty }
+              : i
           ),
         });
       },
@@ -349,7 +388,19 @@ export const useCartStore = create<CartStore>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
 
-        state.items = (state.items ?? []).map((it) => {
+        const rawItems = Array.isArray(state.items) ? state.items : [];
+
+        // Carrito guardado con la forma anterior (sin type/productId/comboId) —
+        // no calza con el tipo nuevo: lo vaciamos en vez de romper el render.
+        if (!rawItems.every(isValidCartItem)) {
+          console.warn(
+            "Carrito guardado en localStorage es de una versión anterior (sin soporte de combos) — se vació."
+          );
+          state.items = [];
+          return;
+        }
+
+        state.items = rawItems.map((it) => {
           const unitType = safeUnitType(it.unitType);
           const min = safePositiveNumberOrNull(it.minPurchaseQty);
           const rawStep = safePositiveNumberOrNull(it.qtyStep);
