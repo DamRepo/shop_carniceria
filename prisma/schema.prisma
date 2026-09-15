@@ -124,6 +124,13 @@ model Order {
   mpPreferenceId      String?
   mpExternalReference String?
 
+  // Talo Pay (transferencia CVU/alias)
+  taloPaymentId String?   @unique
+  taloStatus    String?
+  taloCvu       String?
+  taloAlias     String?
+  taloExpiresAt DateTime?
+
   address        String?
   addressDetails String?
   city           String?
@@ -214,6 +221,13 @@ model CheckoutSession {
   mpStatus       String?
   approvedAt     DateTime?
 
+  // Talo Pay (transferencia CVU/alias)
+  taloPaymentId String?   @unique
+  taloStatus    String?
+  taloCvu       String?
+  taloAlias     String?
+  taloExpiresAt DateTime?
+
   expiresAt           DateTime?
   reservationReleased Boolean  @default(false)
 
@@ -273,7 +287,8 @@ enum UserRole {
 enum PaymentMethod {
   MERCADO_PAGO  // Credit/debit card via Mercado Pago
   CASH          // Cash payment at pickup or delivery
-  BANK_TRANSFER // Bank transfer (CVU/alias)
+  BANK_TRANSFER // Bank transfer (CVU/alias) - manual, con comprobante
+  TALO_PAY      // Bank transfer (CVU/alias) - automático vía Talo Pay
 }
 
 enum TransferStatus {
@@ -293,6 +308,7 @@ enum PaymentStatus {
 
 enum CheckoutSessionStatus {
   WAITING_MP
+  WAITING_TALO
   PENDING
   APPROVED
   FAILED

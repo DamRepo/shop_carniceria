@@ -20,7 +20,7 @@ type BuildTelegramOrderMessageParams = {
   phone: string;
   email?: string | null;
   deliveryMethod: "PICKUP" | "DELIVERY";
-  paymentMethod?: "CASH" | "BANK_TRANSFER" | "MERCADO_PAGO";
+  paymentMethod?: "CASH" | "BANK_TRANSFER" | "MERCADO_PAGO" | "TALO_PAY";
 
   address?: string | null;
   addressDetails?: string | null;
@@ -148,7 +148,9 @@ export function buildTelegramOrderMessage(
       ? "🏦 Transferencia bancaria"
       : params.paymentMethod === "MERCADO_PAGO"
         ? "💳 Mercado Pago"
-        : "💵 Efectivo";
+        : params.paymentMethod === "TALO_PAY"
+          ? "🏦 Transferencia automática (Talo Pay)"
+          : "💵 Efectivo";
 
   const itemsText =
     params.items && params.items.length > 0

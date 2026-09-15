@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Building2,
   Check,
   ChevronLeft,
   CreditCard,
+  Landmark,
   Loader2,
   Wallet,
 } from "lucide-react";
@@ -20,7 +20,7 @@ import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type PaymentMethod = "BANK_TRANSFER" | "MERCADO_PAGO" | "CASH";
+type PaymentMethod = "MERCADO_PAGO" | "TALO_PAY" | "CASH";
 
 type CartItemLike = { id: string; quantity: number };
 
@@ -145,7 +145,7 @@ export default function MetodoPagoPage() {
 
   const isDelivery = formData.deliveryMethod === "DELIVERY";
 
-  const buildOrderBody = (paymentMethod: "CASH" | "BANK_TRANSFER") => {
+  const buildOrderBody = (paymentMethod: "CASH") => {
     const orderItems = (items ?? [])
       .map((item) => ({
         productId: item.id,
@@ -246,8 +246,27 @@ export default function MetodoPagoPage() {
         return;
       }
 
-      if (selected === "BANK_TRANSFER") {
-        router.push("/checkout/transferencia");
+      if (selected === "TALO_PAY") {
+        const res = await fetch("/api/checkout/talo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildMPBody()),
+        });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          const detail = data?.detail ? ` — ${data.detail}` : "";
+          toast.error((data?.error ?? "No se pudo iniciar el pago") + detail);
+          return;
+        }
+
+        if (!data?.csId) {
+          toast.error("No pudimos iniciar el pago. Por favor intentá de nuevo.");
+          return;
+        }
+
+        navigatingRef.current = true;
+        router.push(`/checkout/talo/pending?csId=${data.csId}`);
         return;
       }
 
@@ -336,12 +355,12 @@ export default function MetodoPagoPage() {
             aria-label="Método de pago"
           >
             <PaymentOption
-              selected={selected === "BANK_TRANSFER"}
+              selected={selected === "TALO_PAY"}
               disabled={submitting}
-              onClick={() => setSelected("BANK_TRANSFER")}
-              icon={Building2}
-              title="Transferencia bancaria"
-              description="CVU o alias — sin comisiones"
+              onClick={() => setSelected("TALO_PAY")}
+              icon={Landmark}
+              title="Transferencia automática"
+              description="Confirmación automática"
               badge="Sin recargo"
             />
 
@@ -351,7 +370,7 @@ export default function MetodoPagoPage() {
               onClick={() => setSelected("MERCADO_PAGO")}
               icon={CreditCard}
               title="Tarjeta de débito o crédito"
-              description="Vía Mercado Pago — seguro y rápido"
+              description="Seguro y rápido"
             />
 
             <PaymentOption

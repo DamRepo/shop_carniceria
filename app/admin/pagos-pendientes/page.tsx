@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +79,7 @@ function formatQty(qty: number, unitType: string) {
   return unitType === "PER_KG" ? `${qty} kg` : `${qty} un`;
 }
 
-export default function PagosPendientesPage() {
+function TransferenciasTab() {
   const [orders, setOrders] = useState<TransferOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"pending" | "all">("pending");
@@ -169,14 +170,11 @@ export default function PagosPendientesPage() {
         );
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Transferencias bancarias</h1>
-          <p className="text-sm text-muted-foreground">
-            Revisá y confirmá los pagos pendientes
-          </p>
-        </div>
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          Revisá y confirmá los pagos pendientes
+        </p>
         <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
           <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
           Actualizar
@@ -448,7 +446,381 @@ export default function PagosPendientesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
 
+type TaloReviewReason = "OVERPAID" | "UNDERPAID" | "MISMATCH" | null;
+
+interface TaloOrder {
+  id: string;
+  orderNumber: string;
+  reviewReason: TaloReviewReason;
+  taloStatus: string | null;
+  taloCvu: string | null;
+  taloAlias: string | null;
+  customerName: string;
+  phone: string;
+  email: string | null;
+  deliveryMethod: "PICKUP" | "DELIVERY";
+  address: string | null;
+  pickupDate: string | null;
+  pickupTimeSlot: string | null;
+  paymentStatus: string;
+  status: string;
+  createdAt: string;
+  expectedAmountCents: number;
+  paidAmountCents: number | null;
+  diffCents: number | null;
+  paidAmountError: boolean;
+  items: {
+    quantity: number;
+    lineTotal: number;
+    product: { name: string; unitType: string };
+  }[];
+}
+
+const TALO_REASON_LABELS: Record<Exclude<TaloReviewReason, null>, string> = {
+  OVERPAID: "Pagó de más",
+  UNDERPAID: "Pagó de menos",
+  MISMATCH: "Monto no coincide",
+};
+
+function TaloTab() {
+  const [orders, setOrders] = useState<TaloOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const [rejectDialog, setRejectDialog] = useState<{
+    open: boolean;
+    orderId: string;
+    code: string;
+  }>({ open: false, orderId: "", code: "" });
+  const [rejectReason, setRejectReason] = useState("");
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/talo");
+      if (!res.ok) throw new Error("Error cargando pagos Talo");
+      const data = await res.json();
+      setOrders(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const handleConfirm = async (orderId: string) => {
+    if (!confirm("¿Confirmar este pago como recibido? Esta acción no se puede deshacer.")) return;
+    setActionLoading(orderId + "_confirm");
+    try {
+      const res = await fetch(`/api/admin/talo/${orderId}/confirm`, {
+        method: "PATCH",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        alert(d?.error ?? "Error confirmando pago");
+        return;
+      }
+      await fetchOrders();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectDialog.orderId) return;
+    setActionLoading(rejectDialog.orderId + "_reject");
+    try {
+      const res = await fetch(`/api/admin/talo/${rejectDialog.orderId}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: rejectReason || "El monto acreditado no coincide con el total de la orden.",
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        alert(d?.error ?? "Error rechazando pago");
+        return;
+      }
+      setRejectDialog({ open: false, orderId: "", code: "" });
+      setRejectReason("");
+      await fetchOrders();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          Pagos con Talo Pay que quedaron en revisión por diferencia de monto
+        </p>
+        <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
+          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+          Actualizar
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : orders.length === 0 ? (
+        <Card className="rounded-3xl border-border/60">
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <CheckCircle className="h-12 w-12 text-green-500" />
+            <p className="font-medium">No hay pagos Talo en revisión</p>
+            <p className="text-sm text-muted-foreground">
+              Cuando un pago acreditado no coincida con el total de una orden aparecerá acá.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {orders.map((order) => {
+            const isConfirming = actionLoading === order.id + "_confirm";
+            const isRejecting = actionLoading === order.id + "_reject";
+
+            return (
+              <Card
+                key={order.id}
+                className="overflow-hidden rounded-3xl border-border/60 shadow-sm"
+              >
+                <CardHeader className="border-b bg-muted/30 pb-3 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <p className="font-mono text-lg font-bold">{order.orderNumber}</p>
+                      {order.reviewReason && (
+                        <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
+                          <AlertCircle className="mr-1 inline h-3 w-3" />
+                          {TALO_REASON_LABELS[order.reviewReason]}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(order.createdAt)}
+                    </p>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_auto]">
+                  <div className="space-y-3">
+                    {/* Cliente */}
+                    <div className="rounded-xl border bg-background p-3">
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Cliente
+                      </p>
+                      <p className="font-semibold">{order.customerName}</p>
+                      <p className="text-sm text-muted-foreground">{order.phone}</p>
+                      {order.email && (
+                        <p className="text-sm text-muted-foreground">{order.email}</p>
+                      )}
+                    </div>
+
+                    {/* Montos */}
+                    <div className="flex flex-wrap gap-3">
+                      <div className="flex-1 rounded-xl border bg-background p-3">
+                        <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          Esperado
+                        </p>
+                        <p className="text-lg font-bold">
+                          {formatPrice(order.expectedAmountCents)}
+                        </p>
+                      </div>
+                      <div className="flex-1 rounded-xl border bg-background p-3">
+                        <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          Recibido
+                        </p>
+                        {order.paidAmountError ? (
+                          <p className="text-xs text-muted-foreground">
+                            No se pudo consultar a Talo ahora
+                          </p>
+                        ) : (
+                          <p className="text-lg font-bold">
+                            {order.paidAmountCents != null
+                              ? formatPrice(order.paidAmountCents)
+                              : "—"}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex-1 rounded-xl border bg-background p-3">
+                        <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          Diferencia
+                        </p>
+                        <p
+                          className={cn(
+                            "text-lg font-bold",
+                            order.diffCents != null && order.diffCents > 0 && "text-green-600",
+                            order.diffCents != null && order.diffCents < 0 && "text-red-600"
+                          )}
+                        >
+                          {order.diffCents != null
+                            ? `${order.diffCents > 0 ? "+" : ""}${formatPrice(order.diffCents)}`
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Entrega */}
+                    <div className="rounded-xl border bg-background p-3">
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Entrega
+                      </p>
+                      <p className="text-sm font-medium">
+                        {order.deliveryMethod === "PICKUP" ? "Retiro en local" : "Delivery"}
+                      </p>
+                      {order.deliveryMethod === "PICKUP" && order.pickupDate && (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(order.pickupDate).toLocaleDateString("es-AR")}
+                          {order.pickupTimeSlot && ` · ${order.pickupTimeSlot}`}
+                        </p>
+                      )}
+                      {order.deliveryMethod === "DELIVERY" && order.address && (
+                        <p className="text-xs text-muted-foreground">{order.address}</p>
+                      )}
+                    </div>
+
+                    {/* Productos */}
+                    <details className="rounded-xl border bg-background">
+                      <summary className="cursor-pointer select-none p-3 text-sm font-medium">
+                        {order.items.length} producto{order.items.length !== 1 ? "s" : ""}
+                      </summary>
+                      <div className="border-t px-3 pb-3 pt-2">
+                        <ul className="space-y-1">
+                          {order.items.map((it, i) => (
+                            <li key={i} className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                {it.product.name} × {formatQty(it.quantity, it.product.unitType)}
+                              </span>
+                              <span className="font-medium">{formatPrice(it.lineTotal)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </details>
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="flex flex-row flex-wrap items-start gap-2 md:flex-col md:justify-start">
+                    <Button
+                      size="sm"
+                      className="rounded-xl bg-green-600 text-white hover:bg-green-700"
+                      disabled={!!actionLoading}
+                      onClick={() => handleConfirm(order.id)}
+                    >
+                      {isConfirming ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Confirmar pago
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      disabled={!!actionLoading}
+                      onClick={() =>
+                        setRejectDialog({ open: true, orderId: order.id, code: order.orderNumber })
+                      }
+                    >
+                      {isRejecting ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Rechazar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dialog: Rechazar */}
+      <Dialog
+        open={rejectDialog.open}
+        onOpenChange={(v) => !v && setRejectDialog({ open: false, orderId: "", code: "" })}
+      >
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Rechazar pago</DialogTitle>
+            <DialogDescription>
+              Pedido <strong className="font-mono">{rejectDialog.code}</strong>. Se cancela la
+              orden y se libera el stock reservado. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="mb-2 block text-sm font-medium">Motivo del rechazo</label>
+            <textarea
+              className="w-full rounded-xl border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              rows={3}
+              placeholder="Ej: El monto no coincide y no se pudo resolver con el cliente"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setRejectDialog({ open: false, orderId: "", code: "" })}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+              disabled={!!actionLoading}
+              onClick={handleReject}
+            >
+              {actionLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="mr-2 h-4 w-4" />
+              )}
+              Rechazar pago
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+export default function PagosPendientesPage() {
+  return (
+    <div className="p-4 md:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Pagos pendientes</h1>
+        <p className="text-sm text-muted-foreground">
+          Revisá y resolvé pagos que necesitan una acción manual
+        </p>
+      </div>
+
+      <Tabs defaultValue="transferencias">
+        <TabsList>
+          <TabsTrigger value="transferencias">Transferencias bancarias</TabsTrigger>
+          <TabsTrigger value="talo">Talo Pay</TabsTrigger>
+        </TabsList>
+        <TabsContent value="transferencias">
+          <TransferenciasTab />
+        </TabsContent>
+        <TabsContent value="talo">
+          <TaloTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

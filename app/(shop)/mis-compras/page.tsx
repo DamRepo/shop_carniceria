@@ -35,7 +35,7 @@ type Order = {
   | "COMPLETED"
   | "CANCELLED";
   paymentStatus: "PENDING" | "PAID" | "FAILED" | "CANCELLED";
-  paymentMethod: "MERCADO_PAGO" | "CASH" | "BANK_TRANSFER";
+  paymentMethod: "MERCADO_PAGO" | "CASH" | "BANK_TRANSFER" | "TALO_PAY";
   deliveryMethod: "PICKUP" | "DELIVERY";
   total: number;
   createdAt: string;
