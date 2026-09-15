@@ -13,7 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCartStore, type ProductCartItem } from "@/lib/store";
+import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { TRANSFER_INFO } from "@/lib/transfer-info";
 import { formatPrice } from "@/lib/utils-format";
@@ -85,13 +85,12 @@ export default function TransferenciaPage() {
 
     try {
       const orderItems = (items ?? [])
-        .filter((item): item is ProductCartItem => item.type === "product")
         .map((item) => {
           const qty = Number(item.quantity ?? 0);
-          return {
-            productId: item.productId,
-            quantity: Number.isFinite(qty) && qty > 0 ? qty : 0,
-          };
+          const quantity = Number.isFinite(qty) && qty > 0 ? qty : 0;
+          return item.type === "combo"
+            ? { comboId: item.comboId, quantity }
+            : { productId: item.productId, quantity };
         })
         .filter((i) => i.quantity > 0);
 
@@ -119,10 +118,13 @@ export default function TransferenciaPage() {
 
       if (!res.ok) {
         const missing: string[] = data?.missingProducts ?? [];
-        if (missing.length > 0) {
+        const missingCombos: string[] = data?.missingCombos ?? [];
+        const missingCount = missing.length + missingCombos.length;
+        if (missingCount > 0) {
           missing.forEach((id) => useCartStore.getState().removeItem("product", id));
+          missingCombos.forEach((id) => useCartStore.getState().removeItem("combo", id));
           toast.error(
-            `${missing.length === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
+            `${missingCount === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
             { duration: 6000 }
           );
         } else {

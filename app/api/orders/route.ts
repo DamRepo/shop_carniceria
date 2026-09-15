@@ -8,6 +8,7 @@ import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
 import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 import { generateTransferCode, formatTransferAmount } from "@/lib/transfer-code";
+import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,9 +22,43 @@ class HttpError extends Error {
 }
 
 type IncomingItem = {
-  productId: string;
+  productId?: string;
+  comboId?: string;
   quantity: number;
 };
+
+type IncomingProductItem = { productId: string; quantity: number };
+type IncomingComboItem = { comboId: string; quantity: number };
+
+function splitIncomingItems(items: IncomingItem[]) {
+  const productItems: IncomingProductItem[] = [];
+  const comboItems: IncomingComboItem[] = [];
+
+  for (const raw of items) {
+    const quantity = safeNumber(raw?.quantity);
+    const comboId = normalizeString(raw?.comboId);
+    const productId = normalizeString(raw?.productId);
+
+    if (comboId && productId) {
+      throw new HttpError(400, "Un ítem no puede ser producto y combo a la vez");
+    }
+    if (comboId) {
+      comboItems.push({ comboId, quantity });
+    } else if (productId) {
+      productItems.push({ productId, quantity });
+    } else {
+      throw new HttpError(400, "Ítem sin productId ni comboId");
+    }
+  }
+
+  return { productItems, comboItems };
+}
+
+function validateComboQuantity(name: string, qty: number) {
+  if (!Number.isFinite(qty) || qty <= 0 || !nearlyInteger(qty)) {
+    throw new HttpError(400, `Cantidad inválida para el combo ${name}`);
+  }
+}
 
 function safeNumber(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -179,32 +214,48 @@ export async function POST(request: Request) {
       pickupDate = new Date(`${pickupDateRaw}T12:00:00`);
     }
 
-    const normalizedItems: IncomingItem[] = items.map((i) => ({
-      productId: String(i.productId),
-      quantity: safeNumber(i.quantity),
-    }));
+    const { productItems, comboItems } = splitIncomingItems(items);
 
-    const ids = Array.from(new Set(normalizedItems.map((i) => i.productId)));
+    const ids = Array.from(new Set(productItems.map((i) => i.productId)));
+    const comboIds = Array.from(new Set(comboItems.map((i) => i.comboId)));
 
     const products = await prisma.product.findMany({
       where: { id: { in: ids }, isActive: true },
     });
 
+    const combos = await prisma.combo.findMany({
+      where: { id: { in: comboIds }, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        priceType: true,
+        priceValue: true,
+        items: { select: { quantity: true, product: { select: { price: true } } } },
+      },
+    });
+
     type ProductRow = (typeof products)[number];
+    type ComboRow = (typeof combos)[number];
     const byId = new Map<string, ProductRow>(products.map((p) => [p.id, p]));
+    const comboById = new Map<string, ComboRow>(combos.map((c) => [c.id, c]));
 
     const existingIds = new Set(products.map((p) => p.id));
     const missingIds = ids.filter((id) => !existingIds.has(id));
+    const missingComboIds = comboIds.filter((id) => !comboById.has(id));
 
-    console.log(`[orders] Buscando: [${ids.join(", ")}]`);
-    console.log(`[orders] Encontrados: [${[...existingIds].join(", ")}]`);
+    console.log(`[orders] Buscando: [${ids.join(", ")}] combos: [${comboIds.join(", ")}]`);
+    console.log(`[orders] Encontrados: [${[...existingIds].join(", ")}] combos: [${[...comboById.keys()].join(", ")}]`);
 
-    if (missingIds.length > 0) {
-      console.error(`[orders] ❌ Productos no encontrados/inactivos: [${missingIds.join(", ")}]`);
+    if (missingIds.length > 0 || missingComboIds.length > 0) {
+      console.error(
+        `[orders] ❌ No encontrados/inactivos — productos: [${missingIds.join(", ")}] combos: [${missingComboIds.join(", ")}]`
+      );
       return NextResponse.json(
         {
           error: "Algunos productos ya no están disponibles",
           missingProducts: missingIds,
+          missingCombos: missingComboIds,
           availableProducts: [...existingIds],
         },
         { status: 400 }
@@ -213,7 +264,7 @@ export async function POST(request: Request) {
 
     let subtotalCents = 0;
 
-    const orderItems = normalizedItems.map((i) => {
+    const productOrderItems = productItems.map((i) => {
       const p = byId.get(i.productId)!;
       validateProductQuantity(p, i.quantity);
 
@@ -236,8 +287,34 @@ export async function POST(request: Request) {
         quantity: p.unitType === "PER_UNIT" ? Math.round(i.quantity) : i.quantity,
         unitPrice: priceCents,
         lineTotal: lineTotalCents,
+        itemNameSnapshot: p.name,
       };
     });
+
+    const comboOrderItems = comboItems.map((i) => {
+      const c = comboById.get(i.comboId)!;
+      validateComboQuantity(c.name, i.quantity);
+
+      const qty = Math.round(i.quantity);
+      const { finalPriceCents } = computeComboPricing({
+        priceType: c.priceType,
+        priceValue: c.priceValue,
+        componentsTotalCents: sumComboComponentsCents(c.items),
+      });
+      const lineTotalCents = finalPriceCents * qty;
+
+      subtotalCents += lineTotalCents;
+
+      return {
+        comboId: c.id,
+        quantity: qty,
+        unitPrice: finalPriceCents,
+        lineTotal: lineTotalCents,
+        itemNameSnapshot: c.name,
+      };
+    });
+
+    const orderItems = [...productOrderItems, ...comboOrderItems];
 
     const deliveryCostCents =
       deliveryMethod === "DELIVERY" && isValidShippingZone(deliveryZoneRaw)
@@ -249,7 +326,7 @@ export async function POST(request: Request) {
     // 🔥 FIX CLAVE: AGRUPAR STOCK
     const decByProductId = new Map<string, number>();
 
-    for (const it of normalizedItems) {
+    for (const it of productItems) {
       const p = byId.get(it.productId)!;
       const dec = computeStockDecrement(p.unitType, it.quantity);
 
@@ -257,6 +334,24 @@ export async function POST(request: Request) {
         it.productId,
         (decByProductId.get(it.productId) ?? 0) + dec
       );
+    }
+
+    const decByComboId = new Map<string, number>();
+
+    for (const it of comboOrderItems) {
+      decByComboId.set(
+        it.comboId,
+        (decByComboId.get(it.comboId) ?? 0) + it.quantity
+      );
+    }
+
+    // Pre-chequeo no atómico para devolver un error claro antes de abrir la
+    // transacción; el guard real es el updateMany condicional de abajo.
+    for (const [comboId, dec] of decByComboId.entries()) {
+      const c = comboById.get(comboId)!;
+      if (c.stock < dec) {
+        throw new HttpError(400, `Stock insuficiente para el combo ${c.name}`);
+      }
     }
 
     const created = await prisma.$transaction(async (tx: any) => {
@@ -275,6 +370,25 @@ export async function POST(request: Request) {
 
         if (updated.count === 0) {
           throw new HttpError(400, `Stock insuficiente para ${p.name}`);
+        }
+      }
+
+      for (const [comboId, dec] of decByComboId.entries()) {
+        const c = comboById.get(comboId)!;
+
+        const updated = await tx.combo.updateMany({
+          where: {
+            id: comboId,
+            isActive: true,
+            stock: { gte: dec },
+          },
+          data: {
+            stock: { decrement: dec },
+          },
+        });
+
+        if (updated.count === 0) {
+          throw new HttpError(400, `Stock insuficiente para el combo ${c.name}`);
         }
       }
 
@@ -326,7 +440,7 @@ export async function POST(request: Request) {
           customerName,
           orderId: created.orderNumber,
           items: orderItems.map((it) => ({
-            name: byId.get(it.productId)?.name ?? "",
+            name: it.itemNameSnapshot,
             quantity: it.quantity,
             unitPrice: it.unitPrice / 100,
           })),
@@ -352,9 +466,12 @@ export async function POST(request: Request) {
         deliveryCostCents,
         totalCents,
         items: orderItems.map((it) => ({
-          name: byId.get(it.productId)?.name ?? "",
+          name: it.itemNameSnapshot,
           quantity: it.quantity,
-          unitType: (byId.get(it.productId)?.unitType ?? "PER_UNIT") as "PER_KG" | "PER_UNIT",
+          unitType:
+            "productId" in it
+              ? ((byId.get(it.productId)?.unitType ?? "PER_UNIT") as "PER_KG" | "PER_UNIT")
+              : "PER_UNIT",
           lineTotalCents: it.lineTotal,
         })),
       }),

@@ -14,7 +14,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCartStore, type ProductCartItem } from "@/lib/store";
+import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
@@ -145,14 +145,20 @@ export default function MetodoPagoPage() {
 
   const isDelivery = formData.deliveryMethod === "DELIVERY";
 
-  const buildOrderBody = (paymentMethod: "CASH") => {
-    const orderItems = (items ?? [])
-      .filter((item): item is ProductCartItem => item.type === "product")
-      .map((item) => ({
-        productId: item.productId,
-        quantity: normalizeQty(item as CartItemLike),
-      }))
+  const buildItems = (includeCombos: boolean) =>
+    (items ?? [])
+      .filter((item) => includeCombos || item.type === "product")
+      .map((item) =>
+        item.type === "combo"
+          ? { comboId: item.comboId, quantity: normalizeQty(item as CartItemLike) }
+          : { productId: item.productId, quantity: normalizeQty(item as CartItemLike) }
+      )
       .filter((i) => i.quantity > 0);
+
+  const cartHasCombos = (items ?? []).some((item) => item.type === "combo");
+
+  const buildOrderBody = (paymentMethod: "CASH") => {
+    const orderItems = buildItems(true);
 
     return {
       customerName: formData.customerName.trim(),
@@ -171,14 +177,10 @@ export default function MetodoPagoPage() {
     };
   };
 
+  // Mercado Pago y Talo Pay todavía no aceptan combos: se envían solo productos
+  // y el guard de handleContinue bloquea esos métodos si el carrito tiene combos.
   const buildMPBody = () => {
-    const orderItems = (items ?? [])
-      .filter((item): item is ProductCartItem => item.type === "product")
-      .map((item) => ({
-        productId: item.productId,
-        quantity: normalizeQty(item as CartItemLike),
-      }))
-      .filter((i) => i.quantity > 0);
+    const orderItems = buildItems(false);
 
     return {
       customerName: formData.customerName.trim(),
@@ -198,10 +200,13 @@ export default function MetodoPagoPage() {
 
   const handleOrderError = (data: any) => {
     const missing: string[] = data?.missingProducts ?? [];
-    if (missing.length > 0) {
+    const missingCombos: string[] = data?.missingCombos ?? [];
+    const missingCount = missing.length + missingCombos.length;
+    if (missingCount > 0) {
       missing.forEach((id) => useCartStore.getState().removeItem("product", id));
+      missingCombos.forEach((id) => useCartStore.getState().removeItem("combo", id));
       toast.error(
-        `${missing.length === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
+        `${missingCount === 1 ? "Un producto" : "Algunos productos"} de tu carrito ya no están disponibles y fueron removidos. Revisá tu pedido antes de continuar.`,
         { duration: 6000 }
       );
     } else {
@@ -217,6 +222,13 @@ export default function MetodoPagoPage() {
 
     if ((items?.length ?? 0) === 0) {
       toast.error("Tu carrito está vacío");
+      return;
+    }
+
+    if (cartHasCombos && selected !== "CASH") {
+      toast.error(
+        "Los combos por ahora solo se pueden pagar en el local. Elegí ese método o quitá el combo del carrito."
+      );
       return;
     }
 
