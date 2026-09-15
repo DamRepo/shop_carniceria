@@ -50,6 +50,7 @@ export async function PATCH(
         items: {
           select: {
             quantity: true,
+            comboId: true,
             product: { select: { id: true, unitType: true } },
           },
         },
@@ -88,8 +89,16 @@ export async function PATCH(
       if (result.count === 0) return false;
 
       const incByProductId = new Map<string, number>();
+      const incByComboId = new Map<string, number>();
 
       for (const it of order.items as any[]) {
+        if (it.comboId) {
+          const comboInc = Math.round(Number(it.quantity ?? 0));
+          if (comboInc > 0) {
+            incByComboId.set(it.comboId, (incByComboId.get(it.comboId) ?? 0) + comboInc);
+          }
+          continue;
+        }
         if (!it.product) continue;
         const productId = it.product.id as string;
         const unitType = it.product.unitType as "PER_KG" | "PER_UNIT";
@@ -101,6 +110,15 @@ export async function PATCH(
       for (const [productId, inc] of incByProductId.entries()) {
         await tx.product.update({
           where: { id: productId },
+          data: { stock: { increment: inc } },
+        });
+      }
+
+      // BANK_TRANSFER descuenta Combo.stock al crear la orden (igual que
+      // productos), así que rechazar la transferencia lo devuelve.
+      for (const [comboId, inc] of incByComboId.entries()) {
+        await tx.combo.update({
+          where: { id: comboId },
           data: { stock: { increment: inc } },
         });
       }
