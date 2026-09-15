@@ -4,11 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
+import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type BodyItem = { productId: string; quantity: number };
+type BodyItem = { productId?: string; comboId?: string; quantity: number };
 
 type Body = {
   customerName: string;
@@ -46,6 +47,18 @@ type ProductPick = {
 type ReservationItem = {
   productId: string;
   reserveQty: number;
+};
+
+type ComboReservationItem = {
+  comboId: string;
+  reserveQty: number;
+};
+
+type MpItem = {
+  title: string;
+  quantity: number;
+  unit_price: number;
+  currency_id: "ARS";
 };
 
 function normalizeString(value: unknown): string | undefined {
@@ -311,7 +324,29 @@ export async function POST(req: Request) {
 
     const resolvedEmail = email ?? sessionEmail?.trim().toLowerCase() ?? null;
 
-    const ids = body.items.map((i) => i.productId);
+    const productBodyItems: Array<{ productId: string; quantity: number }> = [];
+    const comboBodyItems: Array<{ comboId: string; quantity: number }> = [];
+
+    for (const raw of body.items) {
+      const productId = normalizeString(raw?.productId);
+      const comboId = normalizeString(raw?.comboId);
+      if (productId && comboId) {
+        return NextResponse.json(
+          { error: "Un ítem no puede ser producto y combo a la vez" },
+          { status: 400 }
+        );
+      }
+      if (comboId) {
+        comboBodyItems.push({ comboId, quantity: safeNumber(raw?.quantity) });
+      } else if (productId) {
+        productBodyItems.push({ productId, quantity: safeNumber(raw?.quantity) });
+      } else {
+        return NextResponse.json({ error: "Ítem sin productId ni comboId" }, { status: 400 });
+      }
+    }
+
+    const ids = productBodyItems.map((i) => i.productId);
+    const comboIds = Array.from(new Set(comboBodyItems.map((i) => i.comboId)));
 
     const products = (await prisma.product.findMany({
       where: { id: { in: ids }, isActive: true },
@@ -334,18 +369,35 @@ export async function POST(req: Request) {
 
     const byId = new Map<string, ProductPick>(products.map((p) => [p.id, p]));
 
+    const combos = await prisma.combo.findMany({
+      where: { id: { in: comboIds }, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        reservedStock: true,
+        priceType: true,
+        priceValue: true,
+        items: { select: { quantity: true, product: { select: { price: true } } } },
+      },
+    });
+    const comboById = new Map(combos.map((c) => [c.id, c]));
+
     let subtotalCents = 0;
 
     const itemsSnapshot: Array<{
-      productId: string;
+      productId?: string;
+      comboId?: string;
       quantity: number;
       unitPrice: number;
       lineTotal: number;
+      itemNameSnapshot: string;
     }> = [];
 
     const reservationItems: ReservationItem[] = [];
+    const comboReservationItems: ComboReservationItem[] = [];
 
-    const mpItems = body.items.map((i) => {
+    const mpItems: MpItem[] = productBodyItems.map((i) => {
       const p = byId.get(i.productId);
       if (!p) throw new Error(`Producto no encontrado: ${i.productId}`);
 
@@ -381,6 +433,7 @@ export async function POST(req: Request) {
           quantity: qty,
           unitPrice: priceCents,
           lineTotal: lineCents,
+          itemNameSnapshot: p.name,
         });
 
         const promoAsCombo =
@@ -418,6 +471,7 @@ export async function POST(req: Request) {
         quantity: units,
         unitPrice: priceCents,
         lineTotal: lineCents,
+        itemNameSnapshot: p.name,
       });
 
       const promoAsCombo =
@@ -439,6 +493,48 @@ export async function POST(req: Request) {
         currency_id: "ARS",
       };
     });
+
+    for (const i of comboBodyItems) {
+      const c = comboById.get(i.comboId);
+      if (!c) throw new Error(`Combo no encontrado: ${i.comboId}`);
+
+      const qty = safeNumber(i.quantity);
+      if (!Number.isFinite(qty) || qty <= 0 || !nearlyInteger(qty)) {
+        throw new Error(`Cantidad inválida para el combo ${c.name}`);
+      }
+      const units = Math.round(qty);
+
+      const { finalPriceCents } = computeComboPricing({
+        priceType: c.priceType,
+        priceValue: c.priceValue,
+        componentsTotalCents: sumComboComponentsCents(c.items),
+      });
+
+      const availableNow = Math.max(0, (c.stock ?? 0) - (c.reservedStock ?? 0));
+      if (availableNow < units) {
+        throw new Error(`Stock insuficiente para el combo ${c.name}`);
+      }
+
+      const lineCents = finalPriceCents * units;
+      subtotalCents += lineCents;
+
+      comboReservationItems.push({ comboId: c.id, reserveQty: units });
+
+      itemsSnapshot.push({
+        comboId: c.id,
+        quantity: units,
+        unitPrice: finalPriceCents,
+        lineTotal: lineCents,
+        itemNameSnapshot: c.name,
+      });
+
+      mpItems.push({
+        title: c.name,
+        quantity: units,
+        unit_price: centsToPesos(finalPriceCents),
+        currency_id: "ARS",
+      });
+    }
 
     const deliveryCostCents =
       deliveryMethod === "DELIVERY" && isValidShippingZone(deliveryZoneRaw)
@@ -506,6 +602,38 @@ export async function POST(req: Request) {
         }
       }
 
+      // Reservar combos con el mismo optimistic locking (Combo.reservedStock)
+      for (const r of comboReservationItems) {
+        const combo = await tx.combo.findUnique({
+          where: { id: r.comboId },
+          select: { id: true, name: true, isActive: true, stock: true, reservedStock: true },
+        });
+
+        if (!combo || !combo.isActive) {
+          throw new Error(`Combo no encontrado: ${r.comboId}`);
+        }
+
+        const available = Math.max(0, combo.stock - combo.reservedStock);
+        if (available < r.reserveQty) {
+          throw new Error(`Stock insuficiente para el combo ${combo.name}`);
+        }
+
+        const updated = await tx.combo.updateMany({
+          where: {
+            id: r.comboId,
+            stock: combo.stock,
+            reservedStock: combo.reservedStock,
+          },
+          data: {
+            reservedStock: { increment: r.reserveQty },
+          },
+        });
+
+        if (updated.count === 0) {
+          throw new Error(`No se pudo reservar stock para el combo ${combo.name}`);
+        }
+      }
+
       console.log("[preference][tx] Stock reserved. Creating order…");
 
       const order = await tx.order.create({
@@ -546,10 +674,12 @@ export async function POST(req: Request) {
 
           items: {
             create: itemsSnapshot.map((it) => ({
-              productId: it.productId,
+              productId: it.productId ?? null,
+              comboId: it.comboId ?? null,
               quantity: Number(it.quantity),
               unitPrice: Number(it.unitPrice),
               lineTotal: Number(it.lineTotal),
+              itemNameSnapshot: it.itemNameSnapshot,
             })),
           },
         },
@@ -623,6 +753,12 @@ export async function POST(req: Request) {
           for (const r of reservationItems) {
             await tx.product.updateMany({
               where: { id: r.productId, reservedStock: { gte: r.reserveQty } },
+              data: { reservedStock: { decrement: r.reserveQty } },
+            });
+          }
+          for (const r of comboReservationItems) {
+            await tx.combo.updateMany({
+              where: { id: r.comboId, reservedStock: { gte: r.reserveQty } },
               data: { reservedStock: { decrement: r.reserveQty } },
             });
           }

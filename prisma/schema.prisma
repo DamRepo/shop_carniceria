@@ -74,9 +74,10 @@ model Combo {
   name        String
   slug        String         @unique
   description String?
-  imageUrl    String?
-  stock       Int            @default(0)
-  priceType   ComboPriceType @default(FIXED)
+  imageUrl      String?
+  stock         Int            @default(0)
+  reservedStock Int            @default(0)
+  priceType     ComboPriceType @default(FIXED)
   priceValue  Int
   isActive    Boolean        @default(true)
   createdAt   DateTime       @default(now())

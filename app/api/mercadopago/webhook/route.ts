@@ -8,11 +8,20 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type SnapshotItem = {
-  productId: string;
+  productId?: string | null;
+  comboId?: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
 };
+
+function getComboReserveQty(qty: number) {
+  const units = Math.round(Number(qty ?? 0));
+  if (units <= 0) {
+    throw new Error("Cantidad inválida de combo");
+  }
+  return units;
+}
 
 type WebhookNotification = {
   topic: string | null;
@@ -192,6 +201,22 @@ async function releaseReservation(
   }
 
   for (const it of items) {
+    if (it.comboId) {
+      const comboQty = getComboReserveQty(it.quantity);
+      await tx.combo.updateMany({
+        where: { id: it.comboId, reservedStock: { gte: comboQty } },
+        data: { reservedStock: { decrement: comboQty } },
+      });
+      continue;
+    }
+
+    if (!it.productId) {
+      console.warn("releaseReservation: ítem sin productId ni comboId", {
+        checkoutSessionId: cs.id,
+      });
+      continue;
+    }
+
     const product = await tx.product.findUnique({
       where: { id: it.productId },
       select: { unitType: true },
@@ -480,6 +505,25 @@ async function processPayment(paymentId: string, accessToken: string) {
         }
 
         for (const it of items) {
+          if (it.comboId) {
+            const comboQty = getComboReserveQty(it.quantity);
+            const comboUpdated = await tx.combo.updateMany({
+              where: { id: it.comboId, reservedStock: { gte: comboQty } },
+              data: {
+                stock: { decrement: comboQty },
+                reservedStock: { decrement: comboQty },
+              },
+            });
+            if (comboUpdated.count === 0) {
+              throw new Error(`RESERVE_CONFIRM_FAILED:combo:${it.comboId}:${comboQty}`);
+            }
+            continue;
+          }
+
+          if (!it.productId) {
+            throw new Error("PRODUCT_NOT_FOUND:missing_id");
+          }
+
           const product = await tx.product.findUnique({
             where: { id: it.productId },
             select: { unitType: true, reservedStock: true },
@@ -547,6 +591,7 @@ async function processPayment(paymentId: string, accessToken: string) {
             select: {
               quantity: true,
               lineTotal: true,
+              itemNameSnapshot: true,
               product: { select: { name: true, unitType: true } },
             },
           },
@@ -567,7 +612,7 @@ async function processPayment(paymentId: string, accessToken: string) {
             deliveryCostCents: Number(fullOrder.deliveryCost ?? 0),
             totalCents: Number(fullOrder.total),
             items: fullOrder.items.map((it: any) => ({
-              name: it.product?.name ?? "",
+              name: it.itemNameSnapshot ?? it.product?.name ?? "",
               quantity: Number(it.quantity),
               unitType: (it.product?.unitType ?? "PER_UNIT") as "PER_KG" | "PER_UNIT",
               lineTotalCents: Number(it.lineTotal),

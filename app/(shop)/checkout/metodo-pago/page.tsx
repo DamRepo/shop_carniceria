@@ -145,9 +145,8 @@ export default function MetodoPagoPage() {
 
   const isDelivery = formData.deliveryMethod === "DELIVERY";
 
-  const buildItems = (includeCombos: boolean) =>
+  const buildItems = () =>
     (items ?? [])
-      .filter((item) => includeCombos || item.type === "product")
       .map((item) =>
         item.type === "combo"
           ? { comboId: item.comboId, quantity: normalizeQty(item as CartItemLike) }
@@ -158,7 +157,7 @@ export default function MetodoPagoPage() {
   const cartHasCombos = (items ?? []).some((item) => item.type === "combo");
 
   const buildOrderBody = (paymentMethod: "CASH") => {
-    const orderItems = buildItems(true);
+    const orderItems = buildItems();
 
     return {
       customerName: formData.customerName.trim(),
@@ -177,10 +176,8 @@ export default function MetodoPagoPage() {
     };
   };
 
-  // Mercado Pago y Talo Pay todavía no aceptan combos: se envían solo productos
-  // y el guard de handleContinue bloquea esos métodos si el carrito tiene combos.
   const buildMPBody = () => {
-    const orderItems = buildItems(false);
+    const orderItems = buildItems();
 
     return {
       customerName: formData.customerName.trim(),
@@ -225,9 +222,11 @@ export default function MetodoPagoPage() {
       return;
     }
 
-    if (cartHasCombos && selected !== "CASH") {
+    // Talo Pay todavía no acepta combos: se bloquea acá para no enviar un
+    // pedido incompleto a /api/checkout/talo.
+    if (cartHasCombos && selected === "TALO_PAY") {
       toast.error(
-        "Los combos por ahora solo se pueden pagar en el local. Elegí ese método o quitá el combo del carrito."
+        "Los combos por ahora no se pueden pagar con transferencia automática. Elegí otro método o quitá el combo del carrito."
       );
       return;
     }
