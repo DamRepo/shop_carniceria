@@ -18,8 +18,14 @@ type OrderItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  itemNameSnapshot: string | null;
+  comboId: string | null;
   product?: { id: string; name: string; slug: string; unitType: "PER_KG" | "PER_UNIT" } | null;
 };
+
+function itemDisplayName(it: OrderItem) {
+  return it.product?.name ?? it.itemNameSnapshot ?? (it.comboId ? "Combo" : "Producto");
+}
 
 type TransferStatus = "AWAITING_PROOF" | "PENDING_REVIEW" | "CONFIRMED" | "REJECTED";
 
@@ -209,6 +215,8 @@ async function getOrdersForSession(args: {
       quantity: Number(it.quantity ?? 0),
       unitPrice: it.unitPrice,
       lineTotal: it.lineTotal,
+      itemNameSnapshot: it.itemNameSnapshot ?? null,
+      comboId: it.comboId ?? null,
       product: it.product
         ? {
           id: it.product.id,
@@ -294,7 +302,7 @@ export default async function MisComprasPage() {
                       slug: it.product?.slug,
                       quantity: it.quantity,
                       unitType: it.product?.unitType ?? "PER_UNIT",
-                      name: it.product?.name ?? "Producto",
+                      name: itemDisplayName(it),
                     }))}
                   />
                 </div>
@@ -365,7 +373,7 @@ export default async function MisComprasPage() {
                     >
                       <div className="min-w-0">
                         <div className="line-clamp-1 font-medium">
-                          {it.product?.name ?? "Producto"}
+                          {itemDisplayName(it)}
                         </div>
                         <div className="text-muted-foreground">
                           Cantidad: {formatQuantity(it.quantity, it.product?.unitType ?? "PER_UNIT")}

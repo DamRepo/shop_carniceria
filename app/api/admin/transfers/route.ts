@@ -69,6 +69,8 @@ export async function GET(req: Request) {
           select: {
             quantity: true,
             lineTotal: true,
+            itemNameSnapshot: true,
+            comboId: true,
             product: { select: { name: true, unitType: true } },
           },
         },

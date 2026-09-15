@@ -87,7 +87,7 @@ export function RepeatOrderButton({ items }: { items: RepeatItem[] }) {
           `${added} producto${added !== 1 ? "s" : ""} agregado${added !== 1 ? "s" : ""} al carrito`
         );
         toast.warning(
-          `${skipped.length} omitido${skipped.length !== 1 ? "s" : ""} (sin stock o inactivo): ${skipped.join(", ")}`
+          `${skipped.length} omitido${skipped.length !== 1 ? "s" : ""} (sin stock, inactivo o combo): ${skipped.join(", ")}`
         );
       } else {
         toast.error("No hay productos disponibles para repetir este pedido.");

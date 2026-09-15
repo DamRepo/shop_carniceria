@@ -48,7 +48,9 @@ interface TransferOrder {
   items: {
     quantity: number;
     lineTotal: number;
-    product: { name: string; unitType: string };
+    itemNameSnapshot: string | null;
+    comboId: string | null;
+    product: { name: string; unitType: string } | null;
   }[];
 }
 
@@ -325,8 +327,8 @@ function TransferenciasTab() {
                               className="flex items-center justify-between text-sm"
                             >
                               <span className="text-muted-foreground">
-                                {it.product.name} ×{" "}
-                                {formatQty(it.quantity, it.product.unitType)}
+                                {it.product?.name ?? it.itemNameSnapshot ?? (it.comboId ? "Combo" : "Producto")} ×{" "}
+                                {formatQty(it.quantity, it.product?.unitType ?? "PER_UNIT")}
                               </span>
                               <span className="font-medium">
                                 {formatPrice(it.lineTotal)}

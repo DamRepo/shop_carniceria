@@ -228,6 +228,8 @@ export async function PATCH(
             quantity: true,
             unitPrice: true,
             lineTotal: true,
+            itemNameSnapshot: true,
+            comboId: true,
             product: {
               select: {
                 id: true,

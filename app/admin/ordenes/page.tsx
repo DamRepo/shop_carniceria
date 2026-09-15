@@ -79,10 +79,12 @@ interface Order {
     quantity: number;
     unitPrice: number;
     lineTotal?: number;
+    itemNameSnapshot?: string | null;
+    comboId?: string | null;
     product: {
       name: string;
       unitType: 'PER_KG' | 'PER_UNIT';
-    };
+    } | null;
   }[];
 }
 
@@ -556,8 +558,8 @@ export default function OrdenesAdmin() {
                     {order.items.map((item) => (
                       <div key={item.id} className="flex items-center justify-between text-sm">
                         <span className="text-white">
-                          {item.product.name} x {item.quantity}
-                          {item.product.unitType === 'PER_KG' ? ' kg' : ''}
+                          {item.product?.name ?? item.itemNameSnapshot ?? (item.comboId ? 'Combo' : 'Producto')} x {item.quantity}
+                          {item.product?.unitType === 'PER_KG' ? ' kg' : ''}
                         </span>
                         <span className="text-zinc-400">
                           {formatPrice(item.lineTotal ?? (item.unitPrice ?? 0) * (item.quantity ?? 0))}

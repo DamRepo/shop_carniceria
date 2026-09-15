@@ -112,6 +112,8 @@ export async function GET(req: Request) {
             unitPrice: true,
             lineTotal: true,
             createdAt: true,
+            itemNameSnapshot: true,
+            comboId: true,
             product: {
               select: {
                 id: true,
