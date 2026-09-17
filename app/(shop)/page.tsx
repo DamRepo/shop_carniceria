@@ -26,6 +26,7 @@ import { toast } from "sonner";
 
 import type { Product } from "@/lib/types";
 import { StoreLocation } from "@/components/store-location";
+import { getOrderProcessingStatus } from "@/lib/business-hours";
 
 type ProductWithSale = Product & {
   saleEndDate?: string | Date | null;
@@ -95,6 +96,7 @@ export default function HomePage() {
     []
   );
   const [loading, setLoading] = useState(true);
+  const [orderStatus] = useState(() => getOrderProcessingStatus());
 
   const [offers, setOffers] = useState<ProductWithSale[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
@@ -506,7 +508,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <StoreLocation />
+      <StoreLocation status={orderStatus} />
     </div>
   );
 }
