@@ -105,7 +105,7 @@ export function isCheckoutBlocked(): boolean {
 }
 
 export type ProcessingStatus =
-  | { kind: "open" }
+  | { kind: "open"; closesAtHour: number }
   | { kind: "later_today"; hour: number }
   | { kind: "next_day" }
   | { kind: "next_monday" };
@@ -130,16 +130,16 @@ export function getOrderProcessingStatus(): ProcessingStatus {
   const PM_CLOSE = 21 * 60;
 
   if (weekday === "Sun") {
-    if (minutes >= AM_OPEN && minutes < AM_CLOSE) return { kind: "open" };
+    if (minutes >= AM_OPEN && minutes < AM_CLOSE)
+      return { kind: "open", closesAtHour: AM_CLOSE / 60 };
     if (minutes < AM_OPEN) return { kind: "later_today", hour: 8 };
     return { kind: "next_monday" };
   }
 
-  if (
-    (minutes >= AM_OPEN && minutes < AM_CLOSE) ||
-    (minutes >= PM_OPEN && minutes < PM_CLOSE)
-  )
-    return { kind: "open" };
+  if (minutes >= AM_OPEN && minutes < AM_CLOSE)
+    return { kind: "open", closesAtHour: AM_CLOSE / 60 };
+  if (minutes >= PM_OPEN && minutes < PM_CLOSE)
+    return { kind: "open", closesAtHour: PM_CLOSE / 60 };
   if (minutes < AM_OPEN) return { kind: "later_today", hour: 8 };
   if (minutes >= AM_CLOSE && minutes < PM_OPEN)
     return { kind: "later_today", hour: 17 };
