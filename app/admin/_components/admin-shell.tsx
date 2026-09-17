@@ -12,6 +12,7 @@ import {
   FolderTree,
   LogOut,
   Menu,
+  PackagePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -53,6 +54,7 @@ export function AdminShell({
   const menuItems = [
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/productos", icon: Package, label: "Productos" },
+    { href: "/admin/combos", icon: PackagePlus, label: "Combos" },
     { href: "/admin/categorias", icon: FolderTree, label: "Categorías" },
     { href: "/admin/ofertas", icon: Tag, label: "Ofertas" },
     { href: "/admin/ordenes", icon: ShoppingCart, label: "Órdenes" },
