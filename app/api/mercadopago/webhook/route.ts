@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
+import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -174,6 +174,7 @@ async function releaseReservation(
   tx: Prisma.TransactionClient,
   cs: {
     id: string;
+    orderId: string | null;
     reservationReleased: boolean | null;
     itemsSnapshot: unknown;
   }
@@ -189,6 +190,23 @@ async function releaseReservation(
   if (guard.count === 0) {
     // Ya fue liberada (o marcada por otra instancia concurrente)
     return;
+  }
+
+  // Órdenes que el admin canceló antes de que la cancelación marcara
+  // reservationReleased: el stock ya se devolvió al cancelar, no liberar de nuevo.
+  if (cs.orderId) {
+    const current = await tx.order.findUnique({
+      where: { id: cs.orderId },
+      select: { status: true },
+    });
+
+    if (current?.status === "CANCELLED") {
+      console.warn("releaseReservation: orden ya CANCELLED, no se libera stock de nuevo", {
+        checkoutSessionId: cs.id,
+        orderId: cs.orderId,
+      });
+      return;
+    }
   }
 
   const items = cs.itemsSnapshot as SnapshotItem[];
@@ -250,6 +268,7 @@ async function findCheckoutSessionForOrder(orderId: string) {
     orderBy: { id: "desc" },
     select: {
       id: true,
+      orderId: true,
       itemsSnapshot: true,
       reservationReleased: true,
       expiresAt: true,
@@ -488,7 +507,11 @@ async function processPayment(paymentId: string, accessToken: string) {
         // solo uno obtendrá count=1; el otro verá count=0 y abortará la transacción
         // antes de tocar el stock, eliminando el doble descuento.
         const orderUpdate = await tx.order.updateMany({
-          where: { id: order.id, paymentStatus: { not: "PAID" } },
+          where: {
+            id: order.id,
+            paymentStatus: { not: "PAID" },
+            status: { not: "CANCELLED" },
+          },
           data: {
             status: "CONFIRMED",
             confirmedAt: new Date(),
@@ -501,6 +524,15 @@ async function processPayment(paymentId: string, accessToken: string) {
         });
 
         if (orderUpdate.count === 0) {
+          // count=0 por dos motivos: ya estaba PAID (webhook duplicado) o fue
+          // cancelada antes de que llegara el pago (admin / expiración).
+          const fresh = await tx.order.findUnique({
+            where: { id: order.id },
+            select: { status: true, paymentStatus: true },
+          });
+          if (fresh?.paymentStatus !== "PAID" && fresh?.status === "CANCELLED") {
+            throw new Error("ORDER_CANCELLED");
+          }
           throw new Error("ALREADY_PROCESSED");
         }
 
@@ -635,6 +667,31 @@ async function processPayment(paymentId: string, accessToken: string) {
         return { ok: true, alreadyProcessed: true };
       }
 
+      // Pago aprobado sobre una orden ya cancelada: no se toca stock ni estado.
+      // La plata entró en MP y hay que devolverla a mano.
+      if (msg === "ORDER_CANCELLED") {
+        console.error("MP processPayment: pago aprobado en orden CANCELADA — requiere reembolso manual", {
+          paymentId,
+          orderId: order.id,
+          paidAmount,
+        });
+
+        // TELEGRAM (no bloquea la respuesta al webhook)
+        prisma.order
+          .findUnique({ where: { id: order.id }, select: { orderNumber: true } })
+          .then((o) =>
+            sendTelegramMessage({
+              text:
+                `<b>⚠️ Pago recibido en orden cancelada #${o?.orderNumber ?? order.id}, requiere reembolso manual</b>\n` +
+                `<b>Pago MP:</b> ${paymentId}\n` +
+                `<b>Monto:</b> ${formatMoney(Math.round(paidAmount * 100))}`,
+            })
+          )
+          .catch((err: unknown) => console.error("Telegram webhook error:", err));
+
+        return { ok: true, cancelledOrderPaid: true };
+      }
+
       console.error("Error confirmando Order desde webhook", e);
 
       const reserveConfirmFailed = msg.startsWith("RESERVE_CONFIRM_FAILED:");
@@ -722,16 +779,18 @@ async function processPayment(paymentId: string, accessToken: string) {
 
   await prisma
     .$transaction([
-      prisma.checkoutSession.update({
-        where: { id: cs.id },
+      // updateMany con condición: un pago pendiente que llega tarde no debe
+      // reabrir una sesión vencida/fallida ni una orden cancelada o pagada.
+      prisma.checkoutSession.updateMany({
+        where: { id: cs.id, status: { in: ["WAITING_MP", "PENDING"] } },
         data: {
           status: "PENDING",
           mpPaymentId: String(paymentId),
           mpStatus: mpStatusText,
         },
       }),
-      prisma.order.update({
-        where: { id: order.id },
+      prisma.order.updateMany({
+        where: { id: order.id, status: { not: "CANCELLED" }, paymentStatus: { not: "PAID" } },
         data: {
           paymentStatus: "PENDING",
           mpPaymentId: String(paymentId),

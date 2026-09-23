@@ -157,7 +157,23 @@ export async function PATCH(
             current.paymentMethod === "TALO_PAY") &&
           current.paymentStatus !== "PAID";
 
+        // Guard atómico sobre CheckoutSession.reservationReleased (el mismo que
+        // usan el webhook de MP y talo-payment-processor): si la reserva ya fue
+        // liberada por otro camino (webhook rejected, rollback, expiración),
+        // count=0 y no se vuelve a descontar reservedStock.
+        let reservationStillHeld = false;
+        if (reservationNeverConfirmed) {
+          const released = await tx.checkoutSession.updateMany({
+            where: { orderId, reservationReleased: false },
+            data: { reservationReleased: true },
+          });
+          reservationStillHeld = released.count > 0;
+        }
+
         for (const item of current.items) {
+          // Reserva ya liberada por otro camino: no hay nada que devolver.
+          if (reservationNeverConfirmed && !reservationStillHeld) continue;
+
           if (item.comboId) {
             // Combos usan el mismo modelo de reserva que productos
             // (Combo.stock / Combo.reservedStock), en unidades enteras.

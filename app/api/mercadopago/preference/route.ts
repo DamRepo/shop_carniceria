@@ -67,6 +67,14 @@ function normalizeString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+// Formato ISO 8601 con offset explícito, como en los ejemplos de MP para
+// expiration_date_* ("2017-02-28T12:00:00.000-04:00"). Argentina es UTC-3 fijo.
+function toMpDate(date: Date): string {
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000)
+    .toISOString()
+    .replace("Z", "-03:00");
+}
+
 function parsePickupDate(value?: string): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(`${value}T12:00:00`);
@@ -794,6 +802,12 @@ export async function POST(req: Request) {
           },
           auto_return: "approved",
           notification_url: `${siteUrl}/api/mercadopago/webhook?source_news=webhooks`,
+          // Vence junto con la reserva de stock (reservationExpiresAt). El "from"
+          // va 1 min en el pasado para que un desfase de reloj con MP no deje el
+          // link inactivo justo al redirigir.
+          expires: true,
+          expiration_date_from: toMpDate(new Date(Date.now() - 60 * 1000)),
+          expiration_date_to: toMpDate(reservationExpiresAt),
         }),
       });
     } catch (fetchError) {
