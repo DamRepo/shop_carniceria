@@ -2,11 +2,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export default function MpFailurePage({
-  searchParams,
-}: {
-  searchParams: { orderId?: string };
-}) {
+export default function MpFailurePage() {
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
       <Card>
