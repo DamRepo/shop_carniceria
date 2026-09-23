@@ -34,9 +34,9 @@ export default async function MpSuccessPage({
 
   const order = checkoutSession?.order ?? null;
 
-  const confirmed =
-    order !== null &&
-    (order.paymentStatus === "PAID" || order.status === "CONFIRMED");
+  // Solo paymentStatus refleja si el dinero entró. `status` es editable a mano
+  // desde el admin, así que no puede decidir si esta pantalla dice "aprobado".
+  const confirmed = order !== null && order.paymentStatus === "PAID";
 
   const rejected =
     order !== null &&
