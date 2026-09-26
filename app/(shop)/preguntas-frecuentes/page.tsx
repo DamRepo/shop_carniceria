@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/accordion";
 import { Phone, MessageCircle, Instagram, Facebook } from "lucide-react";
 
-const WHATSAPP_PHONE_E164 = "543458556104"; 
+// Misma fuente que el botón flotante (components/whatsapp-button.tsx), con el
+// número del footer como respaldo para que el link nunca quede vacío.
+const WHATSAPP_PHONE_E164 = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5493458556104";
 const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_PHONE_E164}`;
 const WHATSAPP_TEXT =
-  "https://wa.me/"  
+  "https://wa.me/" +
   WHATSAPP_PHONE_E164 +
   "?text=" +
   encodeURIComponent("Hola! Tengo una consulta sobre mi pedido.");

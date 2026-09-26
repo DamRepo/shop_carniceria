@@ -543,6 +543,7 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
             phone: fullOrder.phone ?? "",
             email: fullOrder.email,
             deliveryMethod: fullOrder.deliveryMethod as "PICKUP" | "DELIVERY",
+            paymentMethod: "MERCADO_PAGO",
             address: fullOrder.address,
             pickupDate: fullOrder.pickupDate,
             pickupTimeSlot: fullOrder.pickupTimeSlot,

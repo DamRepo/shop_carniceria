@@ -164,7 +164,7 @@ function PaymentSection({
     BANK_TRANSFER: { label: 'Transferencia bancaria', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
     MERCADO_PAGO: { label: 'Mercado Pago', Icon: CreditCard, color: 'bg-green-500/20 text-green-400' },
     CASH: { label: 'Efectivo', Icon: Wallet, color: 'bg-amber-500/20 text-amber-400' },
-    TALO_PAY: { label: 'Transferencia automática', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
+    TALO_PAY: { label: 'Transferencia con Talo', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
   };
 
   const method = methodConfig[paymentMethod] ?? { label: paymentMethod, Icon: Wallet, color: 'bg-zinc-500/20 text-zinc-400' };

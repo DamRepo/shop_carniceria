@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 export const revalidate = 300; // 5 minutos
 
 type BestSellerRow = {
-  productId: string;
+  productId: string | null;
   totalQty: number;
 };
 
@@ -22,17 +22,25 @@ export async function GET() {
         SUM(oi.quantity)::float8 AS "totalQty"
       FROM "OrderItem" oi
       INNER JOIN "Order" o ON o.id = oi."orderId"
-      WHERE o."paymentStatus" = 'PAID' OR o.status = 'COMPLETED'
+      -- Los ítems de combos tienen productId NULL: se excluyen antes de agrupar
+      -- para que un combo no compita en el ranking ni cuele un null en el findMany.
+      WHERE (o."paymentStatus" = 'PAID' OR o.status = 'COMPLETED')
+        AND oi."productId" IS NOT NULL
       GROUP BY oi."productId"
       ORDER BY "totalQty" DESC
       LIMIT 8
     `;
 
-    if (rows.length === 0) {
+    // Red de seguridad: aunque la query ya excluye NULL, nunca pasarle un
+    // null a Prisma en el `in`.
+    const productIds = rows
+      .map((r) => r.productId)
+      .filter((id): id is string => Boolean(id));
+
+    if (productIds.length === 0) {
       return NextResponse.json([]);
     }
 
-    const productIds = rows.map((r) => r.productId);
     const rankMap = new Map(rows.map((r, i) => [r.productId, i]));
 
     const now = new Date();
