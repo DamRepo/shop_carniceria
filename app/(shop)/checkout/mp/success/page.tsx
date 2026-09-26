@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ClearCartOnMount } from "./ClearCartOnMount";
+import { VerifyPaymentButton } from "./VerifyPaymentButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils-format";
@@ -108,11 +109,7 @@ export default async function MpSuccessPage({
                   </p>
 
                   <div className="flex gap-3">
-                    <Button asChild variant="outline">
-                      <Link href={`/checkout/mp/success?csId=${csId}`}>
-                        Actualizar estado
-                      </Link>
-                    </Button>
+                    <VerifyPaymentButton csId={csId} />
 
                     <Button asChild>
                       <Link href="/mis-compras">Ver mis compras</Link>

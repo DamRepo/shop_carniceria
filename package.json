@@ -13,7 +13,9 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "clean-proofs": "tsx --require dotenv/config scripts/clean-old-proofs.ts",
-    "clean-proofs:dry": "tsx --require dotenv/config scripts/clean-old-proofs.ts --dry-run"
+    "clean-proofs:dry": "tsx --require dotenv/config scripts/clean-old-proofs.ts --dry-run",
+    "talo:reconcile": "tsx --require dotenv/config --require ./scripts/load-env-local.cjs scripts/reconcile-talo-payments.ts",
+    "mp:expire": "tsx --require dotenv/config scripts/expire-mp-reservations.ts"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/seed.ts"
@@ -99,6 +101,7 @@
     "react-select": "5.8.0",
     "recharts": "^2.15.3",
     "resend": "^6.9.2",
+    "server-only": "^0.0.1",
     "sonner": "1.5.0",
     "vaul": "0.9.9",
     "zod": "3.23.8",

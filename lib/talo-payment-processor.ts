@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { consultarPagoTalo, extraerCvuAlias, type TaloPago } from "@/lib/talo";
-import { sendTelegramMessage, buildTelegramOrderMessage } from "@/lib/telegram";
+import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/lib/telegram";
 
 /**
  * Procesa la confirmación real de un pago de Talo. Es la ÚNICA función que
@@ -31,6 +31,7 @@ export type TaloProcessResult =
   | { outcome: "mismatch"; orderId: string; paidAmount: number; expectedAmount: number }
   | { outcome: "pending"; orderId: string; taloStatus: string }
   | { outcome: "already_processed"; orderId: string }
+  | { outcome: "cancelled_order_paid"; orderId: string }
   | { outcome: "order_not_found"; paymentId: string }
   | { outcome: "checkout_session_not_found"; orderId: string }
   | { outcome: "snapshot_invalid"; orderId: string }
@@ -137,7 +138,7 @@ async function findOrderForPago(pago: TaloPago) {
  * Talo, así que esta función no vuelve a evaluar el monto: solo ejecuta la
  * confirmación tal como ya lo hace el camino feliz.
  *
- * Tira `Error` con un mensaje sentinel ("ALREADY_PROCESSED", "SNAPSHOT_INVALID",
+ * Tira `Error` con un mensaje sentinel ("ALREADY_PROCESSED", "ORDER_CANCELLED", "SNAPSHOT_INVALID",
  * "PRODUCT_NOT_FOUND:<id>", "RESERVE_CONFIRM_FAILED:<id>:<qty>") ante cualquier
  * falla — cada caller decide cómo mapearlo a su propia respuesta.
  */
@@ -163,7 +164,7 @@ export async function finalizeTaloOrderAsPaid(params: {
     // así que solo UNA llamada concurrente puede obtener count=1. Las demás ven
     // count=0 y abortan antes de tocar stock — no hace falta un SELECT previo.
     const orderUpdate = await tx.order.updateMany({
-      where: { id: orderId, paymentStatus: { not: "PAID" } },
+      where: { id: orderId, paymentStatus: { not: "PAID" }, status: { not: "CANCELLED" } },
       data: {
         status: "CONFIRMED",
         confirmedAt: new Date(),
@@ -178,6 +179,16 @@ export async function finalizeTaloOrderAsPaid(params: {
     });
 
     if (orderUpdate.count === 0) {
+      // count=0 por dos motivos: ya estaba PAID (llamada duplicada) o fue
+      // cancelada antes de que llegara el pago (admin / expiración). Mismo
+      // criterio que lib/mp-payment-processor.ts.
+      const fresh = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, paymentStatus: true },
+      });
+      if (fresh?.paymentStatus !== "PAID" && fresh?.status === "CANCELLED") {
+        throw new Error("ORDER_CANCELLED");
+      }
       throw new Error("ALREADY_PROCESSED");
     }
 
@@ -366,6 +377,49 @@ export async function processTaloPayment(paymentId: string): Promise<TaloProcess
           orderId: order.id,
         });
         return { outcome: "already_processed", orderId: order.id };
+      }
+
+      // Pago acreditado sobre una orden ya cancelada: no se toca stock ni estado.
+      // La plata entró en Talo y hay que revisarla/devolverla a mano.
+      if (msg === "ORDER_CANCELLED") {
+        const paidAmount = safeNumber(pago.price?.amount);
+        const cancelledPaidStatus = `cancelled_order_paid:${status}`;
+
+        // Guard contra alertas repetidas: el cron de reconciliación vuelve a
+        // pasar por esta orden en cada corrida (sigue con paymentStatus PENDING).
+        // Solo taloStatus: no se tocan paymentStatus, status ni stock.
+        const marked = await prisma.order
+          .updateMany({
+            where: {
+              id: order.id,
+              status: "CANCELLED",
+              OR: [{ taloStatus: null }, { taloStatus: { not: cancelledPaidStatus } }],
+            },
+            data: { taloStatus: cancelledPaidStatus },
+          })
+          .catch((err) => {
+            console.error("[talo] Error marcando pago en orden cancelada:", err, { orderId: order.id });
+            return { count: 1 };
+          });
+
+        console.error("[talo] Pago requiere revisión manual: pago acreditado en orden CANCELADA", {
+          paymentId,
+          orderId: order.id,
+          status,
+          paidAmount,
+          alreadyAlerted: marked.count === 0,
+        });
+
+        if (marked.count > 0) {
+          sendTelegramMessage({
+            text:
+              `<b>⚠️ Pago recibido en orden Talo cancelada #${order.orderNumber ?? order.id}, requiere revisión manual</b>\n` +
+              `<b>Pago Talo:</b> ${paymentId}\n` +
+              `<b>Monto:</b> ${Number.isFinite(paidAmount) ? formatMoney(Math.round(paidAmount * 100)) : "desconocido"}`,
+          }).catch((err: unknown) => console.error("[talo] Telegram error:", err));
+        }
+
+        return { outcome: "cancelled_order_paid", orderId: order.id };
       }
 
       if (msg === "SNAPSHOT_INVALID") {

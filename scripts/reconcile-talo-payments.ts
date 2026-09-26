@@ -158,6 +158,11 @@ async function main() {
           log("INFO", `Orden ${label}: ya estaba procesada (otra corrida/el webhook llegó justo antes).`);
           break;
 
+        case "cancelled_order_paid":
+          log("ERROR", `Orden ${label}: Talo dice SUCCESS pero la orden está CANCELLED — NO se confirmó. Requiere revisión/reembolso manual.`);
+          needsReview++;
+          break;
+
         case "order_not_found":
         case "checkout_session_not_found":
         case "snapshot_invalid":

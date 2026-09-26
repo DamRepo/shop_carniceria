@@ -120,6 +120,13 @@ export async function PATCH(
         return NextResponse.json({ error: "Ya está pagada" }, { status: 400 });
       }
 
+      if (msg === "ORDER_CANCELLED") {
+        return NextResponse.json(
+          { error: "La orden está cancelada: no se puede confirmar. Requiere revisión/reembolso manual." },
+          { status: 400 }
+        );
+      }
+
       console.error("[admin/talo/confirm] Error confirmando orden:", e, { orderId: order.id });
       return NextResponse.json({ error: "Error confirmando el pago" }, { status: 500 });
     }

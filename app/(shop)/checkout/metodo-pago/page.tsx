@@ -226,7 +226,7 @@ export default function MetodoPagoPage() {
     // pedido incompleto a /api/checkout/talo.
     if (cartHasCombos && selected === "TALO_PAY") {
       toast.error(
-        "Los combos por ahora no se pueden pagar con transferencia automática. Elegí otro método o quitá el combo del carrito."
+        "Los combos por ahora no se pueden pagar con transferencia con Talo. Elegí otro método o quitá el combo del carrito."
       );
       return;
     }
@@ -372,8 +372,8 @@ export default function MetodoPagoPage() {
               disabled={submitting}
               onClick={() => setSelected("TALO_PAY")}
               icon={Landmark}
-              title="Transferencia automática"
-              description="Confirmación automática"
+              title="Transferencia con Talo"
+              description="Transferís desde tu banco y confirmamos el pago automáticamente"
               badge="Sin recargo"
             />
 
@@ -382,8 +382,8 @@ export default function MetodoPagoPage() {
               disabled={submitting}
               onClick={() => setSelected("MERCADO_PAGO")}
               icon={CreditCard}
-              title="Tarjeta de débito o crédito"
-              description="Seguro y rápido"
+              title="Tarjeta (Mercado Pago)"
+              description="Pagás con tu tarjeta a través de Mercado Pago"
             />
 
             <PaymentOption

@@ -17,6 +17,7 @@ import {
   Clock,
   CreditCard,
   Package,
+  RefreshCw,
   StickyNote,
   Truck,
   Wallet,
@@ -34,7 +35,7 @@ type OrderStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
-type PaymentMethod = 'MERCADO_PAGO' | 'CASH' | 'BANK_TRANSFER';
+type PaymentMethod = 'MERCADO_PAGO' | 'CASH' | 'BANK_TRANSFER' | 'TALO_PAY';
 type TransferStatus = 'AWAITING_PROOF' | 'PENDING_REVIEW' | 'CONFIRMED' | 'REJECTED';
 type DeliveryMethod = 'PICKUP' | 'DELIVERY';
 
@@ -138,16 +139,24 @@ function getStatusUi(status: string) {
   };
 }
 
+type MpVerifyFeedback = { tone: 'success' | 'warning' | 'error'; message: string };
+
 function PaymentSection({
   order,
   onConfirm,
   onReject,
   onMarkCashPaid,
+  onVerifyMp,
+  verifyingMp,
+  mpVerifyFeedback,
 }: {
   order: Order;
   onConfirm: (id: string) => void;
   onReject: (id: string) => void;
   onMarkCashPaid: (id: string) => void;
+  onVerifyMp: (id: string) => void;
+  verifyingMp: boolean;
+  mpVerifyFeedback: MpVerifyFeedback | undefined;
 }) {
   const { paymentMethod, transferStatus, transferCode, transferConfirmedAt } = order;
 
@@ -155,6 +164,7 @@ function PaymentSection({
     BANK_TRANSFER: { label: 'Transferencia bancaria', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
     MERCADO_PAGO: { label: 'Mercado Pago', Icon: CreditCard, color: 'bg-green-500/20 text-green-400' },
     CASH: { label: 'Efectivo', Icon: Wallet, color: 'bg-amber-500/20 text-amber-400' },
+    TALO_PAY: { label: 'Transferencia automática', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
   };
 
   const method = methodConfig[paymentMethod] ?? { label: paymentMethod, Icon: Wallet, color: 'bg-zinc-500/20 text-zinc-400' };
@@ -245,9 +255,51 @@ function PaymentSection({
           </div>
         ) : (
           <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Clock className="h-4 w-4 text-amber-400" />
               <p className="text-sm font-medium text-amber-300">Pago pendiente — Mercado Pago</p>
+              {order.paymentStatus === 'PENDING' && (
+                <button
+                  type="button"
+                  onClick={() => onVerifyMp(order.id)}
+                  disabled={verifyingMp}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${verifyingMp ? 'animate-spin' : ''}`} />
+                  {verifyingMp ? 'Verificando...' : 'Verificar pago'}
+                </button>
+              )}
+            </div>
+            {mpVerifyFeedback && (
+              <p
+                className={`mt-2 text-xs ${
+                  mpVerifyFeedback.tone === 'success'
+                    ? 'text-green-400'
+                    : mpVerifyFeedback.tone === 'warning'
+                      ? 'text-amber-300'
+                      : 'text-red-400'
+                }`}
+              >
+                {mpVerifyFeedback.message}
+              </p>
+            )}
+          </div>
+        )
+      )}
+
+      {paymentMethod === 'TALO_PAY' && (
+        order.paymentStatus === 'PAID' ? (
+          <div className="rounded-xl border border-green-800/50 bg-green-950/30 p-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-400" />
+              <p className="text-sm font-medium text-green-300">Pago confirmado — Talo Pay</p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-400" />
+              <p className="text-sm font-medium text-amber-300">Pago pendiente — Talo Pay</p>
             </div>
           </div>
         )
@@ -288,6 +340,8 @@ export default function OrdenesAdmin() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [verifyingMpId, setVerifyingMpId] = useState<string | null>(null);
+  const [mpVerifyFeedback, setMpVerifyFeedback] = useState<Record<string, MpVerifyFeedback>>({});
 
   useEffect(() => {
     fetchOrders();
@@ -368,6 +422,33 @@ export default function OrdenesAdmin() {
       fetchOrders();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al marcar como cobrado');
+    }
+  };
+
+  const handleVerifyMp = async (orderId: string) => {
+    setVerifyingMpId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/verify-payment`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? 'Error al verificar el pago');
+
+      const message: string = data?.message ?? 'Verificación completada';
+      const outcome: string | undefined = data?.outcome;
+      const confirmed = outcome === 'processed' && data?.result?.confirmed === true;
+      const tone: MpVerifyFeedback['tone'] =
+        confirmed || outcome === 'already_paid' ? 'success' : outcome === 'processed' ? 'error' : 'warning';
+
+      setMpVerifyFeedback((prev) => ({ ...prev, [orderId]: { tone, message } }));
+      if (tone === 'success') toast.success(message);
+      else if (tone === 'error') toast.error(message);
+      else toast.warning(message);
+      fetchOrders();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Error al verificar el pago';
+      setMpVerifyFeedback((prev) => ({ ...prev, [orderId]: { tone: 'error', message } }));
+      toast.error(message);
+    } finally {
+      setVerifyingMpId(null);
     }
   };
 
@@ -577,6 +658,9 @@ export default function OrdenesAdmin() {
                     onConfirm={handleConfirmTransfer}
                     onReject={handleRejectTransfer}
                     onMarkCashPaid={handleMarkCashPaid}
+                    onVerifyMp={handleVerifyMp}
+                    verifyingMp={verifyingMpId === order.id}
+                    mpVerifyFeedback={mpVerifyFeedback[order.id]}
                   />
                 </div>
 

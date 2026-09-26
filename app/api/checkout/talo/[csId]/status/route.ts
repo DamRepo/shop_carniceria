@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
       taloExpiresAt: true,
       total: true,
       orderId: true,
-      order: { select: { orderNumber: true } },
+      order: { select: { orderNumber: true, status: true } },
     },
   });
 
@@ -37,5 +37,8 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
     total: cs.total, // centavos (igual que el resto de la app) — el cliente lo formatea con formatPrice()
     orderId: cs.orderId,
     orderNumber: cs.order?.orderNumber ?? null,
+    // Estado de la ORDEN (no de la sesión): el admin puede cancelarla sin que
+    // la CheckoutSession cambie, y el cliente que está esperando tiene que enterarse.
+    orderStatus: cs.order?.status ?? null,
   });
 }

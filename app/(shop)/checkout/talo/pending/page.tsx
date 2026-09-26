@@ -7,9 +7,11 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
+  Clock,
   Copy,
   Landmark,
   Loader2,
+  MessageCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,9 @@ import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
 
 const POLL_INTERVAL_MS = 5000;
+// Misma fuente que el botón flotante (components/whatsapp-button.tsx), con el
+// número del footer como respaldo para que el link nunca quede vacío.
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5493458556104";
 
 type TaloStatusResponse = {
   status: "WAITING_TALO" | "PENDING" | "APPROVED" | "FAILED" | "EXPIRED";
@@ -29,6 +34,7 @@ type TaloStatusResponse = {
   total: number; // centavos — se muestra con formatPrice()
   orderId: string | null;
   orderNumber: string | null;
+  orderStatus: string | null;
 };
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -124,7 +130,10 @@ function TaloPendingContent() {
         setLoading(false);
 
         const isTerminal =
-          json.status === "APPROVED" || json.status === "FAILED" || json.status === "EXPIRED";
+          json.status === "APPROVED" ||
+          json.status === "FAILED" ||
+          json.status === "EXPIRED" ||
+          json.orderStatus === "CANCELLED";
 
         if (!isTerminal) {
           timer = setTimeout(fetchStatus, POLL_INTERVAL_MS);
@@ -245,6 +254,48 @@ function TaloPendingContent() {
     );
   }
 
+  // El admin canceló la orden mientras el cliente esperaba: la sesión sigue en
+  // WAITING_TALO/PENDING, pero ya no hay que mostrar el CVU/alias.
+  if (data?.orderStatus === "CANCELLED") {
+    const whatsappHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+      `Hola, mi pedido ${data.orderNumber ?? ""} (transferencia) figura como cancelado.`
+    )}`;
+
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-10">
+        <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
+          <CardHeader className="border-b bg-muted/30 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive text-destructive-foreground">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <CardTitle className="text-xl">Este pedido fue cancelado</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 p-5 md:p-6">
+            {data.orderNumber && (
+              <p className="text-sm">
+                Pedido: <b>{data.orderNumber}</b>
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">
+              Si ya hiciste la transferencia, contactanos por WhatsApp antes de volver a intentarlo.
+            </p>
+            <Button asChild className="w-full bg-green-600 text-white hover:bg-green-700">
+              <a href={whatsappHref} target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp">
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Escribinos por WhatsApp
+              </a>
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => router.push("/checkout/metodo-pago")}>
+              Volver a método de pago
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // WAITING_TALO / PENDING
   return (
     <div className="container mx-auto max-w-xl px-4 py-8 md:py-12">
@@ -283,6 +334,16 @@ function TaloPendingContent() {
               <p className="text-sm font-semibold">Datos para la transferencia</p>
               <CopyField label="CVU" value={data.cvu} />
               {data.alias && <CopyField label="Alias" value={data.alias} />}
+            </div>
+          )}
+
+          {data?.cvu && (
+            <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+              <p className="text-sm font-medium text-blue-800">
+                Una vez que hagas la transferencia, esperá unos segundos: confirmamos tu pago
+                automáticamente.
+              </p>
             </div>
           )}
 
