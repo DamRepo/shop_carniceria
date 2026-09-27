@@ -634,26 +634,56 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
       // Pago aprobado sobre una orden ya cancelada: no se toca stock ni estado.
       // La plata entró en MP y hay que devolverla a mano.
       if (msg === "ORDER_CANCELLED") {
+        const cancelledPaidStatus = `cancelled_order_paid:${mpStatusText}`;
+
+        // Guard contra alertas repetidas (mismo criterio que Talo): "Verificar pago"
+        // o un webhook duplicado vuelven a pasar por acá. Se incluye mpPaymentId para
+        // que un segundo pago aprobado distinto sobre la misma orden vuelva a alertar.
+        // Solo mpStatus/mpPaymentId: no se tocan paymentStatus, status ni stock.
+        // Si la escritura falla se alerta igual: preferimos una alerta de más a perder una.
+        const marked = await prisma.order
+          .updateMany({
+            where: {
+              id: order.id,
+              status: "CANCELLED",
+              OR: [
+                { mpStatus: null },
+                { mpStatus: { not: cancelledPaidStatus } },
+                { mpPaymentId: null },
+                { mpPaymentId: { not: String(paymentId) } },
+              ],
+            },
+            data: { mpStatus: cancelledPaidStatus, mpPaymentId: String(paymentId) },
+          })
+          .catch((err: unknown) => {
+            console.error("MP processPayment: error marcando pago en orden cancelada:", err, { orderId: order.id });
+            return { count: 1 };
+          });
+        const alreadyAlerted = marked.count === 0;
+
         console.error("MP processPayment: pago aprobado en orden CANCELADA — requiere reembolso manual", {
           paymentId,
           orderId: order.id,
           paidAmount,
+          alreadyAlerted,
         });
 
-        // TELEGRAM (no bloquea la respuesta al webhook)
-        prisma.order
-          .findUnique({ where: { id: order.id }, select: { orderNumber: true } })
-          .then((o) =>
-            sendTelegramMessage({
-              text:
-                `<b>⚠️ Pago recibido en orden cancelada #${o?.orderNumber ?? order.id}, requiere reembolso manual</b>\n` +
-                `<b>Pago MP:</b> ${paymentId}\n` +
-                `<b>Monto:</b> ${formatMoney(Math.round(paidAmount * 100))}`,
-            })
-          )
-          .catch((err: unknown) => console.error("Telegram webhook error:", err));
+        if (!alreadyAlerted) {
+          // TELEGRAM (no bloquea la respuesta al webhook)
+          prisma.order
+            .findUnique({ where: { id: order.id }, select: { orderNumber: true } })
+            .then((o) =>
+              sendTelegramMessage({
+                text:
+                  `<b>⚠️ Pago recibido en orden cancelada #${o?.orderNumber ?? order.id}, requiere reembolso manual</b>\n` +
+                  `<b>Pago MP:</b> ${paymentId}\n` +
+                  `<b>Monto:</b> ${formatMoney(Math.round(paidAmount * 100))}`,
+              })
+            )
+            .catch((err: unknown) => console.error("Telegram webhook error:", err));
+        }
 
-        return { ok: true, cancelledOrderPaid: true };
+        return { ok: true, cancelledOrderPaid: true, alreadyAlerted };
       }
 
       console.error("Error confirmando Order desde webhook", e);
@@ -860,7 +890,9 @@ function describeProcessResult(r: MpProcessResult): string {
     return "Pago aprobado; la orden ya estaba procesada. No se duplicó nada.";
   }
   if ("cancelledOrderPaid" in r && r.cancelledOrderPaid) {
-    return "Pago APROBADO sobre una orden CANCELADA: requiere reembolso manual. Se envió alerta por Telegram.";
+    return r.alreadyAlerted
+      ? "Pago APROBADO sobre una orden CANCELADA: requiere reembolso manual. La alerta ya se había enviado antes."
+      : "Pago APROBADO sobre una orden CANCELADA: requiere reembolso manual. Se envió alerta por Telegram.";
   }
   if ("mismatch" in r && r.mismatch) {
     return "Pago aprobado pero el monto/moneda no coincide con la orden. La orden quedó cancelada (igual que en el webhook).";
