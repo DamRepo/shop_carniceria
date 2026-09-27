@@ -193,6 +193,57 @@ async function findCheckoutSessionForOrder(orderId: string) {
   });
 }
 
+// Sentinel: otra transacción (webhook concurrente, verificación manual) ya dejó
+// la orden en PAID. Aborta la transacción de "no aprobado" sin tocar nada.
+const ORDER_ALREADY_PAID = "ORDER_ALREADY_PAID";
+
+/**
+ * Guard atómico de las ramas NO aprobadas: toma el lock de fila de la orden
+ * ANTES de tocar reservas o la CheckoutSession, con la condición
+ * paymentStatus != PAID (mismo criterio que el camino aprobado). Si ya está
+ * PAID, count=0 y se tira ORDER_ALREADY_PAID → rollback de toda la transacción.
+ *
+ * No cambia status acá a propósito: releaseReservation mira si la orden ya
+ * estaba CANCELLED (cancelada por el admin) para no devolver stock dos veces.
+ * El update final de la orden va al final de la transacción, con el lock tomado.
+ */
+async function lockOrderUnlessPaid(tx: Prisma.TransactionClient, orderId: string, paymentId: string) {
+  const guard = await tx.order.updateMany({
+    where: { id: orderId, paymentStatus: { not: "PAID" } },
+    data: { mpPaymentId: paymentId },
+  });
+
+  if (guard.count === 0) {
+    throw new Error(ORDER_ALREADY_PAID);
+  }
+}
+
+/**
+ * Corre la transacción de una rama NO aprobada.
+ * - true: se aplicó.
+ * - false: la orden ya estaba PAID por otro camino; no se tocó nada (decisión
+ *   de negocio → el webhook puede responder 200).
+ * Cualquier otro error (falla técnica de DB) se PROPAGA: el webhook responde
+ * 5xx y MP reintenta la notificación, en vez de darla por resuelta.
+ */
+async function runNonApprovedTx(
+  label: string,
+  ctx: { paymentId: string; orderId: string },
+  fn: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<boolean> {
+  try {
+    await prisma.$transaction(fn);
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.message === ORDER_ALREADY_PAID) {
+      console.warn(`MP ${label}: orden ya pagada por otro camino, no se pisa`, ctx);
+      return false;
+    }
+    console.error(`MP ${label} tx error`, err);
+    throw err;
+  }
+}
+
 export async function processMpPayment(paymentId: string, payment: MpPayment) {
   const status: string | undefined = payment?.status;
   const externalReference: string | undefined = payment?.external_reference;
@@ -295,8 +346,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
       expectedCurrency,
     });
 
-    await prisma
-      .$transaction(async (tx: any) => {
+    const applied = await runNonApprovedTx(
+      "mismatch",
+      { paymentId: String(paymentId), orderId: order.id },
+      async (tx) => {
+        await lockOrderUnlessPaid(tx, order.id, String(paymentId));
         await releaseReservation(tx, cs);
 
         await tx.checkoutSession.update({
@@ -317,11 +371,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
             status: "CANCELLED",
           },
         });
-      })
-      .catch((err: any) => {
-        console.error("MP mismatch tx error", err);
-      });
+      }
+    );
 
+    if (!applied) return { ok: true, alreadyProcessed: true };
     return { ok: true, mismatch: true };
   }
 
@@ -336,8 +389,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
       myCollectorId,
     });
 
-    await prisma
-      .$transaction(async (tx: any) => {
+    const applied = await runNonApprovedTx(
+      "collector mismatch",
+      { paymentId: String(paymentId), orderId: order.id },
+      async (tx) => {
+        await lockOrderUnlessPaid(tx, order.id, String(paymentId));
         await releaseReservation(tx, cs);
 
         await tx.checkoutSession.update({
@@ -358,11 +414,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
             status: "CANCELLED",
           },
         });
-      })
-      .catch((err: any) => {
-        console.error("MP collector mismatch tx error", err);
-      });
+      }
+    );
 
+    if (!applied) return { ok: true, alreadyProcessed: true };
     return { ok: true, collectorMismatch: true };
   }
 
@@ -375,8 +430,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
         orderId: order.id,
       });
 
-      await prisma
-        .$transaction(async (tx: any) => {
+      const applied = await runNonApprovedTx(
+        "snapshot invalid",
+        { paymentId: String(paymentId), orderId: order.id },
+        async (tx) => {
+          await lockOrderUnlessPaid(tx, order.id, String(paymentId));
           await releaseReservation(tx, cs);
 
           await tx.checkoutSession.update({
@@ -397,11 +455,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
               status: "CANCELLED",
             },
           });
-        })
-        .catch((err: any) => {
-          console.error("MP snapshot invalid tx error", err);
-        });
+        }
+      );
 
+      if (!applied) return { ok: true, alreadyProcessed: true };
       return { ok: true, snapshotInvalid: true };
     }
 
@@ -604,8 +661,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
       const reserveConfirmFailed = msg.startsWith("RESERVE_CONFIRM_FAILED:");
       const productNotFound = msg.startsWith("PRODUCT_NOT_FOUND:");
 
-      await prisma
-        .$transaction(async (tx: any) => {
+      const applied = await runNonApprovedTx(
+        "approved fallback",
+        { paymentId: String(paymentId), orderId: order.id },
+        async (tx) => {
+          await lockOrderUnlessPaid(tx, order.id, String(paymentId));
           await releaseReservation(tx, cs);
 
           await tx.checkoutSession.update({
@@ -634,11 +694,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
               status: "CANCELLED",
             },
           });
-        })
-        .catch((err: any) => {
-          console.error("MP approved fallback tx error", err);
-        });
+        }
+      );
 
+      if (!applied) return { ok: true, alreadyProcessed: true };
       return {
         ok: true,
         reserveConfirmFailed,
@@ -648,8 +707,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
   }
 
   if (status === "rejected" || status === "cancelled") {
-    await prisma
-      .$transaction(async (tx: any) => {
+    const applied = await runNonApprovedTx(
+      "rejected/cancelled",
+      { paymentId: String(paymentId), orderId: order.id },
+      async (tx) => {
+        await lockOrderUnlessPaid(tx, order.id, String(paymentId));
         await releaseReservation(tx, cs);
 
         await tx.checkoutSession.update({
@@ -670,10 +732,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
             status: "CANCELLED",
           },
         });
-      })
-      .catch((err: any) => {
-        console.error("MP rejected/cancelled tx error", err);
-      });
+      }
+    );
+
+    if (!applied) return { ok: true, alreadyProcessed: true };
 
     console.log("MP processPayment: pago rechazado/cancelado", {
       paymentId,
@@ -684,8 +746,10 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
     return { ok: true, failed: true, status };
   }
 
-  await prisma
-    .$transaction([
+  // Ya tenía guard condicional; solo cambia que una falla técnica de DB se
+  // propaga (5xx → MP reintenta) en vez de tragarse con un log.
+  try {
+    await prisma.$transaction([
       // updateMany con condición: un pago pendiente que llega tarde no debe
       // reabrir una sesión vencida/fallida ni una orden cancelada o pagada.
       prisma.checkoutSession.updateMany({
@@ -705,10 +769,11 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
           status: "PENDING_PAYMENT",
         },
       }),
-    ])
-    .catch((err: any) => {
-      console.error("MP pending tx error", err);
-    });
+    ]);
+  } catch (err) {
+    console.error("MP pending tx error", err);
+    throw err;
+  }
 
   console.log("MP processPayment: estado pendiente", {
     paymentId,

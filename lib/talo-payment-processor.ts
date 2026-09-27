@@ -279,6 +279,57 @@ export async function finalizeTaloOrderAsPaid(params: {
   return { orderId, orderNumber: fullOrder?.orderNumber ?? orderId };
 }
 
+// Sentinel: otra transacción (webhook concurrente, cron, confirmación del admin)
+// ya dejó la orden en PAID. Aborta la transacción de "no aprobado" sin tocar nada.
+const ORDER_ALREADY_PAID = "ORDER_ALREADY_PAID";
+
+/**
+ * Guard atómico de las ramas NO aprobadas: primer UPDATE de la transacción,
+ * condicionado a paymentStatus != PAID (mismo criterio que
+ * finalizeTaloOrderAsPaid). Toma el lock de fila de la orden antes de tocar
+ * reservas o la CheckoutSession; si ya está PAID, count=0 y se tira
+ * ORDER_ALREADY_PAID → rollback de toda la transacción.
+ */
+async function updateOrderUnlessPaid(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  data: Prisma.OrderUpdateManyMutationInput
+) {
+  const guard = await tx.order.updateMany({
+    where: { id: orderId, paymentStatus: { not: "PAID" } },
+    data,
+  });
+
+  if (guard.count === 0) {
+    throw new Error(ORDER_ALREADY_PAID);
+  }
+}
+
+/**
+ * Corre la transacción de una rama NO aprobada.
+ * - null: se aplicó.
+ * - already_processed: la orden ya estaba PAID por otro camino; no se tocó nada.
+ * - error: falla técnica real de DB. La orden no cambia (sigue PENDING), así que
+ *   el cron de reconciliación la vuelve a procesar en la próxima corrida.
+ */
+async function runNonApprovedTx(
+  label: string,
+  ctx: { paymentId: string; orderId: string },
+  fn: (tx: Prisma.TransactionClient) => Promise<void>
+): Promise<TaloProcessResult | null> {
+  try {
+    await prisma.$transaction(fn);
+    return null;
+  } catch (err) {
+    if (err instanceof Error && err.message === ORDER_ALREADY_PAID) {
+      console.warn(`[talo] ${label}: orden ya pagada por otro camino, no se pisa`, ctx);
+      return { outcome: "already_processed", orderId: ctx.orderId };
+    }
+    console.error(`[talo] tx error en ${label}:`, err, ctx);
+    return { outcome: "error", message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function processTaloPayment(paymentId: string): Promise<TaloProcessResult> {
   console.log("[talo] processTaloPayment:start", { paymentId });
 
@@ -341,19 +392,18 @@ export async function processTaloPayment(paymentId: string): Promise<TaloProcess
         expectedAmount,
       });
 
-      await prisma
-        .$transaction(async (tx) => {
-          await tx.checkoutSession.update({
-            where: { id: cs.id },
-            data: { status: "FAILED", taloStatus: `mismatch:${status}` },
-          });
-          await tx.order.update({
-            where: { id: order.id },
-            data: { paymentStatus: "FAILED", taloStatus: `mismatch:${status}` },
-          });
-        })
-        .catch((err) => console.error("[talo] tx error en mismatch:", err));
+      const notApplied = await runNonApprovedTx("mismatch", { paymentId, orderId: order.id }, async (tx) => {
+        await updateOrderUnlessPaid(tx, order.id, {
+          paymentStatus: "FAILED",
+          taloStatus: `mismatch:${status}`,
+        });
+        await tx.checkoutSession.update({
+          where: { id: cs.id },
+          data: { status: "FAILED", taloStatus: `mismatch:${status}` },
+        });
+      });
 
+      if (notApplied) return notApplied;
       return { outcome: "mismatch", orderId: order.id, paidAmount, expectedAmount };
     }
 
@@ -437,57 +487,56 @@ export async function processTaloPayment(paymentId: string): Promise<TaloProcess
 
   if (status === "OVERPAID" || status === "UNDERPAID") {
     // Queda para revisión manual del admin: no se marca como pagada automáticamente.
-    await prisma
-      .$transaction(async (tx) => {
-        await tx.checkoutSession.update({
-          where: { id: cs.id },
-          data: { status: "PENDING", taloStatus: status },
-        });
-        await tx.order.update({
-          where: { id: order.id },
-          data: { taloStatus: status, taloCvu: cvu ?? undefined, taloAlias: alias ?? undefined },
-        });
-      })
-      .catch((err) => console.error("[talo] tx error en over/underpaid:", err));
+    const notApplied = await runNonApprovedTx("over/underpaid", { paymentId, orderId: order.id }, async (tx) => {
+      await updateOrderUnlessPaid(tx, order.id, {
+        taloStatus: status,
+        taloCvu: cvu ?? undefined,
+        taloAlias: alias ?? undefined,
+      });
+      await tx.checkoutSession.update({
+        where: { id: cs.id },
+        data: { status: "PENDING", taloStatus: status },
+      });
+    });
+
+    if (notApplied) return notApplied;
 
     console.warn("[talo] Pago requiere revisión manual", { paymentId, orderId: order.id, status });
     return { outcome: status === "OVERPAID" ? "overpaid" : "underpaid", orderId: order.id };
   }
 
   if (status === "EXPIRED") {
-    await prisma
-      .$transaction(async (tx) => {
-        await releaseReservation(tx, cs);
+    const notApplied = await runNonApprovedTx("expired", { paymentId, orderId: order.id }, async (tx) => {
+      await updateOrderUnlessPaid(tx, order.id, {
+        paymentStatus: "FAILED",
+        status: "CANCELLED",
+        taloStatus: status,
+      });
 
-        await tx.checkoutSession.update({
-          where: { id: cs.id },
-          data: { status: "EXPIRED", taloStatus: status },
-        });
+      await releaseReservation(tx, cs);
 
-        await tx.order.update({
-          where: { id: order.id },
-          data: { paymentStatus: "FAILED", status: "CANCELLED", taloStatus: status },
-        });
-      })
-      .catch((err) => console.error("[talo] tx error en expired:", err));
+      await tx.checkoutSession.update({
+        where: { id: cs.id },
+        data: { status: "EXPIRED", taloStatus: status },
+      });
+    });
+
+    if (notApplied) return notApplied;
 
     console.log("[talo] Pago expirado, reserva liberada", { paymentId, orderId: order.id });
     return { outcome: "expired", orderId: order.id };
   }
 
   // PENDING u otro estado intermedio: solo se actualiza el tracking.
-  await prisma
-    .$transaction([
-      prisma.checkoutSession.update({
-        where: { id: cs.id },
-        data: { taloStatus: status },
-      }),
-      prisma.order.update({
-        where: { id: order.id },
-        data: { taloStatus: status },
-      }),
-    ])
-    .catch((err) => console.error("[talo] tx error en pending:", err));
+  const notApplied = await runNonApprovedTx("pending", { paymentId, orderId: order.id }, async (tx) => {
+    await updateOrderUnlessPaid(tx, order.id, { taloStatus: status });
+    await tx.checkoutSession.update({
+      where: { id: cs.id },
+      data: { taloStatus: status },
+    });
+  });
+
+  if (notApplied) return notApplied;
 
   console.log("[talo] Estado pendiente", { paymentId, orderId: order.id, status });
   return { outcome: "pending", orderId: order.id, taloStatus: status };

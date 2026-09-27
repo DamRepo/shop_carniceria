@@ -163,6 +163,17 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const result = await processMpPaymentById(notification.paymentId, accessToken);
-  return NextResponse.json(result, { status: 200 });
+  try {
+    const result = await processMpPaymentById(notification.paymentId, accessToken);
+    return NextResponse.json(result, { status: 200 });
+  } catch (err) {
+    // Falla técnica real (p. ej. la DB no respondió): 500 para que MP reintente
+    // la notificación. Las decisiones de negocio (ignorar, ya pagada, etc.)
+    // vuelven como resultado normal y siguen respondiendo 200.
+    console.error("MP webhook: error técnico procesando el pago, se responde 500 para reintento", {
+      paymentId: notification.paymentId,
+      err,
+    });
+    return NextResponse.json({ error: "Error procesando el pago" }, { status: 500 });
+  }
 }
