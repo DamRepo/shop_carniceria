@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { ShoppingCart, Tag } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useCartStore } from "@/lib/store";
 import { formatPrice } from "@/lib/utils-format";
 
 interface ComboItemDTO {
@@ -31,6 +32,7 @@ interface ComboDTO {
 export function HomeCombosSection() {
   const [combos, setCombos] = useState<ComboDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const addItem = useCartStore((s) => s.addItem);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +56,25 @@ export function HomeCombosSection() {
     };
   }, []);
 
+  // El límite por stock lo valida el checkout (missingCombos); acá solo se
+  // bloquea el combo agotado.
+  const handleAddCombo = (combo: ComboDTO) => {
+    if (combo.stock <= 0) return toast.error("Combo sin stock");
+
+    addItem({
+      type: "combo",
+      comboId: combo.id,
+      name: combo.name,
+      slug: combo.slug,
+      price: combo.finalPriceCents,
+      quantity: 1,
+      unitType: "PER_UNIT",
+      image: combo.imageUrl ?? undefined,
+    });
+
+    toast.success(`${combo.name} agregado al carrito (1 un)`);
+  };
+
   if (loading || combos.length === 0) return null;
 
   return (
@@ -70,13 +91,6 @@ export function HomeCombosSection() {
             <p className="mt-2 text-sm text-muted-foreground">
               Todo lo que necesitás, en un solo clic.
             </p>
-            <div className="mt-4">
-              <Link href="/productos">
-                <Button variant="outline" className="border-border bg-card text-foreground hover:bg-muted">
-                  Ver todos los combos →
-                </Button>
-              </Link>
-            </div>
           </div>
 
           <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-3">
@@ -128,12 +142,15 @@ export function HomeCombosSection() {
                       <span className="text-lg font-bold text-foreground">
                         {formatPrice(combo.finalPriceCents)}
                       </span>
-                      <Link href="/productos">
-                        <Button size="sm" className="gap-1.5" disabled={agotado}>
-                          <ShoppingCart className="h-4 w-4" />
-                          Agregar
-                        </Button>
-                      </Link>
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={agotado}
+                        onClick={() => handleAddCombo(combo)}
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                        Agregar
+                      </Button>
                     </div>
                   </div>
                 </div>
