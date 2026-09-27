@@ -4,7 +4,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
-import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
+import {
+  buildComboCheckoutLines,
+  findActiveCombosById,
+  releaseComboReservation,
+  reserveComboStock,
+  type ComboReservationItem,
+} from "@/lib/combos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,11 +52,6 @@ type ProductPick = {
 
 type ReservationItem = {
   productId: string;
-  reserveQty: number;
-};
-
-type ComboReservationItem = {
-  comboId: string;
   reserveQty: number;
 };
 
@@ -377,19 +378,7 @@ export async function POST(req: Request) {
 
     const byId = new Map<string, ProductPick>(products.map((p) => [p.id, p]));
 
-    const combos = await prisma.combo.findMany({
-      where: { id: { in: comboIds }, isActive: true },
-      select: {
-        id: true,
-        name: true,
-        stock: true,
-        reservedStock: true,
-        priceType: true,
-        priceValue: true,
-        items: { select: { quantity: true, product: { select: { price: true } } } },
-      },
-    });
-    const comboById = new Map(combos.map((c) => [c.id, c]));
+    const comboById = await findActiveCombosById(prisma, comboIds);
 
     let subtotalCents = 0;
 
@@ -502,44 +491,23 @@ export async function POST(req: Request) {
       };
     });
 
-    for (const i of comboBodyItems) {
-      const c = comboById.get(i.comboId);
-      if (!c) throw new Error(`Combo no encontrado: ${i.comboId}`);
+    for (const line of buildComboCheckoutLines(comboBodyItems, comboById)) {
+      subtotalCents += line.lineCents;
 
-      const qty = safeNumber(i.quantity);
-      if (!Number.isFinite(qty) || qty <= 0 || !nearlyInteger(qty)) {
-        throw new Error(`Cantidad inválida para el combo ${c.name}`);
-      }
-      const units = Math.round(qty);
-
-      const { finalPriceCents } = computeComboPricing({
-        priceType: c.priceType,
-        priceValue: c.priceValue,
-        componentsTotalCents: sumComboComponentsCents(c.items),
-      });
-
-      const availableNow = Math.max(0, (c.stock ?? 0) - (c.reservedStock ?? 0));
-      if (availableNow < units) {
-        throw new Error(`Stock insuficiente para el combo ${c.name}`);
-      }
-
-      const lineCents = finalPriceCents * units;
-      subtotalCents += lineCents;
-
-      comboReservationItems.push({ comboId: c.id, reserveQty: units });
+      comboReservationItems.push({ comboId: line.comboId, reserveQty: line.units });
 
       itemsSnapshot.push({
-        comboId: c.id,
-        quantity: units,
-        unitPrice: finalPriceCents,
-        lineTotal: lineCents,
-        itemNameSnapshot: c.name,
+        comboId: line.comboId,
+        quantity: line.units,
+        unitPrice: line.unitPriceCents,
+        lineTotal: line.lineCents,
+        itemNameSnapshot: line.name,
       });
 
       mpItems.push({
-        title: c.name,
-        quantity: units,
-        unit_price: centsToPesos(finalPriceCents),
+        title: line.name,
+        quantity: line.units,
+        unit_price: centsToPesos(line.unitPriceCents),
         currency_id: "ARS",
       });
     }
@@ -611,36 +579,7 @@ export async function POST(req: Request) {
       }
 
       // Reservar combos con el mismo optimistic locking (Combo.reservedStock)
-      for (const r of comboReservationItems) {
-        const combo = await tx.combo.findUnique({
-          where: { id: r.comboId },
-          select: { id: true, name: true, isActive: true, stock: true, reservedStock: true },
-        });
-
-        if (!combo || !combo.isActive) {
-          throw new Error(`Combo no encontrado: ${r.comboId}`);
-        }
-
-        const available = Math.max(0, combo.stock - combo.reservedStock);
-        if (available < r.reserveQty) {
-          throw new Error(`Stock insuficiente para el combo ${combo.name}`);
-        }
-
-        const updated = await tx.combo.updateMany({
-          where: {
-            id: r.comboId,
-            stock: combo.stock,
-            reservedStock: combo.reservedStock,
-          },
-          data: {
-            reservedStock: { increment: r.reserveQty },
-          },
-        });
-
-        if (updated.count === 0) {
-          throw new Error(`No se pudo reservar stock para el combo ${combo.name}`);
-        }
-      }
+      await reserveComboStock(tx, comboReservationItems);
 
       console.log("[preference][tx] Stock reserved. Creating order…");
 
@@ -765,10 +704,7 @@ export async function POST(req: Request) {
             });
           }
           for (const r of comboReservationItems) {
-            await tx.combo.updateMany({
-              where: { id: r.comboId, reservedStock: { gte: r.reserveQty } },
-              data: { reservedStock: { decrement: r.reserveQty } },
-            });
+            await releaseComboReservation(tx, r.comboId, r.reserveQty);
           }
           await tx.checkoutSession.update({
             where: { id: cs.id },

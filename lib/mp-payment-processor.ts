@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/lib/telegram";
+import { confirmComboSale, getComboReserveQty, releaseComboReservation } from "@/lib/combos";
 
 /**
  * Procesamiento de pagos de Mercado Pago. Es la ÚNICA lógica que escribe en
@@ -28,14 +29,6 @@ type SnapshotItem = {
   unitPrice: number;
   lineTotal: number;
 };
-
-function getComboReserveQty(qty: number) {
-  const units = Math.round(Number(qty ?? 0));
-  if (units <= 0) {
-    throw new Error("Cantidad inválida de combo");
-  }
-  return units;
-}
 
 export async function fetchMpPayment(paymentId: string, accessToken: string): Promise<MpPayment | null> {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -134,11 +127,7 @@ async function releaseReservation(
 
   for (const it of items) {
     if (it.comboId) {
-      const comboQty = getComboReserveQty(it.quantity);
-      await tx.combo.updateMany({
-        where: { id: it.comboId, reservedStock: { gte: comboQty } },
-        data: { reservedStock: { decrement: comboQty } },
-      });
+      await releaseComboReservation(tx, it.comboId, getComboReserveQty(it.quantity));
       continue;
     }
 
@@ -501,17 +490,7 @@ export async function processMpPayment(paymentId: string, payment: MpPayment) {
 
         for (const it of items) {
           if (it.comboId) {
-            const comboQty = getComboReserveQty(it.quantity);
-            const comboUpdated = await tx.combo.updateMany({
-              where: { id: it.comboId, reservedStock: { gte: comboQty } },
-              data: {
-                stock: { decrement: comboQty },
-                reservedStock: { decrement: comboQty },
-              },
-            });
-            if (comboUpdated.count === 0) {
-              throw new Error(`RESERVE_CONFIRM_FAILED:combo:${it.comboId}:${comboQty}`);
-            }
+            await confirmComboSale(tx, it.comboId, getComboReserveQty(it.quantity));
             continue;
           }
 
