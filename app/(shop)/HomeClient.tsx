@@ -12,6 +12,7 @@ import { HomeCombosSection } from "@/components/home-combos-section";
 import {
   Star,
   Flame,
+  Clock,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -67,22 +68,38 @@ function adaptForOfferCard(p: ProductWithSale) {
   };
 }
 
-/** Fecha de fin más próxima entre las ofertas activas, para el contador de la sección. */
-function getEarliestActiveSaleEndDate(offers: ProductWithSale[]): string | null {
-  const now = Date.now();
+type OfferEndSummary =
+  | { kind: "none" }
+  | { kind: "shared"; endDate: string }
+  | { kind: "mixed" };
 
-  const activeEndTimes: number[] = [];
+/**
+ * Fecha de fin de las ofertas activas del bloque. Un único contador solo es
+ * correcto si todas vencen en el mismo instante; con fechas distintas (o
+ * alguna oferta sin fecha de fin) el número engañaría sobre las demás.
+ */
+function getOfferEndSummary(offers: ProductWithSale[]): OfferEndSummary {
+  const now = Date.now();
+  const endTimes = new Set<number>();
+  let hasActiveWithoutEnd = false;
 
   for (const o of offers) {
-    if (!o.isOnSale || !o.saleEndDate) continue;
+    if (!o.isOnSale) continue;
+
+    if (!o.saleEndDate) {
+      hasActiveWithoutEnd = true;
+      continue;
+    }
 
     const t = o.saleEndDate instanceof Date ? o.saleEndDate.getTime() : new Date(o.saleEndDate).getTime();
-    if (Number.isFinite(t) && t > now) activeEndTimes.push(t);
+    if (Number.isFinite(t) && t > now) endTimes.add(t);
   }
 
-  if (activeEndTimes.length === 0) return null;
-
-  return new Date(Math.min(...activeEndTimes)).toISOString();
+  if (endTimes.size === 0) return { kind: "none" };
+  if (endTimes.size === 1 && !hasActiveWithoutEnd) {
+    return { kind: "shared", endDate: new Date([...endTimes][0]).toISOString() };
+  }
+  return { kind: "mixed" };
 }
 
 interface HomeClientProps {
@@ -129,7 +146,7 @@ export function HomeClient({ orderStatus }: HomeClientProps) {
     fetchBestSellers();
   }, []);
 
-  const earliestOfferEndDate = getEarliestActiveSaleEndDate(offers);
+  const offerEnd = getOfferEndSummary(offers);
 
   return (
     <div className="flex flex-col">
@@ -150,9 +167,20 @@ export function HomeClient({ orderStatus }: HomeClientProps) {
                   </p>
                 </div>
 
-                {earliestOfferEndDate && (
+                {offerEnd.kind === "shared" && (
                   <div className="max-w-[220px]">
-                    <CountdownTimer endDate={earliestOfferEndDate} />
+                    <CountdownTimer endDate={offerEnd.endDate} />
+                  </div>
+                )}
+
+                {offerEnd.kind === "mixed" && (
+                  <div className="max-w-[220px]">
+                    <div className="w-full rounded-md border border-red-700 bg-gradient-to-r from-red-600 via-orange-500 to-red-600 px-3 py-2">
+                      <div className="flex items-center justify-center gap-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                        <Clock className="h-3 w-3" />
+                        Ofertas por tiempo limitado
+                      </div>
+                    </div>
                   </div>
                 )}
 

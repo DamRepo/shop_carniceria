@@ -255,6 +255,11 @@ export default function MetodoPagoPage() {
           return;
         }
 
+        // Decisión consciente: el carrito se vacía al CREAR el pago, no al
+        // confirmarlo, para no depender de que el cliente vuelva a la pantalla
+        // de éxito. Si el pago falla, vence o se abandona, el carrito ya quedó
+        // vacío igual (el cliente vuelve a armarlo).
+        useCartStore.getState().clearCart();
         window.location.href = initPoint;
         return;
       }
@@ -279,6 +284,8 @@ export default function MetodoPagoPage() {
         }
 
         navigatingRef.current = true;
+        // Misma decisión que en Mercado Pago: se vacía al crear el pago de Talo.
+        useCartStore.getState().clearCart();
         router.push(`/checkout/talo/pending?csId=${data.csId}`);
         return;
       }
