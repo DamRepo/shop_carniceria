@@ -1,26 +1,18 @@
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { MpPaymentStatusWatcher } from "../MpPaymentStatusWatcher";
 
-export default function MpFailurePage() {
+export const dynamic = "force-dynamic";
+
+export default function MpFailurePage({
+  searchParams,
+}: {
+  searchParams: { csId?: string };
+}) {
+  // MP vuelve con el csId de la back_url (preference/route.ts). El redirect a
+  // failure no es definitivo: el pago puede acreditarse después, y el watcher
+  // corrige el mensaje si pasa.
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Pago rechazado ❌</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p>El pago no se pudo completar.</p>
-          <div className="flex gap-3">
-            <Link href="/checkout">
-              <Button>Reintentar</Button>
-            </Link>
-            <Link href="/carrito">
-              <Button variant="outline">Volver al carrito</Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <MpPaymentStatusWatcher csId={searchParams?.csId || null} failedTitle="Pago rechazado ❌" />
     </div>
   );
 }

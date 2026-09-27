@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ClearCartOnMount } from "./ClearCartOnMount";
 import { VerifyPaymentButton } from "./VerifyPaymentButton";
+import { MpPaymentStatusWatcher } from "../MpPaymentStatusWatcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils-format";
@@ -50,13 +51,34 @@ export default async function MpSuccessPage({
   // qué pedido mostrar. Ese —y solo ese— es el caso de error real.
   const notFound = order === null;
 
+  // Rechazado según la base al momento del redirect: puede corregirse después
+  // (webhook tardío o aprobado sobre orden cancelada), así que lo maneja el watcher.
+  if (rejected) {
+    return (
+      <div className="container mx-auto max-w-3xl px-4 py-10">
+        <MpPaymentStatusWatcher
+          csId={csId}
+          failedTitle="El pago no se completó ❌"
+          details={
+            <>
+              <p>
+                Orden: <b>{order.orderNumber}</b>
+              </p>
+              <p>
+                Total: <b>{formatPrice(order.total)}</b>
+              </p>
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
   const title = notFound
     ? "No encontramos tu pedido"
     : confirmed
       ? "¡Pago aprobado! ✅"
-      : rejected
-        ? "El pago no se completó ❌"
-        : "Estamos confirmando tu pago... ⏳";
+      : "Estamos confirmando tu pago... ⏳";
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-10">
@@ -85,21 +107,6 @@ export default async function MpSuccessPage({
                   <Link href="/productos">
                     <Button variant="outline">Seguir comprando</Button>
                   </Link>
-                </div>
-              ) : rejected ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    No se pudo acreditar el pago. No te cobramos nada.
-                  </p>
-
-                  <div className="flex gap-3">
-                    <Link href="/checkout">
-                      <Button>Reintentar</Button>
-                    </Link>
-                    <Link href="/carrito">
-                      <Button variant="outline">Volver al carrito</Button>
-                    </Link>
-                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
