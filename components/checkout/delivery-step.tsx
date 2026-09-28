@@ -6,35 +6,14 @@ import { Button } from "@/components/ui/button";
 import type { CheckoutFormData } from "@/components/checkout/types";
 import { SHIPPING_ZONES, SHIPPING_OUTSIDE_MESSAGE } from "@/lib/shipping";
 import type { ShippingZone } from "@/lib/shipping";
-import { isCheckoutBlocked, getOrderProcessingStatus } from "@/lib/business-hours";
-
-function getDeliveryAvailability(): { isAvailable: boolean; message: string } {
-  const ahoraAR = new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" });
-  const ahora = new Date(ahoraAR);
-  const horaEnMinutos = ahora.getHours() * 60 + ahora.getMinutes();
-  const dia = ahora.getDay();
-
-  if (dia === 0) {
-    if (horaEnMinutos >= 450 && horaEnMinutos < 720) {
-      return { isAvailable: true, message: "" };
-    }
-    return { isAvailable: false, message: "⚠️ No hay envíos. Reabrimos el lunes a las 7:30hs." };
-  }
-
-  if (horaEnMinutos < 450) {
-    return { isAvailable: false, message: "⚠️ Envíos cerrados. Reabrimos a las 7:30hs." };
-  }
-  if (horaEnMinutos < 720) {
-    return { isAvailable: true, message: "" };
-  }
-  if (horaEnMinutos < 960) {
-    return { isAvailable: false, message: "⚠️ Envíos cerrados hasta las 16hs." };
-  }
-  if (horaEnMinutos < 1200) {
-    return { isAvailable: true, message: "" };
-  }
-  return { isAvailable: false, message: "⚠️ Envíos cerrados. Reabrimos mañana a las 7:30hs." };
-}
+import {
+  describeShiftStart,
+  describeWeekHours,
+  isOpenNow,
+  nextDeliveryWindow,
+  nextOpening,
+} from "@/lib/business-hours";
+import { useStoreHours } from "@/lib/use-store-hours";
 
 interface DeliveryStepProps {
   formData: CheckoutFormData;
@@ -49,14 +28,18 @@ export function DeliveryStep({
   onBack,
   onContinue,
 }: DeliveryStepProps) {
-  const blocked = isCheckoutBlocked();
-  const processingStatus = getOrderProcessingStatus();
   const isPickup = formData.deliveryMethod === "PICKUP";
   const isDelivery = formData.deliveryMethod === "DELIVERY";
-  const deliveryAvailability = getDeliveryAvailability();
-  const isDeliveryUnavailable = !deliveryAvailability.isAvailable;
-  const canContinue =
-    !blocked && (isPickup || (isDelivery && !isDeliveryUnavailable && formData.deliveryZone !== ""));
+
+  const { hours } = useStoreHours();
+
+  // El horario no bloquea la compra: solo define cuándo se prepara/sale el pedido.
+  const now = new Date();
+  const openNow = isOpenNow(now, hours);
+  const preparationStart = openNow ? null : describeShiftStart(nextOpening(now, hours), now, true);
+  const deliveryStart = openNow ? null : describeShiftStart(nextDeliveryWindow(now, hours), now, true);
+
+  const canContinue = isPickup || (isDelivery && formData.deliveryZone !== "");
 
   return (
     <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
@@ -70,25 +53,12 @@ export function DeliveryStep({
       </CardHeader>
 
       <CardContent className="space-y-4 p-5 md:p-6">
-        {blocked && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p className="text-red-300">
-              <span className="font-semibold">⚠️ No hay servicio disponible.</span>{" "}
-              Retomamos el lunes a partir de las 8hs.
-            </p>
-          </div>
-        )}
-
         <div className="grid gap-4 md:grid-cols-2">
           <button
             type="button"
-            disabled={blocked}
-            onClick={() => !blocked && onChange("deliveryMethod", "PICKUP")}
+            onClick={() => onChange("deliveryMethod", "PICKUP")}
             className={`rounded-2xl border p-4 text-left transition ${
-              blocked
-                ? "cursor-not-allowed border-border bg-muted/50 opacity-60"
-                : isPickup
+              isPickup
                 ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                 : "border-border bg-background hover:border-primary/40"
             }`}
@@ -116,9 +86,11 @@ export function DeliveryStep({
                 </div>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Lunes a Sábado: 07:30 - 13:00 y 16:00 - 21:00
-                  <br />
-                  Domingos: 08:30 - 13:00
+                  {describeWeekHours(hours).map((line) => (
+                    <span key={line} className="block">
+                      {line}
+                    </span>
+                  ))}
                 </p>
               </div>
             </div>
@@ -126,12 +98,9 @@ export function DeliveryStep({
 
           <button
             type="button"
-            disabled={blocked || isDeliveryUnavailable}
-            onClick={() => !(blocked || isDeliveryUnavailable) && onChange("deliveryMethod", "DELIVERY")}
+            onClick={() => onChange("deliveryMethod", "DELIVERY")}
             className={`rounded-2xl border p-4 text-left transition ${
-              blocked || isDeliveryUnavailable
-                ? "cursor-not-allowed border-border bg-muted/50 opacity-60"
-                : isDelivery
+              isDelivery
                 ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                 : "border-border bg-background hover:border-primary/40"
             }`}
@@ -161,24 +130,21 @@ export function DeliveryStep({
           </button>
         </div>
 
-        {isDeliveryUnavailable && !blocked && (
+        {isDelivery && deliveryStart && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-            <p className="text-amber-200">{deliveryAvailability.message}</p>
+            <p className="text-amber-200">
+              Estamos fuera del horario de envíos. Tu pedido sale en el próximo turno: {deliveryStart}.
+            </p>
           </div>
         )}
 
         <div className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
           <Clock className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
           <p className="text-blue-200">
-            {processingStatus.kind === "open" &&
-              "Tu pedido será procesado hoy durante el horario de atención."}
-            {processingStatus.kind === "later_today" &&
-              `Estamos cerrados ahora. Tu pedido será procesado hoy a partir de las ${processingStatus.hour}hs.`}
-            {processingStatus.kind === "next_day" &&
-              "Tu pedido quedará registrado y será procesado el próximo día hábil."}
-            {processingStatus.kind === "next_monday" &&
-              "Tu pedido quedará registrado y será procesado el lunes a partir de las 8hs."}
+            {preparationStart
+              ? `Estamos cerrados ahora. Tu pedido queda registrado y lo empezamos a preparar ${preparationStart}.`
+              : "Tu pedido será procesado hoy durante el horario de atención."}
           </p>
         </div>
 

@@ -8,6 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { CheckoutFormData } from "@/components/checkout/types";
+import {
+  addDaysToDateString,
+  getStoreNow,
+  slotsForDate,
+  weekdayOfDateString,
+} from "@/lib/business-hours";
+import { useStoreHours } from "@/lib/use-store-hours";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,63 +45,11 @@ function getSlotStartMinutes(slot: string): number | null {
   return h * 60 + m;
 }
 
-function getArgentinaTime(): { horaEnMinutos: number; dia: number } {
-  const ahoraAR = new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" });
-  const ahora = new Date(ahoraAR);
-  return {
-    horaEnMinutos: ahora.getHours() * 60 + ahora.getMinutes(),
-    dia: ahora.getDay(),
-  };
-}
-
-interface PickupTodayRestriction {
-  disableAllSlots: boolean;
-  disableMorningSlots: boolean;
-  disableAfternoonSlots: boolean;
-  message: string | null;
-}
-
-function getPickupTodayRestriction(horaEnMinutos: number, dia: number): PickupTodayRestriction {
-  if (dia === 0) {
-    if (horaEnMinutos >= 780) {
-      return { disableAllSlots: true, disableMorningSlots: false, disableAfternoonSlots: false, message: "⚠️ Cerrado. Reabrimos el lunes a las 7:30hs." };
-    }
-    // Domingo antes de 13:00: tarde/noche no disponibles (el local cierra a las 13hs)
-    return { disableAllSlots: false, disableMorningSlots: false, disableAfternoonSlots: true, message: null };
-  }
-  if (horaEnMinutos >= 1170) {
-    return { disableAllSlots: true, disableMorningSlots: false, disableAfternoonSlots: false, message: "📦 Ya no hay turnos para hoy. Tu pedido se despacha mañana." };
-  }
-  if (horaEnMinutos >= 689) {
-    return { disableAllSlots: false, disableMorningSlots: true, disableAfternoonSlots: false, message: "🕐 Solo podés retirar a la tarde o noche." };
-  }
-  return { disableAllSlots: false, disableMorningSlots: false, disableAfternoonSlots: false, message: null };
-}
-
 function parseSlot(slot: string): { start: string; end: string | null } {
   const m = slot.match(/(\d{1,2}:\d{2})\s*a\s*(\d{1,2}:\d{2})/i);
   if (m) return { start: m[1], end: m[2] };
   const start = slot.match(/(\d{1,2}:\d{2})/)?.[1] ?? slot;
   return { start, end: null };
-}
-
-function getTodayLocalString(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-function parseLocalDate(s: string): Date {
-  const [y, mo, d] = s.split("-").map(Number);
-  return new Date(y, mo - 1, d);
-}
-
-function generateDays(count = 7): { dateString: string; date: Date }[] {
-  const now = new Date();
-  return Array.from({ length: count }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    return { dateString: ds, date: d };
-  });
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -199,8 +154,6 @@ function SlotCard({
 
 interface PickupStepProps {
   formData: CheckoutFormData;
-  minPickupDate: string;
-  pickupTimeSlots: string[];
   onChange: (field: keyof CheckoutFormData, value: string) => void;
   onBack: () => void;
   onContinue: () => void;
@@ -211,116 +164,78 @@ interface PickupStepProps {
 
 export function PickupStep({
   formData,
-  minPickupDate,
-  pickupTimeSlots,
   onChange,
   onBack,
   onContinue,
   disabled = false,
 }: PickupStepProps) {
   const [timeError, setTimeError] = useState<string | null>(null);
+  // Hasta que llega el horario de la base (o vence el timeout y queda el fijo)
+  // no se preselecciona ni se descarta nada.
+  const { hours, ready } = useStoreHours();
 
-  const todayString = useMemo(() => getTodayLocalString(), []);
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  // Hora Argentina al abrir el paso: define "hoy" y qué franjas de hoy ya empezaron.
+  const now = useMemo(() => getStoreNow(), []);
 
-  const isTodaySelected = formData.pickupDate === todayString;
-
-  const argentinaTime = useMemo(() => getArgentinaTime(), []);
-  const todayStringAR = useMemo(() => {
-    const ahoraAR = new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" });
-    const ahora = new Date(ahoraAR);
-    return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
-  }, []);
-  const isTodaySelectedAR = formData.pickupDate === todayStringAR;
-  const pickupTodayRestriction = useMemo(
-    () => getPickupTodayRestriction(argentinaTime.horaEnMinutos, argentinaTime.dia),
-    [argentinaTime]
-  );
-
-  const effectiveMinDate = minPickupDate > todayString ? minPickupDate : todayString;
-
-  // Generate 7 upcoming days with metadata
+  // 7 días desde hoy, cada uno con las franjas de su horario (el domingo no tiene tarde).
+  // Hoy no se puede elegir una franja que ya empezó; un día sin franjas queda deshabilitado.
   const days = useMemo(() => {
-    return generateDays(7).map(({ dateString, date }, i) => {
-      const isToday = i === 0;
-
-      // Today becomes disabled when all slots are unavailable (past or extra-restricted)
-      const todayExhausted =
-        isToday &&
-        pickupTimeSlots.every((slot) => {
-          const mins = getSlotStartMinutes(slot);
-          if (mins === null) return true;
-          if (mins <= currentMinutes) return true;
-          if (pickupTodayRestriction.disableAllSlots) return true;
-          if (pickupTodayRestriction.disableMorningSlots && mins < 840) return true;
-          if (pickupTodayRestriction.disableAfternoonSlots && mins >= 840) return true;
-          return false;
-        });
-
-      const dayLabel =
-        i === 0 ? "Hoy" : i === 1 ? "Mañana" : DAY_NAMES_SHORT[date.getDay()];
-      const dateDisplay = `${date.getDate()}/${date.getMonth() + 1}`;
+    return Array.from({ length: 7 }, (_, i) => {
+      const dateString = addDaysToDateString(now.dateString, i);
+      const [, month, day] = dateString.split("-").map(Number);
+      const slots = slotsForDate(dateString, hours).map((slot) => {
+        const start = getSlotStartMinutes(slot);
+        return { value: slot, disabled: i === 0 && (start === null || start <= now.minutes) };
+      });
 
       return {
         dateString,
-        date,
-        dayLabel,
-        dateDisplay,
-        isDisabled: todayExhausted || dateString < effectiveMinDate,
+        dayLabel: i === 0 ? "Hoy" : i === 1 ? "Mañana" : DAY_NAMES_SHORT[weekdayOfDateString(dateString)],
+        dateDisplay: `${day}/${month}`,
+        slots,
+        isDisabled: slots.every((s) => s.disabled),
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickupTimeSlots, currentMinutes, effectiveMinDate, pickupTodayRestriction]);
+  }, [now, hours]);
 
-  // Slot options — disabled if today is selected and the slot already started
-  const slotOptions = useMemo(() => {
-    return pickupTimeSlots.map((slot) => {
-      const slotStartMinutes = getSlotStartMinutes(slot);
+  const selectedDay = days.find((d) => d.dateString === formData.pickupDate) ?? null;
+  const slotOptions = useMemo(() => selectedDay?.slots ?? [], [selectedDay]);
 
-      // Existing: disable if slot already started (today)
-      const isPastToday =
-        isTodaySelected &&
-        slotStartMinutes !== null &&
-        slotStartMinutes <= currentMinutes;
+  // Sin día elegido: se preselecciona el primer día y franja disponibles
+  // (un domingo a la noche queda en lunes 07:30 a 09:30). El cliente puede cambiarlo.
+  useEffect(() => {
+    if (!ready || formData.pickupDate) return;
+    const firstDay = days.find((d) => !d.isDisabled);
+    const firstSlot = firstDay?.slots.find((s) => !s.disabled);
+    if (!firstDay || !firstSlot) return;
+    onChange("pickupDate", firstDay.dateString);
+    onChange("pickupTimeSlot", firstSlot.value);
+  }, [ready, formData.pickupDate, days, onChange]);
 
-      // Additional restrictions based on Argentina time (today only)
-      const isExtraDisabledToday =
-        isTodaySelectedAR &&
-        slotStartMinutes !== null &&
-        (pickupTodayRestriction.disableAllSlots ||
-          (pickupTodayRestriction.disableMorningSlots && slotStartMinutes < 840) ||
-          (pickupTodayRestriction.disableAfternoonSlots && slotStartMinutes >= 840));
-
-      return { value: slot, disabled: isPastToday || isExtraDisabledToday };
-    });
-  }, [pickupTimeSlots, isTodaySelected, isTodaySelectedAR, currentMinutes, pickupTodayRestriction]);
-
-  // Detect if the currently-selected slot became invalid (time passed)
-  const selectedSlotIsInvalid = useMemo(() => {
+  // Día o franja guardados que ya no son válidos (pasó la hora, o es de otra semana).
+  const selectionIsInvalid = useMemo(() => {
+    if (!formData.pickupDate) return false;
+    if (!selectedDay || selectedDay.isDisabled) return true;
     if (!formData.pickupTimeSlot) return false;
     const found = slotOptions.find((o) => o.value === formData.pickupTimeSlot);
-    return found ? found.disabled : false;
-  }, [formData.pickupTimeSlot, slotOptions]);
+    return !found || found.disabled;
+  }, [formData.pickupDate, formData.pickupTimeSlot, selectedDay, slotOptions]);
 
   useEffect(() => {
-    if (selectedSlotIsInvalid) {
-      onChange("pickupTimeSlot", "");
-      setTimeError("La franja elegida ya pasó. Seleccioná un horario disponible.");
-    }
-  }, [selectedSlotIsInvalid, onChange]);
+    if (!ready || !selectionIsInvalid) return;
+    if (!selectedDay || selectedDay.isDisabled) onChange("pickupDate", "");
+    onChange("pickupTimeSlot", "");
+    setTimeError("La franja elegida ya no está disponible. Seleccioná otro horario.");
+  }, [ready, selectionIsInvalid, selectedDay, onChange]);
 
   const handleDateSelect = (dateString: string) => {
     setTimeError(null);
     onChange("pickupDate", dateString);
 
-    // Clear time slot if it would be invalid on the newly-selected day
-    if (dateString === todayString && formData.pickupTimeSlot) {
-      const mins = getSlotStartMinutes(formData.pickupTimeSlot);
-      if (mins !== null && mins <= currentMinutes) {
-        onChange("pickupTimeSlot", "");
-      }
-    }
+    // La franja elegida puede no existir o ya haber pasado en el nuevo día.
+    const day = days.find((d) => d.dateString === dateString);
+    const stillValid = day?.slots.some((s) => s.value === formData.pickupTimeSlot && !s.disabled);
+    if (formData.pickupTimeSlot && !stillValid) onChange("pickupTimeSlot", "");
   };
 
   const handleSlotSelect = (slot: string) => {
@@ -341,20 +256,16 @@ export function PickupStep({
       return;
     }
 
-    const selectedDate = parseLocalDate(formData.pickupDate);
-    const todayDate = parseLocalDate(todayString);
-
-    if (selectedDate < todayDate) {
-      setTimeError("No podés elegir una fecha de retiro pasada.");
+    const slot = slotOptions.find((o) => o.value === formData.pickupTimeSlot);
+    if (!selectedDay || !slot || slot.disabled) {
+      setTimeError("Ese horario de retiro ya no está disponible. Elegí otro.");
       return;
     }
 
-    const slotStartMinutes = getSlotStartMinutes(formData.pickupTimeSlot);
-    if (
-      formData.pickupDate === todayString &&
-      slotStartMinutes !== null &&
-      slotStartMinutes <= currentMinutes
-    ) {
+    // El paso pudo quedar abierto un rato: se revalida contra la hora actual.
+    const fresh = getStoreNow();
+    const start = getSlotStartMinutes(formData.pickupTimeSlot);
+    if (formData.pickupDate === fresh.dateString && (start === null || start <= fresh.minutes)) {
       setTimeError("Ese horario de retiro ya pasó. Elegí otro.");
       return;
     }
@@ -407,12 +318,6 @@ export function PickupStep({
         {formData.pickupDate && (
           <div className="space-y-4">
             <Label className="text-sm font-medium">Horario de retiro *</Label>
-
-            {isTodaySelectedAR && pickupTodayRestriction.message && (
-              <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-                <p className="text-amber-200">{pickupTodayRestriction.message}</p>
-              </div>
-            )}
 
             <div className="space-y-4">
               {groupedSlots.map((group) => (
@@ -483,7 +388,7 @@ export function PickupStep({
             type="button"
             onClick={handleContinue}
             className="h-11 rounded-xl px-6"
-            disabled={disabled}
+            disabled={disabled || !ready}
           >
             Continuar al pago
           </Button>

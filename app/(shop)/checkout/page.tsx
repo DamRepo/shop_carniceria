@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -20,20 +20,6 @@ import { CheckoutSummary } from "@/components/checkout/checkout-summary";
 import type { CheckoutFormData } from "@/components/checkout/types";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
-
-const PICKUP_TIME_SLOTS = [
-  "07:30 a 09:30",
-  "09:30 a 11:30",
-  "11:30 a 13:00",
-  "16:00 a 18:00",
-  "18:00 a 21:00",
-];
-
-function getTodayLocalDateString() {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().split("T")[0];
-}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -202,8 +188,6 @@ export default function CheckoutPage() {
     router.push("/checkout/metodo-pago");
   };
 
-  const minPickupDate = useMemo(() => getTodayLocalDateString(), []);
-
   if ((items?.length ?? 0) === 0) {
     return (
       <div className="container mx-auto max-w-5xl px-4 py-16 md:py-24">
@@ -280,8 +264,6 @@ export default function CheckoutPage() {
             (formData.deliveryMethod === "PICKUP" ? (
               <PickupStep
                 formData={formData}
-                minPickupDate={minPickupDate}
-                pickupTimeSlots={PICKUP_TIME_SLOTS}
                 onChange={handleInputChange}
                 onBack={() => setCurrentStep(2)}
                 onContinue={() => {

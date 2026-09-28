@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { describeWeekHours } from "@/lib/business-hours";
+import { useStoreHours } from "@/lib/use-store-hours";
 import Link from "next/link";
 import {
   Building2,
@@ -105,6 +107,7 @@ function OrderConfirmedContent() {
   const addressDetails = searchParams?.get?.("addressDetails");
 
   const [guestContact, setGuestContact] = useState<{ name: string; email: string; phone: string } | null>(null);
+  const { hours: storeHours } = useStoreHours();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -340,7 +343,7 @@ function OrderConfirmedContent() {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Horarios del local: Lun–Sáb 07:30–13:00 y 16:00–21:00 · Dom 08:30–13:00
+                  Horarios del local: {describeWeekHours(storeHours, "short").join(" · ")}
                 </p>
               </>
             )}

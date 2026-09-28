@@ -19,25 +19,13 @@ function describeStatus(status: ProcessingStatus): {
     case "open":
       return {
         label: "Abierto ahora",
-        detail: `Cierra a las ${status.closesAtHour}:00`,
+        detail: `Cierra a las ${status.closesAt}`,
         isOpen: true,
       };
-    case "later_today":
+    case "closed":
       return {
         label: "Cerrado ahora",
-        detail: `Abre hoy a las ${status.hour}:00`,
-        isOpen: false,
-      };
-    case "next_day":
-      return {
-        label: "Cerrado ahora",
-        detail: "Abre mañana a las 8:00",
-        isOpen: false,
-      };
-    case "next_monday":
-      return {
-        label: "Cerrado ahora",
-        detail: "Abre el lunes a las 8:00",
+        detail: `Abre ${status.opensAt}`,
         isOpen: false,
       };
   }
