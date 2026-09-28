@@ -12,7 +12,9 @@ import {
   FolderTree,
   LogOut,
   Menu,
+  Landmark,
   PackagePlus,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -37,15 +39,15 @@ export function AdminShell({
 
   if (status === "loading") {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      <div className="min-h-dvh flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
 
   if (!session || session.user?.role !== "ADMIN") {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-black text-zinc-300">
+      <div className="min-h-dvh flex items-center justify-center bg-background text-muted-foreground">
         Redirigiendo...
       </div>
     );
@@ -58,21 +60,23 @@ export function AdminShell({
     { href: "/admin/categorias", icon: FolderTree, label: "Categorías" },
     { href: "/admin/ofertas", icon: Tag, label: "Ofertas" },
     { href: "/admin/ordenes", icon: ShoppingCart, label: "Órdenes" },
+    { href: "/admin/pagos-pendientes", icon: Landmark, label: "Pagos pendientes" },
+    { href: "/admin/horarios", icon: Clock, label: "Horarios" },
   ];
 
   const SidebarContent = () => (
-    <div className="flex h-full flex-col bg-zinc-900">
-      <div className="shrink-0 mt-4 p-5 border-b border-zinc-800 flex items-center gap-3">
+    <div className="flex h-full flex-col bg-card">
+      <div className="shrink-0 mt-4 p-5 border-b border-border flex items-center gap-3">
         <AvatarUpload size="sm" />
 
         <div className="flex flex-col">
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-muted-foreground">
             Hola{" "}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-foreground">
               {session.user?.name ?? "Admin"}
             </span>
           </p>
-          <p className="text-xs text-zinc-400">Carnicería El Negro</p>
+          <p className="text-xs text-muted-foreground">Carnicería El Negro</p>
         </div>
       </div>
 
@@ -87,8 +91,8 @@ export function AdminShell({
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive
-                  ? "bg-orange-500 text-white"
-                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               <Icon className="w-5 h-5" />
@@ -98,23 +102,23 @@ export function AdminShell({
         })}
       </nav>
 
-      <div className="shrink-0 p-4 border-t border-zinc-800 space-y-2">
+      <div className="shrink-0 p-4 border-t border-border space-y-2">
         <Link
           href="/admin/perfil"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors group"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors group"
         >
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {session.user?.name ?? "Admin"}
             </p>
-            <p className="text-xs text-zinc-400 truncate">{session.user?.email ?? ""}</p>
+            <p className="text-xs text-muted-foreground truncate">{session.user?.email ?? ""}</p>
           </div>
         </Link>
 
         <Button
           onClick={() => signOut({ callbackUrl: "/" })}
           variant="outline"
-          className="w-full justify-start gap-3 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          className="w-full justify-start gap-3 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <LogOut className="w-4 h-4" />
           Cerrar Sesión
@@ -124,23 +128,23 @@ export function AdminShell({
   );
 
   return (
-    <div className="min-h-dvh bg-black text-white">
-      <aside className="hidden md:block fixed inset-y-0 left-0 w-64 border-r border-zinc-800 bg-zinc-900">
+    <div className="min-h-dvh bg-background text-foreground">
+      <aside className="hidden md:block fixed inset-y-0 left-0 w-64 border-r border-border bg-card">
         <SidebarContent />
       </aside>
 
-      <div className="md:hidden sticky top-0 z-40 border-b border-zinc-800 bg-black/80 backdrop-blur">
+      <div className="md:hidden sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
         <div className="flex items-center gap-2 px-3 py-2">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white">
+              <Button variant="ghost" size="icon" className="text-foreground">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
 
             <SheetContent
               side="left"
-              className="w-80 p-0 bg-zinc-900 border-zinc-800"
+              className="w-80 p-0 bg-card border-border"
             >
               <SidebarContent />
             </SheetContent>
@@ -148,7 +152,7 @@ export function AdminShell({
 
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold">Admin</span>
-            <span className="text-xs text-zinc-400">Carnicería El Negro</span>
+            <span className="text-xs text-muted-foreground">Carnicería El Negro</span>
           </div>
         </div>
       </div>

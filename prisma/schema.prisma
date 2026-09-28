@@ -364,3 +364,14 @@ enum ComboPriceType {
   FIXED
   PERCENTAGE_DISCOUNT
 }
+/// Horario del local editable desde el admin. Un registro por día (0 = domingo).
+/// Horas en "HH:mm", hora Argentina. Si falta o es inválido, la app usa el horario fijo de lib/business-hours.ts.
+model BusinessHours {
+  dayOfWeek      Int      @id
+  openMorning    String?
+  closeMorning   String?
+  openAfternoon  String?
+  closeAfternoon String?
+  isClosed       Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+}
