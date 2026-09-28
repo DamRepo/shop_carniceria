@@ -5,11 +5,18 @@ import { authOptions } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 import { crearPagoTalo, extraerCvuAlias } from "@/lib/talo";
+import {
+  buildComboCheckoutLines,
+  findActiveCombosById,
+  releaseComboReservation,
+  reserveComboStock,
+  type ComboReservationItem,
+} from "@/lib/combos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type BodyItem = { productId: string; quantity: number };
+type BodyItem = { productId?: string; comboId?: string; quantity: number };
 
 type Body = {
   customerName: string;
@@ -291,7 +298,29 @@ export async function POST(req: Request) {
 
     const resolvedEmail = email ?? sessionEmail?.trim().toLowerCase() ?? null;
 
-    const ids = body.items.map((i) => i.productId);
+    const productBodyItems: Array<{ productId: string; quantity: number }> = [];
+    const comboBodyItems: Array<{ comboId: string; quantity: number }> = [];
+
+    for (const raw of body.items) {
+      const productId = normalizeString(raw?.productId);
+      const comboId = normalizeString(raw?.comboId);
+      if (productId && comboId) {
+        return NextResponse.json(
+          { error: "Un ítem no puede ser producto y combo a la vez" },
+          { status: 400 }
+        );
+      }
+      if (comboId) {
+        comboBodyItems.push({ comboId, quantity: safeNumber(raw?.quantity) });
+      } else if (productId) {
+        productBodyItems.push({ productId, quantity: safeNumber(raw?.quantity) });
+      } else {
+        return NextResponse.json({ error: "Ítem sin productId ni comboId" }, { status: 400 });
+      }
+    }
+
+    const ids = productBodyItems.map((i) => i.productId);
+    const comboIds = Array.from(new Set(comboBodyItems.map((i) => i.comboId)));
 
     const products = (await prisma.product.findMany({
       where: { id: { in: ids }, isActive: true },
@@ -314,18 +343,23 @@ export async function POST(req: Request) {
 
     const byId = new Map<string, ProductPick>(products.map((p) => [p.id, p]));
 
+    const comboById = await findActiveCombosById(prisma, comboIds);
+
     let subtotalCents = 0;
 
     const itemsSnapshot: Array<{
-      productId: string;
+      productId?: string;
+      comboId?: string;
       quantity: number;
       unitPrice: number;
       lineTotal: number;
+      itemNameSnapshot?: string;
     }> = [];
 
     const reservationItems: ReservationItem[] = [];
+    const comboReservationItems: ComboReservationItem[] = [];
 
-    for (const i of body.items) {
+    for (const i of productBodyItems) {
       const p = byId.get(i.productId);
       if (!p) throw new Error(`Producto no encontrado: ${i.productId}`);
 
@@ -355,6 +389,22 @@ export async function POST(req: Request) {
         quantity: normalizedQty,
         unitPrice: priceCents,
         lineTotal: lineCents,
+      });
+    }
+
+    // Mismo cálculo que MP (lib/combos.ts): el total que se le pide a Talo es el
+    // mismo que después se compara contra lo pagado, sin falsos UNDERPAID/OVERPAID.
+    for (const line of buildComboCheckoutLines(comboBodyItems, comboById)) {
+      subtotalCents += line.lineCents;
+
+      comboReservationItems.push({ comboId: line.comboId, reserveQty: line.units });
+
+      itemsSnapshot.push({
+        comboId: line.comboId,
+        quantity: line.units,
+        unitPrice: line.unitPriceCents,
+        lineTotal: line.lineCents,
+        itemNameSnapshot: line.name,
       });
     }
 
@@ -400,6 +450,9 @@ export async function POST(req: Request) {
         }
       }
 
+      // Combos: mismo optimistic locking sobre Combo.reservedStock (lib/combos.ts).
+      await reserveComboStock(tx, comboReservationItems);
+
       const order = await tx.order.create({
         data: {
           userId: userId ?? null,
@@ -429,10 +482,12 @@ export async function POST(req: Request) {
 
           items: {
             create: itemsSnapshot.map((it) => ({
-              productId: it.productId,
+              productId: it.productId ?? null,
+              comboId: it.comboId ?? null,
               quantity: Number(it.quantity),
               unitPrice: Number(it.unitPrice),
               lineTotal: Number(it.lineTotal),
+              itemNameSnapshot: it.itemNameSnapshot ?? null,
             })),
           },
         },
@@ -480,6 +535,9 @@ export async function POST(req: Request) {
               where: { id: r.productId, reservedStock: { gte: r.reserveQty } },
               data: { reservedStock: { decrement: r.reserveQty } },
             });
+          }
+          for (const r of comboReservationItems) {
+            await releaseComboReservation(tx, r.comboId, r.reserveQty);
           }
           await tx.checkoutSession.update({
             where: { id: cs.id },

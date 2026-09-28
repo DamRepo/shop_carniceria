@@ -154,7 +154,6 @@ export default function MetodoPagoPage() {
       )
       .filter((i) => i.quantity > 0);
 
-  const cartHasCombos = (items ?? []).some((item) => item.type === "combo");
 
   const buildOrderBody = (paymentMethod: "CASH") => {
     const orderItems = buildItems();
@@ -219,15 +218,6 @@ export default function MetodoPagoPage() {
 
     if ((items?.length ?? 0) === 0) {
       toast.error("Tu carrito está vacío");
-      return;
-    }
-
-    // Talo Pay todavía no acepta combos: se bloquea acá para no enviar un
-    // pedido incompleto a /api/checkout/talo.
-    if (cartHasCombos && selected === "TALO_PAY") {
-      toast.error(
-        "Los combos por ahora no se pueden pagar con transferencia con Talo. Elegí otro método o quitá el combo del carrito."
-      );
       return;
     }
 

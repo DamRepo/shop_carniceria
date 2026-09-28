@@ -478,7 +478,9 @@ interface TaloOrder {
   items: {
     quantity: number;
     lineTotal: number;
-    product: { name: string; unitType: string };
+    comboId: string | null;
+    itemNameSnapshot: string | null;
+    product: { name: string; unitType: string } | null;
   }[];
 }
 
@@ -701,7 +703,8 @@ function TaloTab() {
                           {order.items.map((it, i) => (
                             <li key={i} className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
-                                {it.product.name} × {formatQty(it.quantity, it.product.unitType)}
+                                {it.product?.name ?? it.itemNameSnapshot ?? (it.comboId ? "Combo" : "Producto")} ×{" "}
+                                {formatQty(it.quantity, it.product?.unitType ?? "PER_UNIT")}
                               </span>
                               <span className="font-medium">{formatPrice(it.lineTotal)}</span>
                             </li>

@@ -60,6 +60,8 @@ export async function GET() {
           select: {
             quantity: true,
             lineTotal: true,
+            comboId: true,
+            itemNameSnapshot: true,
             product: { select: { name: true, unitType: true } },
           },
         },

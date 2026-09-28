@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { consultarPagoTalo, extraerCvuAlias, type TaloPago } from "@/lib/talo";
 import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/lib/telegram";
+import { confirmComboSale, getComboReserveQty, releaseComboReservation } from "@/lib/combos";
 
 /**
  * Procesa la confirmación real de un pago de Talo. Es la ÚNICA función que
@@ -18,7 +19,8 @@ import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/l
  */
 
 type SnapshotItem = {
-  productId: string;
+  productId?: string | null;
+  comboId?: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -77,6 +79,18 @@ export async function releaseReservation(
   }
 
   for (const it of items) {
+    if (it.comboId) {
+      await releaseComboReservation(tx, it.comboId, getComboReserveQty(it.quantity));
+      continue;
+    }
+
+    if (!it.productId) {
+      console.warn("[talo] releaseReservation: ítem sin productId ni comboId", {
+        checkoutSessionId: cs.id,
+      });
+      continue;
+    }
+
     const product = await tx.product.findUnique({
       where: { id: it.productId },
       select: { unitType: true },
@@ -193,6 +207,15 @@ export async function finalizeTaloOrderAsPaid(params: {
     }
 
     for (const it of items) {
+      if (it.comboId) {
+        await confirmComboSale(tx, it.comboId, getComboReserveQty(it.quantity));
+        continue;
+      }
+
+      if (!it.productId) {
+        throw new Error("PRODUCT_NOT_FOUND:missing_id");
+      }
+
       const product = await tx.product.findUnique({
         where: { id: it.productId },
         select: { unitType: true },
@@ -245,6 +268,7 @@ export async function finalizeTaloOrderAsPaid(params: {
         select: {
           quantity: true,
           lineTotal: true,
+          itemNameSnapshot: true,
           product: { select: { name: true, unitType: true } },
         },
       },
@@ -267,7 +291,7 @@ export async function finalizeTaloOrderAsPaid(params: {
         deliveryCostCents: Number(fullOrder.deliveryCost ?? 0),
         totalCents: Number(fullOrder.total),
         items: fullOrder.items.map((it) => ({
-          name: it.product?.name ?? "",
+          name: it.itemNameSnapshot ?? it.product?.name ?? "",
           quantity: Number(it.quantity),
           unitType: (it.product?.unitType ?? "PER_UNIT") as "PER_KG" | "PER_UNIT",
           lineTotalCents: Number(it.lineTotal),
