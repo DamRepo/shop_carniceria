@@ -4,7 +4,7 @@ import { Footer } from "@/components/footer";
 import { PromoTopBanner } from "@/components/promo-top-banner";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { DeliveryBanner } from "@/components/delivery-banner";
-import { ExitIntentPopup } from "@/components/exit-intent-popup";
+import { OffersBanner } from "@/components/offers-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
 
 export default function ShopLayout({
@@ -25,7 +25,7 @@ export default function ShopLayout({
       </Suspense>
 
       <WhatsAppButton />
-      <ExitIntentPopup />
+      <OffersBanner />
       <FeedbackWidget />
     </div>
   );

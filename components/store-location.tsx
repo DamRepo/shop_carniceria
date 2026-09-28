@@ -46,8 +46,8 @@ export function StoreLocation({ status }: StoreLocationProps) {
                 className={cn(
                   "h-1.5 w-1.5 shrink-0 rounded-full",
                   isOpen
-                    ? "animate-pulse bg-white"
-                    : "border border-white/40 bg-transparent"
+                    ? "animate-pulse bg-green-500"
+                    : "bg-amber-400"
                 )}
               />
               <p
