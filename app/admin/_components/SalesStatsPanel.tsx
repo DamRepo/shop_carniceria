@@ -47,11 +47,11 @@ function formatARSShort(cents: number): string {
 function OrdersTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm shadow-xl">
-      <p className="mb-1 font-medium text-zinc-300">{label}</p>
-      <p className="text-orange-400">
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-xl">
+      <p className="mb-1 font-medium text-muted-foreground">{label}</p>
+      <p className="text-primary">
         <span className="font-bold">{payload[0].value}</span>{" "}
-        <span className="text-zinc-400">órdenes</span>
+        <span className="text-muted-foreground">órdenes</span>
       </p>
     </div>
   );
@@ -60,9 +60,9 @@ function OrdersTooltip({ active, payload, label }: any) {
 function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm shadow-xl">
-      <p className="mb-1 font-medium text-zinc-300">{label}</p>
-      <p className="text-cyan-400 font-bold">{formatARS(payload[0].value)}</p>
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-xl">
+      <p className="mb-1 font-medium text-muted-foreground">{label}</p>
+      <p className="text-cyan-600 font-bold">{formatARS(payload[0].value)}</p>
     </div>
   );
 }
@@ -81,12 +81,12 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900`}>
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3">
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card`}>
         <Icon className={`h-4 w-4 ${color}`} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-xs text-zinc-500">{label}</p>
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
         <p className={`truncate text-base font-bold ${color}`}>{value}</p>
       </div>
     </div>
@@ -133,16 +133,16 @@ export function SalesStatsPanel() {
   const tickInterval = data.length > 20 ? 3 : data.length > 10 ? 1 : 0;
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2 text-base text-white sm:text-lg">
-            <TrendingUp className="h-5 w-5 text-orange-400" />
+          <CardTitle className="flex items-center gap-2 text-base text-foreground sm:text-lg">
+            <TrendingUp className="h-5 w-5 text-primary" />
             Estadísticas de Ventas
           </CardTitle>
 
           {/* Period selector */}
-          <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+          <div className="flex rounded-lg border border-border bg-muted p-0.5">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -150,8 +150,8 @@ export function SalesStatsPanel() {
                 onClick={() => setPeriod(opt.value)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   period === opt.value
-                    ? "bg-orange-500 text-white"
-                    : "text-zinc-400 hover:text-zinc-200"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {opt.label}
@@ -164,11 +164,11 @@ export function SalesStatsPanel() {
       <CardContent className="space-y-6">
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+            <Loader2 className="h-7 w-7 animate-spin text-primary" />
           </div>
         ) : error ? (
-          <div className="flex h-40 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/40">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="flex h-40 items-center justify-center rounded-xl border border-border bg-muted/40">
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         ) : (
           <>
@@ -179,26 +179,26 @@ export function SalesStatsPanel() {
                   icon={ShoppingCart}
                   label={`Órdenes · ${summary.periodLabel}`}
                   value={String(summary.totalOrders)}
-                  color="text-orange-400"
+                  color="text-primary"
                 />
                 <SummaryCard
                   icon={TrendingUp}
                   label="Ingresos del período"
                   value={formatARS(summary.totalRevenue)}
-                  color="text-cyan-400"
+                  color="text-cyan-600"
                 />
                 <SummaryCard
                   icon={Receipt}
                   label="Ticket promedio"
                   value={summary.avgTicket > 0 ? formatARS(summary.avgTicket) : "—"}
-                  color="text-emerald-400"
+                  color="text-emerald-600"
                 />
               </div>
             )}
 
             {!hasData ? (
-              <div className="flex h-40 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/40">
-                <p className="text-sm text-zinc-500">
+              <div className="flex h-40 items-center justify-center rounded-xl border border-border bg-muted/40">
+                <p className="text-sm text-muted-foreground">
                   Sin ventas pagadas en este período
                 </p>
               </div>
@@ -206,29 +206,29 @@ export function SalesStatsPanel() {
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {/* ── Órdenes ─────────────────────────────────────── */}
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Cantidad de órdenes
                   </p>
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" vertical={false} />
                       <XAxis
                         dataKey="label"
-                        tick={{ fill: "#71717a", fontSize: 11 }}
+                        tick={{ fill: "#52525b", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         interval={tickInterval}
                       />
                       <YAxis
                         allowDecimals={false}
-                        tick={{ fill: "#71717a", fontSize: 11 }}
+                        tick={{ fill: "#52525b", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip content={<OrdersTooltip />} cursor={{ fill: "#3f3f46" }} />
+                      <Tooltip content={<OrdersTooltip />} cursor={{ fill: "#f4f4f5" }} />
                       <Bar
                         dataKey="orders"
-                        fill="#f97316"
+                        fill="#e40c18"
                         radius={[4, 4, 0, 0]}
                         maxBarSize={40}
                       />
@@ -238,7 +238,7 @@ export function SalesStatsPanel() {
 
                 {/* ── Ingresos ────────────────────────────────────── */}
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Ingresos (ARS)
                   </p>
                   <ResponsiveContainer width="100%" height={220}>
@@ -249,29 +249,29 @@ export function SalesStatsPanel() {
                           <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}    />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" vertical={false} />
                       <XAxis
                         dataKey="label"
-                        tick={{ fill: "#71717a", fontSize: 11 }}
+                        tick={{ fill: "#52525b", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         interval={tickInterval}
                       />
                       <YAxis
                         tickFormatter={formatARSShort}
-                        tick={{ fill: "#71717a", fontSize: 11 }}
+                        tick={{ fill: "#52525b", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip content={<RevenueTooltip />} cursor={{ stroke: "#3f3f46" }} />
+                      <Tooltip content={<RevenueTooltip />} cursor={{ stroke: "#d4d4d8" }} />
                       <Area
                         type="monotone"
                         dataKey="revenue"
-                        stroke="#22d3ee"
+                        stroke="#0891b2"
                         strokeWidth={2}
                         fill="url(#revenueGrad)"
                         dot={false}
-                        activeDot={{ r: 4, fill: "#22d3ee", stroke: "#18181b", strokeWidth: 2 }}
+                        activeDot={{ r: 4, fill: "#0891b2", stroke: "#ffffff", strokeWidth: 2 }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>

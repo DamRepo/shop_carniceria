@@ -40,15 +40,15 @@ export function AdminPagination({ total, currentPage, pageSize }: Props) {
 
   const btnBase =
     "px-2 py-1 rounded text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
-  const btnNav = `${btnBase} text-zinc-400 hover:text-white hover:bg-zinc-800`;
+  const btnNav = `${btnBase} text-muted-foreground hover:text-foreground hover:bg-muted`;
   const btnPage = (active: boolean) =>
     active
-      ? `${btnBase} bg-orange-500 text-white font-medium`
-      : `${btnBase} text-zinc-400 hover:bg-zinc-800 hover:text-white`;
+      ? `${btnBase} bg-primary text-primary-foreground font-medium`
+      : `${btnBase} text-muted-foreground hover:bg-muted hover:text-foreground`;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-zinc-800 mt-2">
-      <p className="text-sm text-zinc-400">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border mt-2">
+      <p className="text-sm text-muted-foreground">
         Mostrando {from}–{to} de {total} productos
       </p>
 
@@ -72,7 +72,7 @@ export function AdminPagination({ total, currentPage, pageSize }: Props) {
 
         {getPageNumbers().map((p, i) =>
           p === "…" ? (
-            <span key={`ellipsis-${i}`} className="px-2 py-1 text-sm text-zinc-600">
+            <span key={`ellipsis-${i}`} className="px-2 py-1 text-sm text-muted-foreground">
               …
             </span>
           ) : (

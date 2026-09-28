@@ -41,13 +41,13 @@ export default function ForgotPasswordClient() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md bg-card border-border">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center text-white">
             Recuperar contraseña
           </CardTitle>
-          <CardDescription className="text-center text-zinc-400">
+          <CardDescription className="text-center text-muted-foreground">
             Ingresá tu email y te vamos a enviar un enlace.
           </CardDescription>
         </CardHeader>
@@ -62,23 +62,23 @@ export default function ForgotPasswordClient() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={loading}
             >
               {loading ? "Enviando..." : "Enviar enlace"}
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
+          <div className="mt-6 pt-6 border-t border-border text-center">
             <Link
               href={callbackUrl}
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Volver
             </Link>

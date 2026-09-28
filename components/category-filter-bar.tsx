@@ -195,17 +195,17 @@ export function CategoryFilterBar({ allProducts, label, children }: Props) {
 
           <SheetContent
             side="left"
-            className="w-80 bg-zinc-950 border-zinc-800 p-0"
+            className="w-80 bg-card border-border p-0"
           >
             <div className="flex h-full flex-col">
-              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <div className="p-4 border-b border-border flex items-center justify-between">
                 <div>
                   {label && (
-                    <div className="text-base font-semibold text-white leading-tight">
+                    <div className="text-base font-semibold text-foreground leading-tight">
                       {label}
                     </div>
                   )}
-                  <div className="text-xs text-zinc-400 mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {filtered.length} producto{filtered.length !== 1 ? "s" : ""}
                   </div>
                 </div>
@@ -216,7 +216,7 @@ export function CategoryFilterBar({ allProducts, label, children }: Props) {
                       setSelectedCategorySlug(null);
                       setFilters(DEFAULT_FILTERS);
                     }}
-                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1"
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                   >
                     <X className="h-3 w-3" />
                     Limpiar
@@ -232,9 +232,9 @@ export function CategoryFilterBar({ allProducts, label, children }: Props) {
                   allProducts={categoryFiltered}
                 />
               </div>
-              <div className="p-4 border-t border-zinc-800">
+              <div className="p-4 border-t border-border">
                 <Button
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={() => setMobileOpen(false)}
                 >
                   Ver {filtered.length} productos

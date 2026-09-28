@@ -90,13 +90,13 @@ interface Order {
 }
 
 const statusColors: Record<OrderStatus, string> = {
-  PENDING_PAYMENT: 'bg-amber-500/20 text-amber-400',
-  PENDING: 'bg-yellow-500/20 text-yellow-500',
-  CONFIRMED: 'bg-cyan-500/20 text-cyan-500',
-  PREPARING: 'bg-blue-500/20 text-blue-500',
-  READY: 'bg-purple-500/20 text-purple-500',
-  COMPLETED: 'bg-green-500/20 text-green-500',
-  CANCELLED: 'bg-red-500/20 text-red-500',
+  PENDING_PAYMENT: 'bg-amber-100 text-amber-700',
+  PENDING: 'bg-yellow-100 text-yellow-700',
+  CONFIRMED: 'bg-cyan-100 text-cyan-700',
+  PREPARING: 'bg-blue-100 text-blue-700',
+  READY: 'bg-purple-100 text-purple-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-700',
 };
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -134,7 +134,7 @@ function getStatusUi(status: string) {
   const safeStatus = status as OrderStatus;
   return {
     label: statusLabels[safeStatus] ?? status,
-    color: statusColors[safeStatus] ?? 'bg-zinc-500/20 text-zinc-300',
+    color: statusColors[safeStatus] ?? 'bg-muted text-muted-foreground',
     Icon: statusIcons[safeStatus] ?? Clock,
   };
 }
@@ -161,13 +161,13 @@ function PaymentSection({
   const { paymentMethod, transferStatus, transferCode, transferConfirmedAt } = order;
 
   const methodConfig: Record<PaymentMethod, { label: string; Icon: React.ComponentType<{ className?: string }>; color: string }> = {
-    BANK_TRANSFER: { label: 'Transferencia bancaria', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
-    MERCADO_PAGO: { label: 'Mercado Pago', Icon: CreditCard, color: 'bg-green-500/20 text-green-400' },
-    CASH: { label: 'Efectivo', Icon: Wallet, color: 'bg-amber-500/20 text-amber-400' },
-    TALO_PAY: { label: 'Transferencia con Talo', Icon: Building2, color: 'bg-blue-500/20 text-blue-400' },
+    BANK_TRANSFER: { label: 'Transferencia bancaria', Icon: Building2, color: 'bg-blue-100 text-blue-700' },
+    MERCADO_PAGO: { label: 'Mercado Pago', Icon: CreditCard, color: 'bg-green-100 text-green-700' },
+    CASH: { label: 'Efectivo', Icon: Wallet, color: 'bg-amber-100 text-amber-700' },
+    TALO_PAY: { label: 'Transferencia con Talo', Icon: Building2, color: 'bg-blue-100 text-blue-700' },
   };
 
-  const method = methodConfig[paymentMethod] ?? { label: paymentMethod, Icon: Wallet, color: 'bg-zinc-500/20 text-zinc-400' };
+  const method = methodConfig[paymentMethod] ?? { label: paymentMethod, Icon: Wallet, color: 'bg-muted text-muted-foreground' };
   const MethodIcon = method.Icon;
 
   return (
@@ -180,22 +180,22 @@ function PaymentSection({
       {paymentMethod === 'BANK_TRANSFER' && (
         <>
           {(transferStatus === 'PENDING_REVIEW' || transferStatus === 'AWAITING_PROOF') && (
-            <div className="rounded-xl border border-blue-800/50 bg-blue-950/30 p-4">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
               <div className="mb-1 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-blue-400" />
-                <p className="text-sm font-semibold text-blue-300">Transferencia en revisión</p>
+                <AlertTriangle className="h-4 w-4 text-blue-600" />
+                <p className="text-sm font-semibold text-blue-800">Transferencia en revisión</p>
               </div>
-              <p className="mb-2 text-xs text-zinc-400">Verificá el pago en tu homebanking.</p>
+              <p className="mb-2 text-xs text-muted-foreground">Verificá el pago en tu homebanking.</p>
               {transferCode && (
-                <p className="mb-3 text-xs text-zinc-500">
-                  Código: <span className="font-mono font-medium text-zinc-300">{transferCode}</span>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Código: <span className="font-mono font-medium text-foreground">{transferCode}</span>
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => onConfirm(order.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
                 >
                   <CheckCircle className="h-3.5 w-3.5" />
                   Confirmar pago
@@ -203,7 +203,7 @@ function PaymentSection({
                 <button
                   type="button"
                   onClick={() => onReject(order.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-700/70 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
                 >
                   <XCircle className="h-3.5 w-3.5" />
                   Rechazar
@@ -213,13 +213,13 @@ function PaymentSection({
           )}
 
           {transferStatus === 'CONFIRMED' && (
-            <div className="rounded-xl border border-green-800/50 bg-green-950/30 p-3">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                <p className="text-sm font-semibold text-green-300">Pago confirmado</p>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <p className="text-sm font-semibold text-green-800">Pago confirmado</p>
               </div>
               {transferConfirmedAt && (
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Verificado el{' '}
                   {new Date(transferConfirmedAt).toLocaleDateString('es-AR', {
                     day: '2-digit',
@@ -232,13 +232,13 @@ function PaymentSection({
           )}
 
           {transferStatus === 'REJECTED' && (
-            <div className="rounded-xl border border-red-800/50 bg-red-950/30 p-3">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
               <div className="flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-red-400" />
-                <p className="text-sm font-semibold text-red-300">Pago rechazado</p>
+                <XCircle className="h-4 w-4 text-red-600" />
+                <p className="text-sm font-semibold text-red-800">Pago rechazado</p>
               </div>
               {order.transferRejectNote && (
-                <p className="mt-1 text-xs text-zinc-400">{order.transferRejectNote}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{order.transferRejectNote}</p>
               )}
             </div>
           )}
@@ -247,23 +247,23 @@ function PaymentSection({
 
       {paymentMethod === 'MERCADO_PAGO' && (
         order.paymentStatus === 'PAID' ? (
-          <div className="rounded-xl border border-green-800/50 bg-green-950/30 p-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <p className="text-sm font-medium text-green-300">Pago confirmado — Mercado Pago</p>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <p className="text-sm font-medium text-green-800">Pago confirmado — Mercado Pago</p>
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-400" />
-              <p className="text-sm font-medium text-amber-300">Pago pendiente — Mercado Pago</p>
+              <Clock className="h-4 w-4 text-amber-600" />
+              <p className="text-sm font-medium text-amber-800">Pago pendiente — Mercado Pago</p>
               {order.paymentStatus === 'PENDING' && (
                 <button
                   type="button"
                   onClick={() => onVerifyMp(order.id)}
                   disabled={verifyingMp}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${verifyingMp ? 'animate-spin' : ''}`} />
                   {verifyingMp ? 'Verificando...' : 'Verificar pago'}
@@ -274,10 +274,10 @@ function PaymentSection({
               <p
                 className={`mt-2 text-xs ${
                   mpVerifyFeedback.tone === 'success'
-                    ? 'text-green-400'
+                    ? 'text-green-700'
                     : mpVerifyFeedback.tone === 'warning'
-                      ? 'text-amber-300'
-                      : 'text-red-400'
+                      ? 'text-amber-800'
+                      : 'text-red-700'
                 }`}
               >
                 {mpVerifyFeedback.message}
@@ -289,17 +289,17 @@ function PaymentSection({
 
       {paymentMethod === 'TALO_PAY' && (
         order.paymentStatus === 'PAID' ? (
-          <div className="rounded-xl border border-green-800/50 bg-green-950/30 p-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <p className="text-sm font-medium text-green-300">Pago confirmado — Talo Pay</p>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <p className="text-sm font-medium text-green-800">Pago confirmado — Talo Pay</p>
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-400" />
-              <p className="text-sm font-medium text-amber-300">Pago pendiente — Talo Pay</p>
+              <Clock className="h-4 w-4 text-amber-600" />
+              <p className="text-sm font-medium text-amber-800">Pago pendiente — Talo Pay</p>
             </div>
           </div>
         )
@@ -307,24 +307,24 @@ function PaymentSection({
 
       {paymentMethod === 'CASH' && (
         order.paymentStatus === 'PAID' ? (
-          <div className="rounded-xl border border-green-800/50 bg-green-950/30 p-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <p className="text-sm font-medium text-green-300">Efectivo cobrado</p>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <p className="text-sm font-medium text-green-800">Efectivo cobrado</p>
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
             <div className="mb-2 flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-amber-400" />
-              <p className="text-sm font-medium text-amber-300">
+              <Wallet className="h-4 w-4 text-amber-600" />
+              <p className="text-sm font-medium text-amber-800">
                 Paga al retirar — {formatPrice(order.total)}
               </p>
             </div>
             <button
               type="button"
               onClick={() => onMarkCashPaid(order.id)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-green-700/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
             >
               <CheckCircle className="h-3.5 w-3.5" />
               Marcar como cobrado
@@ -477,7 +477,7 @@ export default function OrdenesAdmin() {
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-orange-500" />
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     );
   }
@@ -487,16 +487,16 @@ export default function OrdenesAdmin() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Órdenes</h1>
-          <p className="mt-1 text-zinc-400">
+          <p className="mt-1 text-muted-foreground">
             {filteredOrders.length} orden{filteredOrders.length !== 1 ? 'es' : ''}
           </p>
         </div>
 
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-56 border-zinc-800 bg-zinc-900">
+          <SelectTrigger className="w-56 border-border bg-card">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="border-zinc-800 bg-zinc-900">
+          <SelectContent className="border-border bg-card">
             <SelectItem value="all">Todas las órdenes</SelectItem>
             <SelectItem value="PENDING_PAYMENT">Pendientes de pago</SelectItem>
             <SelectItem value="PENDING">Pendientes</SelectItem>
@@ -510,10 +510,10 @@ export default function OrdenesAdmin() {
       </div>
 
       {filteredOrders.length === 0 ? (
-        <Card className="border-zinc-800 bg-zinc-900 p-12 text-center">
-          <Package className="mx-auto mb-4 h-16 w-16 text-zinc-600" />
-          <h3 className="mb-2 text-xl font-semibold text-white">No hay órdenes</h3>
-          <p className="text-zinc-400">
+        <Card className="border-border bg-card p-12 text-center">
+          <Package className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+          <h3 className="mb-2 text-xl font-semibold text-foreground">No hay órdenes</h3>
+          <p className="text-muted-foreground">
             {filterStatus === 'all'
               ? 'Aún no se han recibido órdenes'
               : `No hay órdenes con estado: ${statusLabels[filterStatus as OrderStatus] ?? filterStatus}`}
@@ -526,12 +526,12 @@ export default function OrdenesAdmin() {
             const pickupDateLabel = formatPickupDate(order.pickupDate);
 
             return (
-              <Card key={order.id} className="border-zinc-800 bg-zinc-900 p-6">
+              <Card key={order.id} className="border-border bg-card p-6">
                 {/* Header */}
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex-1">
                     <div className="mb-2 flex items-center gap-3">
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="text-lg font-semibold text-foreground">
                         Orden #{order.orderNumber ?? order.id.slice(0, 8)}
                       </h3>
                       <span className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${statusColor}`}>
@@ -539,7 +539,7 @@ export default function OrdenesAdmin() {
                         {statusLabel}
                       </span>
                     </div>
-                    <p className="text-sm text-zinc-400">
+                    <p className="text-sm text-muted-foreground">
                       {new Date(order.createdAt).toLocaleDateString('es-AR', {
                         day: '2-digit',
                         month: 'long',
@@ -551,8 +551,8 @@ export default function OrdenesAdmin() {
                   </div>
 
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-white">{formatPrice(order.total ?? 0)}</p>
-                    <div className="mt-2 space-y-1 text-sm text-zinc-400">
+                    <p className="text-2xl font-bold text-foreground">{formatPrice(order.total ?? 0)}</p>
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                       <div className="flex items-center justify-end gap-2">
                         <span>Subtotal:</span>
                         <span>{formatPrice(order.subtotal ?? 0)}</span>
@@ -568,58 +568,58 @@ export default function OrdenesAdmin() {
                 </div>
 
                 {/* Cliente + Entrega */}
-                <div className="mb-4 grid grid-cols-1 gap-6 border-b border-zinc-800 pb-4 md:grid-cols-2">
+                <div className="mb-4 grid grid-cols-1 gap-6 border-b border-border pb-4 md:grid-cols-2">
                   <div>
-                    <h4 className="mb-2 text-sm font-medium text-zinc-400">Información del Cliente</h4>
+                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Información del Cliente</h4>
                     <div className="space-y-1">
-                      <p className="text-white">{order.customerName}</p>
-                      <p className="text-sm text-zinc-400">{order.email ?? ''}</p>
-                      <p className="text-sm text-zinc-400">{order.phone ?? ''}</p>
+                      <p className="text-foreground">{order.customerName}</p>
+                      <p className="text-sm text-muted-foreground">{order.email ?? ''}</p>
+                      <p className="text-sm text-muted-foreground">{order.phone ?? ''}</p>
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="mb-2 text-sm font-medium text-zinc-400">Método de Entrega</h4>
-                    <p className="mb-1 flex items-center gap-2 text-white">
+                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Método de Entrega</h4>
+                    <p className="mb-1 flex items-center gap-2 text-foreground">
                       {order.deliveryMethod === 'DELIVERY' && (
-                        <Truck className="h-4 w-4 text-zinc-400" />
+                        <Truck className="h-4 w-4 text-muted-foreground" />
                       )}
                       {order.deliveryMethod === 'DELIVERY' ? 'Envío a domicilio' : 'Retiro en local'}
                     </p>
 
                     {order.deliveryMethod === 'DELIVERY' && (
-                      <div className="space-y-1 text-sm text-zinc-400">
+                      <div className="space-y-1 text-sm text-muted-foreground">
                         {order.address && <p>{order.address}</p>}
                         {order.addressDetails && <p>{order.addressDetails}</p>}
                         {order.city && <p>{order.city}</p>}
                         {order.postalCode && <p>CP: {order.postalCode}</p>}
                         {order.notes && (
                           <p>
-                            <span className="font-medium text-zinc-300">Notas:</span> {order.notes}
+                            <span className="font-medium text-foreground">Notas:</span> {order.notes}
                           </p>
                         )}
                       </div>
                     )}
 
                     {order.deliveryMethod === 'PICKUP' && (
-                      <div className="mt-3 space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
-                        <div className="flex items-center gap-2 text-sm text-zinc-300">
-                          <CalendarDays className="h-4 w-4 text-zinc-500" />
+                      <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted/50 p-3">
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
                           <span>
                             <span className="font-medium">Día:</span>{' '}
                             {pickupDateLabel ?? 'No definido'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-zinc-300">
-                          <Clock className="h-4 w-4 text-zinc-500" />
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
                           <span>
                             <span className="font-medium">Horario:</span>{' '}
                             {order.pickupTimeSlot ?? 'No definido'}
                           </span>
                         </div>
                         {order.pickupNotes && (
-                          <div className="flex items-start gap-2 text-sm text-zinc-300">
-                            <StickyNote className="mt-0.5 h-4 w-4 text-zinc-500" />
+                          <div className="flex items-start gap-2 text-sm text-foreground">
+                            <StickyNote className="mt-0.5 h-4 w-4 text-muted-foreground" />
                             <span>
                               <span className="font-medium">Nota:</span> {order.pickupNotes}
                             </span>
@@ -631,18 +631,18 @@ export default function OrdenesAdmin() {
                 </div>
 
                 {/* Productos */}
-                <div className="mb-4 border-b border-zinc-800 pb-4">
-                  <h4 className="mb-3 text-sm font-medium text-zinc-400">
+                <div className="mb-4 border-b border-border pb-4">
+                  <h4 className="mb-3 text-sm font-medium text-muted-foreground">
                     Productos ({order.items.length})
                   </h4>
                   <div className="space-y-2">
                     {order.items.map((item) => (
                       <div key={item.id} className="flex items-center justify-between text-sm">
-                        <span className="text-white">
+                        <span className="text-foreground">
                           {item.product?.name ?? item.itemNameSnapshot ?? (item.comboId ? 'Combo' : 'Producto')} x {item.quantity}
                           {item.product?.unitType === 'PER_KG' ? ' kg' : ''}
                         </span>
-                        <span className="text-zinc-400">
+                        <span className="text-muted-foreground">
                           {formatPrice(item.lineTotal ?? (item.unitPrice ?? 0) * (item.quantity ?? 0))}
                         </span>
                       </div>
@@ -651,8 +651,8 @@ export default function OrdenesAdmin() {
                 </div>
 
                 {/* Pago */}
-                <div className="mb-4 border-b border-zinc-800 pb-4">
-                  <h4 className="mb-3 text-sm font-medium text-zinc-400">Pago</h4>
+                <div className="mb-4 border-b border-border pb-4">
+                  <h4 className="mb-3 text-sm font-medium text-muted-foreground">Pago</h4>
                   <PaymentSection
                     order={order}
                     onConfirm={handleConfirmTransfer}
@@ -670,10 +670,10 @@ export default function OrdenesAdmin() {
                     value={order.status}
                     onValueChange={(value) => handleStatusChange(order.id, value as OrderStatus)}
                   >
-                    <SelectTrigger className="w-56 border-zinc-700 bg-zinc-800">
+                    <SelectTrigger className="w-56 border-border bg-muted">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="border-zinc-700 bg-zinc-800">
+                    <SelectContent className="border-border bg-card">
                       <SelectItem value="PENDING_PAYMENT">Pendiente de pago</SelectItem>
                       <SelectItem value="PENDING">Pendiente</SelectItem>
                       <SelectItem value="CONFIRMED">Confirmada</SelectItem>

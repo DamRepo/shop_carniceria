@@ -23,7 +23,7 @@ const ORDER_OPTIONS = [
 ] as const;
 
 const SELECT_CLASS =
-  "h-9 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-orange-500";
+  "h-9 rounded-md bg-background border border-input px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
 
 export function AdminProductFilters({ categories }: Props) {
   const router = useRouter();
@@ -111,13 +111,13 @@ export function AdminProductFilters({ categories }: Props) {
           placeholder="Buscar por nombre, slug o categoría..."
           value={inputValue}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 pr-8"
+          className="bg-background border-input text-foreground placeholder:text-muted-foreground pr-8"
         />
         {inputValue && (
           <button
             type="button"
             onClick={clearSearch}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
@@ -195,13 +195,13 @@ export function AdminProductFilters({ categories }: Props) {
           {chips.map((chip) => (
             <span
               key={chip.key}
-              className="flex items-center gap-1 rounded-full bg-orange-500/15 px-3 py-1 text-xs text-orange-300 border border-orange-500/20"
+              className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary border border-primary/20"
             >
               {chip.label}
               <button
                 type="button"
                 onClick={() => updateParam(chip.key, "")}
-                className="ml-0.5 hover:text-white"
+                className="ml-0.5 hover:text-foreground"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -211,7 +211,7 @@ export function AdminProductFilters({ categories }: Props) {
             <button
               type="button"
               onClick={clearAll}
-              className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
               Limpiar todos
             </button>

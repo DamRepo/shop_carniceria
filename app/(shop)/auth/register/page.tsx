@@ -98,13 +98,13 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md bg-card border-border">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center text-white">
             Crear Cuenta
           </CardTitle>
-          <CardDescription className="text-center text-zinc-400">
+          <CardDescription className="text-center text-muted-foreground">
             Regístrate para recibir ofertas exclusivas
           </CardDescription>
         </CardHeader>
@@ -124,7 +124,7 @@ export default function RegisterPage() {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -141,7 +141,7 @@ export default function RegisterPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -157,7 +157,7 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -174,7 +174,7 @@ export default function RegisterPage() {
                   setFormData({ ...formData, password: e.target.value })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -194,7 +194,7 @@ export default function RegisterPage() {
                   })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -211,7 +211,7 @@ export default function RegisterPage() {
               />
               <label
                 htmlFor="receiveOffers"
-                className="text-sm text-zinc-400 cursor-pointer"
+                className="text-sm text-muted-foreground cursor-pointer"
               >
                 Quiero recibir ofertas y promociones
               </label>
@@ -219,7 +219,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={loading}
             >
               {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
@@ -227,19 +227,19 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-4 text-center text-sm">
-            <span className="text-zinc-400">¿Ya tienes una cuenta? </span>
+            <span className="text-muted-foreground">¿Ya tienes una cuenta? </span>
             <Link
               href="/auth/login"
-              className="text-orange-500 hover:text-orange-400 font-medium"
+              className="text-primary hover:text-primary/80 font-medium"
             >
               Inicia sesión
             </Link>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
+          <div className="mt-6 pt-6 border-t border-border text-center">
             <Link
               href="/"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Volver al inicio
             </Link>

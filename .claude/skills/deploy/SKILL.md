@@ -1,3 +1,8 @@
+---
+name: deploy
+description: Proceso de deploy manual a producción para Carnicería El Negro (VPS, Next.js standalone, PostgreSQL, sin CI/CD). Usar cuando el usuario pida deployar, publicar cambios, o subir una versión nueva a carniceriaelnegro.com.
+---
+
 # Skill: Deploy a Produccion
 
 Proceso de deploy para Carniceria El Negro en el VPS de produccion.

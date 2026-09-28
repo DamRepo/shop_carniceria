@@ -26,3 +26,5 @@ Thumbs.db
 .turbo/
 # Script logs
 logs/
+
+.claude/settings.local.json

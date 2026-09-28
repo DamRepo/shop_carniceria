@@ -350,7 +350,7 @@ export default function OfertasClient() {
                       )}
 
                       {discount !== null && (
-                        <Badge className="bg-black text-white font-bold">
+                        <Badge className="bg-blood-dark text-white font-bold">
                           -{discount}%
                         </Badge>
                       )}

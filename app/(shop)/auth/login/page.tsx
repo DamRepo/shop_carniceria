@@ -18,7 +18,7 @@ export default async function LoginPage({
   }
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
       <LoginClient />
     </Suspense>
   );

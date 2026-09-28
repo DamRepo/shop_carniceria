@@ -3,8 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { ShoppingCart, Zap, Tag } from "lucide-react";
+import { ShoppingCart, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +13,6 @@ import {
   getReferencePriceLabel,
 } from "@/lib/utils-format";
 import { UnitPriceTag } from "@/components/UnitPriceTag";
-import { CountdownTimer } from "@/components/countdown-timer";
 import { useCartStore } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -98,7 +96,6 @@ function getOfferQtyLabel(product: ProductDTO) {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const router = useRouter();
   const addItem = useCartStore((state) => state.addItem);
   const cartItems = useCartStore((state) => state.items);
   const [imgError, setImgError] = useState(false);
@@ -175,42 +172,19 @@ export function ProductCard({ product }: ProductCardProps) {
     );
   };
 
-  const handleBuyNow = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!canBuy) return toast.error("Producto sin stock");
-    if (wouldExceedStock(initialQty)) return toast.error("No hay más stock disponible");
-
-    addItem({
-      type: "product",
-      productId: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: finalPrice,
-      quantity: initialQty,
-      unitType: product.unitType ?? "PER_KG",
-      image: product.image ?? undefined,
-      vatRate,
-    });
-
-    toast.success("Producto agregado, redirigiendo al checkout...");
-    setTimeout(() => router.push("/checkout"), 450);
-  };
-
   return (
     <Link href={`/productos/${product.slug}`} className="block h-full">
       <article
         className="
           group h-full flex flex-col overflow-hidden
-          border border-iron hover:border-primary/60
+          border border-border hover:border-primary/60
           bg-card
           transition-shadow duration-200 hover:shadow-glow-red-sm
           rounded-sm
         "
       >
         {/* Image */}
-        <div className="relative bg-charcoal overflow-hidden h-[200px] md:h-[220px]">
+        <div className="relative bg-muted overflow-hidden h-[200px] md:h-[220px]">
           {product.image && !imgError ? (
             <Image
               src={product.image}
@@ -226,16 +200,8 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {/* Overlay: countdown primero (si aplica), badges debajo */}
+          {/* Overlay: badges */}
           <div className="absolute inset-x-0 top-0 z-20 p-2 flex flex-col gap-1">
-            {offerActive && product.saleEndDate && (
-              <div className="flex justify-center">
-                <div className="w-[80%] max-w-[220px]">
-                  <CountdownTimer endDate={product.saleEndDate} />
-                </div>
-              </div>
-            )}
-
             <div className="flex items-start justify-between">
               {/* Izquierda: OFERTA + descuento */}
               <div className="flex flex-col items-start gap-1">
@@ -246,7 +212,7 @@ export function ProductCard({ product }: ProductCardProps) {
                       Oferta
                     </Badge>
                     {discount !== null && (
-                      <Badge className="bg-black text-white font-bold rounded-none px-2 py-0.5 text-[10px] shadow-md">
+                      <Badge className="bg-blood-dark text-white font-bold rounded-none px-2 py-0.5 text-[10px] shadow-md">
                         -{discount}%
                       </Badge>
                     )}
@@ -270,7 +236,7 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {/* Content */}
-        <div className="p-3 flex-1 flex flex-col gap-1.5">
+        <div className="p-2.5 flex-1 flex flex-col gap-1.5">
           <h3 className="font-sans font-semibold text-[13px] md:text-[15px] leading-snug line-clamp-2 text-foreground">
             {product.name}
           </h3>
@@ -326,8 +292,8 @@ export function ProductCard({ product }: ProductCardProps) {
           <div className="mt-auto" />
         </div>
 
-        {/* Footer buttons */}
-        <div className="p-3 pt-0 flex flex-col gap-2">
+        {/* Footer button */}
+        <div className="p-2.5 pt-0">
           <Button
             onClick={handleAddToCart}
             disabled={!canBuy}
@@ -338,17 +304,6 @@ export function ProductCard({ product }: ProductCardProps) {
           >
             <ShoppingCart className="mr-2 h-4 w-4" />
             Agregar al carrito
-          </Button>
-
-          <Button
-            onClick={handleBuyNow}
-            disabled={!canBuy}
-            className="w-full rounded-none bg-primary hover:bg-blood-dark text-primary-foreground font-semibold"
-            size="lg"
-            type="button"
-          >
-            <Zap className="mr-2 h-4 w-4" />
-            Comprar ahora
           </Button>
         </div>
       </article>

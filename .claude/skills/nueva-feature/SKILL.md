@@ -1,3 +1,8 @@
+---
+name: nueva-feature
+description: Guía paso a paso para implementar una funcionalidad nueva en Carnicería El Negro (pantalla, endpoint, modelo de datos, integración externa) siguiendo las convenciones del proyecto. Usar al empezar cualquier feature nueva.
+---
+
 # Skill: Nueva Feature
 
 Guia paso a paso para implementar una nueva feature en Carniceria El Negro siguiendo las convenciones del proyecto.

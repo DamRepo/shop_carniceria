@@ -12,12 +12,12 @@ export default function Split({ side, kicker, desc, bullets, image }: Props) {
   const isLeft = side === "left";
 
   return (
-    <section className="border-b border-zinc-800">
+    <section className="border-b border-border">
       <div className="container mx-auto max-w-7xl px-4 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
           {/* Imagen */}
           <div className={isLeft ? "lg:col-span-6 order-1" : "lg:col-span-6 order-2"}>
-            <div className="relative h-64 sm:h-96 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+            <div className="relative h-64 sm:h-96 overflow-hidden rounded-2xl border border-border bg-muted">
               {image ? (
                 <Image
                   src={image.src}
@@ -27,7 +27,7 @@ export default function Split({ side, kicker, desc, bullets, image }: Props) {
                   sizes="(max-width: 1024px) 100vw, 50vw"
                 />
               ) : (
-                <div className="h-full w-full flex items-center justify-center text-zinc-500">
+                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
                   Posible imagen
                 </div>
               )}
@@ -44,12 +44,12 @@ export default function Split({ side, kicker, desc, bullets, image }: Props) {
                 </p>
               ) : null}
 
-              <p className="mt-5 text-lg sm:text-xl text-zinc-200 leading-relaxed">
+              <p className="mt-5 text-lg sm:text-xl text-foreground leading-relaxed">
                 {desc}
               </p>
 
               {bullets && bullets.length > 0 ? (
-                <ul className="mt-7 space-y-3 text-sm sm:text-base text-zinc-300">
+                <ul className="mt-7 space-y-3 text-sm sm:text-base text-muted-foreground">
                   {bullets.map((b, i) => (
                     <li key={i} className="flex gap-3">
                       <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />

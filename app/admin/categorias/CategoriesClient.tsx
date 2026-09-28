@@ -181,12 +181,12 @@ export default function CategoriesClient() {
   return (
     <div className="space-y-6">
       {/* Formulario de creación */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-4">
+      <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-4">
         <div className="font-medium">Nueva categoría</div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-xs text-zinc-400">Nombre</label>
+            <label className="text-xs text-muted-foreground">Nombre</label>
             <Input
               placeholder="Nombre (ej: Vacuno)"
               value={newName}
@@ -195,7 +195,7 @@ export default function CategoriesClient() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-zinc-400">Slug</label>
+            <label className="text-xs text-muted-foreground">Slug</label>
             <Input
               placeholder="slug-auto-generado"
               value={newSlug}
@@ -205,9 +205,9 @@ export default function CategoriesClient() {
               }}
             />
             {newSlug && (
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 URL:{" "}
-                <span className="text-zinc-300">
+                <span className="text-foreground">
                   /productos?category={newSlug}
                 </span>
               </p>
@@ -216,9 +216,9 @@ export default function CategoriesClient() {
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-zinc-400">Categoría madre (opcional)</label>
+          <label className="text-xs text-muted-foreground">Categoría madre (opcional)</label>
           <select
-            className="w-full h-10 rounded-md bg-zinc-800 border border-zinc-700 px-3 text-white text-sm"
+            className="w-full h-10 rounded-md bg-background border border-input px-3 text-foreground text-sm"
             value={newParentId}
             onChange={(e) => setNewParentId(e.target.value)}
           >
@@ -252,14 +252,14 @@ export default function CategoriesClient() {
       </div>
 
       {/* Tabla */}
-      <div className="rounded-xl border border-zinc-800 overflow-hidden">
-        <div className="bg-zinc-950/40 px-4 py-3 text-sm text-zinc-300">
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="bg-muted/40 px-4 py-3 text-sm text-foreground">
           {loading ? "Cargando..." : `${filtered.length} categorías`}
         </div>
 
         <div className="w-full overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-zinc-400 border-b border-zinc-800">
+            <thead className="text-left text-muted-foreground border-b border-border">
               <tr>
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Slug</th>
@@ -279,7 +279,7 @@ export default function CategoriesClient() {
                   : null;
 
                 return (
-                  <tr key={c.id} className="border-b border-zinc-800">
+                  <tr key={c.id} className="border-b border-border">
                     <td className="px-4 py-3">
                       {isEditing ? (
                         <Input
@@ -287,20 +287,20 @@ export default function CategoriesClient() {
                           onChange={(e) => setEditName(e.target.value)}
                         />
                       ) : (
-                        <div className="font-medium text-zinc-200">{c.name}</div>
+                        <div className="font-medium text-foreground">{c.name}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <code className="text-xs text-zinc-300">{c.slug}</code>
+                      <code className="text-xs text-foreground">{c.slug}</code>
                     </td>
                     <td className="px-4 py-3">
                       {parentName ? (
-                        <span className="text-xs text-zinc-400">{parentName}</span>
+                        <span className="text-xs text-muted-foreground">{parentName}</span>
                       ) : (
-                        <span className="text-xs text-zinc-600">—</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-zinc-300">{count}</td>
+                    <td className="px-4 py-3 text-foreground">{count}</td>
                     <td className="px-4 py-3">
                       {isEditing ? (
                         <div className="flex gap-2">
@@ -340,7 +340,7 @@ export default function CategoriesClient() {
 
               {!loading && filtered.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-zinc-400" colSpan={5}>
+                  <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
                     No hay categorías.
                   </td>
                 </tr>

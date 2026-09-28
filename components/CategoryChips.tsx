@@ -30,8 +30,8 @@ export function CategoryChips({
         className={[
           "shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
           selectedCategory === "todos"
-            ? "bg-red-600 text-white"
-            : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700",
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground hover:bg-muted/70",
         ].join(" ")}
       >
         Todos
@@ -45,8 +45,8 @@ export function CategoryChips({
           className={[
             "shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
             selectedCategory === cat.slug
-              ? "bg-red-600 text-white"
-              : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700",
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/70",
           ].join(" ")}
         >
           {cat.name}

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function ProductosPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
       <ProductosClient />
     </Suspense>
   );

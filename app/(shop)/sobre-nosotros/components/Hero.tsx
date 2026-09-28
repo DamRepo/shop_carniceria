@@ -2,9 +2,9 @@ import Image from "next/image";
 
 export default function Hero() {
   return (
-    <section className="border-b border-zinc-800">
+    <section className="border-b border-border">
       <div className="container mx-auto max-w-7xl px-4 py-10">
-        <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
           <div className="relative h-[240px] sm:h-[320px] lg:h-[380px]">
             <Image
               src="/carniceria-frente.jpeg"
@@ -18,7 +18,7 @@ export default function Hero() {
           </div>
 
           <div className="p-6 sm:p-8">
-            <h1 className="mt-2 text-center sm:text-3xl font-bold text-white">
+            <h1 className="mt-2 text-center sm:text-3xl font-bold text-foreground">
               SOMOS TRABAJO Y DEDICACION.
             </h1>
           </div>

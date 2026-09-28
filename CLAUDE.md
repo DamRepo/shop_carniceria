@@ -6,113 +6,11 @@ Guidance for Claude Code when working in this repository.
 
 **Carnicería El Negro** es un e-commerce de carnicería argentina deployado en producción en `carniceriaelnegro.com`. Permite a clientes comprar cortes de carne, elaborados, minimercado y verdulería con tres métodos de pago: Mercado Pago (tarjetas), transferencia bancaria con comprobante, y efectivo. Tiene panel de administración para gestión de productos, categorías y pedidos.
 
-## Stack tecnológico
-
-| Capa | Tecnología |
-|------|-----------|
-| Framework | Next.js 14 App Router (Turbopack en dev) |
-| Lenguaje | TypeScript 5 — modo strict |
-| UI | Tailwind CSS 3 + shadcn/ui (Radix UI) |
-| Estado cliente | Zustand 5 (carrito persiste en localStorage) |
-| Base de datos | PostgreSQL 15 vía Prisma ORM 6 |
-| Auth | NextAuth v4 — provider Credentials, JWT |
-| Pagos | Mercado Pago (preferencias + webhooks IPN) |
-| Imágenes | Cloudinary CDN |
-| Email | Resend (principal) + Nodemailer (backup) |
-| Notificaciones | Telegram bot para nuevos pedidos |
-| Deploy | Node.js standalone (`output: "standalone"`) en VPS |
-
 ## Comandos
-
-```bash
-npm run dev                    # Dev server con Turbopack
-npm run build                  # Build de producción
-npm run lint                   # ESLint
-npm run typecheck              # TypeScript check (tsc --noEmit)
-npm run check                  # typecheck + lint juntos
-
-npm run prisma:generate        # Regenerar Prisma client tras cambios al schema
-npm run prisma:studio          # GUI de base de datos
-npm run prisma:migrate:deploy  # Aplicar migraciones en producción
-npm run prisma:seed            # Seed de datos de ejemplo
-
-npm run clean-proofs           # Eliminar comprobantes viejos de Cloudinary
-npm run clean-proofs:dry       # Dry-run del limpiador de comprobantes
-```
 
 **Regla importante:** después de editar `prisma/schema.prisma`, siempre ejecutar `prisma:generate` antes de `prisma:migrate:deploy`.
 
-## Estructura de carpetas
-
-```
-shop_carniceria/
-├── app/
-│   ├── (shop)/             # Storefront público (layout compartido)
-│   │   ├── carniceria/     # Página de categoría carnicería
-│   │   ├── elaborados/     # Página de elaborados
-│   │   ├── minimercado/    # Minimercado
-│   │   ├── fruteria-y-verduleria/
-│   │   ├── productos/[slug]/   # Detalle de producto
-│   │   ├── carrito/        # Carrito de compras
-│   │   ├── checkout/       # Flujo de checkout
-│   │   │   ├── metodo-pago/
-│   │   │   ├── transferencia/
-│   │   │   └── mp/{success|pending|failure}/
-│   │   ├── ofertas/        # Productos en oferta
-│   │   ├── auth/           # Login, registro, reset password
-│   │   ├── perfil/         # Perfil de usuario
-│   │   ├── mis-compras/    # Historial de pedidos
-│   │   └── sobre-nosotros/ # Páginas estáticas
-│   ├── admin/              # Panel admin (protegido, rol ADMIN)
-│   │   ├── productos/      # CRUD de productos
-│   │   ├── categorias/     # CRUD de categorías
-│   │   └── ofertas/        # Gestión de ofertas
-│   └── api/                # Route handlers
-│       ├── auth/           # NextAuth + registro + reset password
-│       ├── products/       # Productos públicos
-│       ├── orders/         # Pedidos de usuario
-│       ├── mercadopago/    # Preferencias + webhook IPN
-│       ├── checkout-session/
-│       ├── admin/          # Rutas protegidas de admin
-│       │   ├── products/   # CRUD admin de productos
-│       │   ├── categories/ # CRUD admin de categorías
-│       │   ├── orders/     # Gestión de pedidos
-│       │   ├── transfers/  # Validación de transferencias
-│       │   └── stats/      # Estadísticas de ventas
-│       └── support/
-├── components/
-│   ├── ui/                 # shadcn/ui (40+ componentes base)
-│   ├── checkout-*.tsx      # Componentes del flujo de pago
-│   ├── product-*.tsx       # Tarjetas y sliders de productos
-│   ├── admin/              # Componentes del panel admin
-│   └── orders/             # Comprobantes y estado de pedidos
-├── lib/
-│   ├── db.ts               # Singleton de Prisma client
-│   ├── auth.ts             # Configuración NextAuth
-│   ├── store.ts            # Zustand cart store (con normalización de cantidades)
-│   ├── checkout-store.ts   # Estado del flujo de checkout
-│   ├── types/              # Tipos TypeScript compartidos
-│   ├── utils/              # Utilidades generales y de formato
-│   ├── mail/               # Sistema de email (templates + send)
-│   ├── uploads/            # Cloudinary (imágenes de productos y comprobantes)
-│   ├── auth/               # Reset tokens y lógica de contraseñas
-│   ├── telegram.ts         # Notificaciones Telegram
-│   ├── rate-limit.ts       # Rate limiter en memoria (5 intentos/15min/IP)
-│   ├── shipping.ts         # Cálculo de costos de envío
-│   └── business-hours.ts   # Horarios del negocio
-├── prisma/
-│   ├── schema.prisma       # 9 modelos + 8 enums
-│   ├── migrations/         # 17 migraciones históricas
-│   └── seed.ts             # Seed de categorías, productos y admin
-├── scripts/
-│   ├── seed.ts             # Script de seed
-│   └── clean-old-proofs.ts # Limpieza de comprobantes en Cloudinary
-├── public/                 # Assets estáticos (logos, imágenes, favicons)
-├── middleware.ts           # Protección de rutas /admin/* y /api/admin/*
-├── next.config.js          # Standalone output, Cloudinary domain, headers de seguridad
-├── docker-compose.yml      # PostgreSQL 15 para desarrollo local
-└── .env.example            # Variables de entorno requeridas
-```
+Deploy a producción: ver skill `deploy`.
 
 ## Modelos Prisma clave
 
@@ -144,23 +42,6 @@ Precios almacenados en **centavos** (entero). Nunca floats para dinero.
 1. `POST /api/mercadopago/preference` → crea preferencia MP + registro `CheckoutSession`.
 2. MP redirige a `/checkout/mp/{success|pending|failure}`.
 3. `POST /api/mercadopago/webhook` → recibe IPN, actualiza `Order`/`CheckoutSession`, descuenta stock.
-
-## Cómo está el deploy
-
-- **Output:** `next build` genera `.next/standalone/` (build autocontenido).
-- **Base de datos:** PostgreSQL 15 en Docker (`docker-compose.yml`) — en dev local. En producción, instancia separada.
-- **Dominio:** `carniceriaelnegro.com` (redirect permanente desde `.tech`).
-- **Proceso de deploy manual:**
-  ```bash
-  npm run check                        # Verificar tipos y lint
-  npm run prisma:generate              # Si hubo cambios al schema
-  npm run prisma:migrate:deploy        # Aplicar migraciones en producción
-  npm run build                        # Generar .next/standalone/
-  # Copiar standalone + static + public al servidor
-  # Reiniciar proceso Node.js (PM2 u otro)
-  ```
-- **Variables de entorno requeridas:** ver `.env.example`.
-- **No hay CI/CD configurado** actualmente — deploy es manual.
 
 ## Convenciones del código
 
@@ -198,21 +79,7 @@ Precios almacenados en **centavos** (entero). Nunca floats para dinero.
 
 ## Variables de entorno
 
-Ver `.env.example`:
-
-```
-DATABASE_URL               # PostgreSQL connection string
-NEXTAUTH_URL               # https://carniceriaelnegro.com
-NEXTAUTH_SECRET            # Secret de NextAuth
-CLOUDINARY_URL             # Credenciales Cloudinary
-MERCADOPAGO_ACCESS_TOKEN   # Token de Mercado Pago
-MERCADOPAGO_PUBLIC_KEY     # Clave pública de MP
-MERCADOPAGO_WEBHOOK_SECRET # Para validar webhooks
-RESEND_API_KEY             # API de Resend (emails)
-TELEGRAM_BOT_TOKEN         # Bot de Telegram
-TELEGRAM_CHAT_ID           # Chat ID para notificaciones
-NEXT_PUBLIC_WHATSAPP_NUMBER
-```
+Ver `.env.example`.
 
 ## Reglas de calidad para agentes
 

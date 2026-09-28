@@ -60,19 +60,19 @@ export default function ResetPasswordClient() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md bg-card border-border">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center text-white">
             Restablecer contraseña
           </CardTitle>
-          <CardDescription className="text-center text-zinc-400">
+          <CardDescription className="text-center text-muted-foreground">
             Elegí una nueva contraseña.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!token && (
-            <p className="text-sm text-red-400 mb-4">
+            <p className="text-sm text-destructive mb-4">
               El enlace no es válido o ya expiró. Solicitá uno nuevo.
             </p>
           )}
@@ -87,7 +87,7 @@ export default function ResetPasswordClient() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
@@ -100,23 +100,23 @@ export default function ResetPasswordClient() {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={loading || !token}
             >
               {loading ? "Guardando..." : "Guardar nueva contraseña"}
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
+          <div className="mt-6 pt-6 border-t border-border text-center">
             <Link
               href="/auth/login"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Volver al login
             </Link>

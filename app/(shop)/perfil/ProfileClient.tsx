@@ -86,16 +86,16 @@ function roleInfo(role: string): { label: string; className: string } {
   if (role === "ADMIN")
     return {
       label: "Administrador",
-      className: "text-red-400 border-red-500/40 bg-red-500/10",
+      className: "text-red-700 border-red-300 bg-red-100",
     };
   if (role === "EMPLOYEE")
     return {
       label: "Empleado",
-      className: "text-blue-400 border-blue-500/40 bg-blue-500/10",
+      className: "text-blue-700 border-blue-300 bg-blue-100",
     };
   return {
     label: "Cliente",
-    className: "text-zinc-400 border-zinc-600/40 bg-zinc-600/10",
+    className: "text-muted-foreground border-border bg-muted",
   };
 }
 
@@ -421,7 +421,7 @@ export function ProfileClient({ user }: { user: UserProfile }) {
       />
 
       {/* ── Page header ── */}
-      <div className="border-b border-zinc-800 bg-zinc-950/60">
+      <div className="border-b border-border bg-muted/60">
         <div className="container mx-auto max-w-7xl px-4 py-7">
           <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
             <Link href="/" className="hover:text-foreground transition-colors">

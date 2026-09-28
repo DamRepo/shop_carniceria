@@ -75,7 +75,7 @@ export default function SoportePage() {
         <button
           type="submit"
           disabled={sending}
-          className="w-full bg-black text-white rounded-lg p-3"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg p-3"
         >
           {sending ? "Enviando..." : "Enviar mensaje"}
         </button>

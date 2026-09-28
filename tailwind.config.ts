@@ -55,8 +55,8 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        blood: '#9B1C1C',
-        'blood-dark': '#7F1D1D',
+        blood: '#E40C18',
+        'blood-dark': '#AB1114',
         bone: '#F5EDE0',
         charcoal: '#1A1A1A',
         iron: '#2A2A2A',
@@ -69,8 +69,8 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        'glow-red': '0 0 20px rgba(155,28,28,0.4)',
-        'glow-red-sm': '0 0 10px rgba(155,28,28,0.25)',
+        'glow-red': '0 0 20px rgba(228,12,24,0.35)',
+        'glow-red-sm': '0 0 10px rgba(228,12,24,0.2)',
       },
       keyframes: {
         'accordion-down': {

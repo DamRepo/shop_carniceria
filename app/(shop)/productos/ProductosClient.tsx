@@ -309,7 +309,7 @@ export default function ProductosClient() {
   }
 
   const CategoriesBlock = ({ mobile }: { mobile: boolean }) => (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-center gap-2 mb-4">
         <Filter className="h-5 w-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Categorías</h2>
@@ -335,8 +335,8 @@ export default function ProductosClient() {
                 type="button"
                 onClick={() => toggleMother(mother.id)}
                 className={[
-                  "w-full flex items-center justify-between rounded-md px-2 py-2 text-left text-sm font-semibold hover:bg-zinc-800/60",
-                  motherIsActive ? "bg-red-500/10 text-red-400" : "text-zinc-100",
+                  "w-full flex items-center justify-between rounded-md px-2 py-2 text-left text-sm font-semibold hover:bg-muted",
+                  motherIsActive ? "bg-primary/10 text-primary" : "text-foreground",
                 ].join(" ")}
               >
                 <span className="truncate">{mother.name}</span>
@@ -350,7 +350,7 @@ export default function ProductosClient() {
               {isOpen && (
                 <div className="mt-2 flex flex-col gap-2 pl-2">
                   {children.length === 0 ? (
-                    <div className="text-xs text-zinc-500 px-2">(Sin subcategorías)</div>
+                    <div className="text-xs text-muted-foreground px-2">(Sin subcategorías)</div>
                   ) : (
                     children.map((child) => (
                       <Button
@@ -415,7 +415,7 @@ export default function ProductosClient() {
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="shrink-0 h-8 w-24 rounded-full bg-zinc-800 animate-pulse"
+                className="shrink-0 h-8 w-24 rounded-full bg-muted animate-pulse"
               />
             ))}
           </div>
@@ -435,7 +435,7 @@ export default function ProductosClient() {
             id="top-sort"
             value={topSort}
             onChange={(e) => setTopSort(e.target.value as typeof topSort)}
-            className="h-9 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-red-500 w-full sm:w-auto"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-full sm:w-auto"
           >
             <option value="relevancia">Relevancia</option>
             <option value="price-asc">Menor precio</option>
@@ -458,11 +458,11 @@ export default function ProductosClient() {
             </Button>
           </SheetTrigger>
 
-          <SheetContent side="left" className="w-80 bg-zinc-950 border-zinc-800 p-0">
+          <SheetContent side="left" className="w-80 bg-card border-border p-0">
             <div className="flex h-full flex-col">
-              <div className="p-4 border-b border-zinc-800">
-                <div className="text-base font-semibold text-white">Filtros y Categorías</div>
-                <p className="text-xs text-zinc-400 mt-1">
+              <div className="p-4 border-b border-border">
+                <div className="text-base font-semibold text-foreground">Filtros y Categorías</div>
+                <p className="text-xs text-muted-foreground mt-1">
                   Elegí categoría y ajustá filtros. Luego tocá “Aplicar”.
                 </p>
               </div>
@@ -478,9 +478,9 @@ export default function ProductosClient() {
                 />
               </div>
 
-              <div className="p-4 border-t border-zinc-800">
+              <div className="p-4 border-t border-border">
                 <Button
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={() => setMobileOpen(false)}
                 >
                   Aplicar
@@ -509,39 +509,39 @@ export default function ProductosClient() {
               {[...Array(12)].map((_, i) => (
                 <div
                   key={i}
-                  className="animate-pulse rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden flex flex-col"
+                  className="animate-pulse rounded-lg border border-border bg-card overflow-hidden flex flex-col"
                 >
                   {/* Imagen — misma altura que la card real */}
-                  <div className="bg-zinc-800 h-[220px]" />
+                  <div className="bg-muted h-[220px]" />
 
                   {/* Contenido */}
                   <div className="p-3 flex-1 flex flex-col gap-1.5">
                     {/* Título */}
-                    <div className="h-4 bg-zinc-800 rounded w-3/4" />
+                    <div className="h-4 bg-muted rounded w-3/4" />
                     {/* Descripción — 2 líneas */}
                     <div className="space-y-1 min-h-[34px]">
-                      <div className="h-3 bg-zinc-800 rounded" />
-                      <div className="h-3 bg-zinc-800 rounded w-5/6" />
+                      <div className="h-3 bg-muted rounded" />
+                      <div className="h-3 bg-muted rounded w-5/6" />
                     </div>
                     {/* Precio: tachado + principal + sin impuestos */}
                     <div className="space-y-1 mt-1">
-                      <div className="h-3 bg-zinc-800 rounded w-1/3" />
-                      <div className="h-6 bg-zinc-800 rounded w-2/5" />
-                      <div className="h-3 bg-zinc-800 rounded w-3/4" />
+                      <div className="h-3 bg-muted rounded w-1/3" />
+                      <div className="h-6 bg-muted rounded w-2/5" />
+                      <div className="h-3 bg-muted rounded w-3/4" />
                     </div>
                   </div>
 
                   {/* Footer — 2 botones */}
                   <div className="p-3 pt-0 flex flex-col gap-2">
-                    <div className="h-10 bg-zinc-800 rounded" />
-                    <div className="h-10 bg-zinc-800 rounded" />
+                    <div className="h-10 bg-muted rounded" />
+                    <div className="h-10 bg-muted rounded" />
                   </div>
                 </div>
               ))}
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <AlertTriangle className="h-10 w-10 text-red-500" />
+              <AlertTriangle className="h-10 w-10 text-destructive" />
               <p className="text-lg font-medium">
                 No pudimos cargar los productos. Intentá de nuevo más tarde.
               </p>

@@ -26,19 +26,19 @@ export default function PreguntasFrecuentesPage() {
   return (
     <main className="container mx-auto max-w-5xl px-4 py-10">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white">Preguntas frecuentes</h1>
-        <p className="text-zinc-400 mt-2">
+        <h1 className="text-3xl font-bold text-foreground">Preguntas frecuentes</h1>
+        <p className="text-muted-foreground mt-2">
           Respuestas rápidas para que compres sin vueltas.
         </p>
       </div>
 
-      <Card className="bg-zinc-900 border-zinc-800 p-4 sm:p-6">
+      <Card className="bg-card border-border p-4 sm:p-6">
         <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="envios" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="envios" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               ¿Hacen envíos a domicilio?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Sí, realizamos envíos dentro de San José de Feliciano y su ejido
               (hasta 4 km). El costo varía según la zona: <strong>$1.500</strong> para
               Ciudad y <strong>$3.200</strong> para Ejido. No realizamos envíos fuera
@@ -46,33 +46,33 @@ export default function PreguntasFrecuentesPage() {
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="pagos" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="pagos" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               ¿Cuáles son los medios de pagos habilitados?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Aceptamos todas las tarjetas de crédito y débito, pagos
               electrónicos (como transferencias o billeteras virtuales) y
               efectivo que lo abonás en el local.
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="estado" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="estado" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               Una vez que confirme mi pedido ¿Cómo puedo saber el estado del
               mismo?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Tu pedido estará listo dentro de la franja horaria que elegiste.
               Ante cualquier eventualidad, nos pondremos en contacto con vos.
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="retiro" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="retiro" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               ¿Qué necesito para retirar mi pedido?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Para retirar tu pedido solo necesitás presentar el número de orden.
               En caso de enviar a un tercero o un servicio de mensajería, por
               favor dejános su nombre y apellido previamente para autorizar la
@@ -80,32 +80,32 @@ export default function PreguntasFrecuentesPage() {
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="hora" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="hora" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               ¿Hasta qué hora puedo realizar un pedido?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Los pedidos se pueden realizar las 24hs. Si querés retirar tu
               pedido en el día, debés hacerlo antes de las 19hs.
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="otro-dia" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="otro-dia" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               ¿Puedo realizar un pedido para que sea entregado al otro día o
               cualquier otro día?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Por el momento solo podés realizar pedidos para ser entregados en
               el mismo día o para el día siguiente.
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="problema" className="border-zinc-800">
-            <AccordionTrigger className="text-zinc-100 hover:text-red-400">
+          <AccordionItem value="problema" className="border-border">
+            <AccordionTrigger className="text-foreground hover:text-primary">
               Si existe un problema con el pedido realizado ¿Qué hago?
             </AccordionTrigger>
-            <AccordionContent className="text-zinc-300">
+            <AccordionContent className="text-muted-foreground">
               Tranqui, te comunicas al{" "}
               <a
                 href="tel:+543458556104"
@@ -120,18 +120,18 @@ export default function PreguntasFrecuentesPage() {
       </Card>
 
       {/* Contacto */}
-      <Card className="mt-6 bg-zinc-900 border-zinc-800 p-4 sm:p-6">
-        <h2 className="text-xl font-semibold text-white">
+      <Card className="mt-6 bg-card border-border p-4 sm:p-6">
+        <h2 className="text-xl font-semibold text-foreground">
           ¿Otra consulta o dudas?
         </h2>
 
-        <p className="text-zinc-300 mt-2">
+        <p className="text-muted-foreground mt-2">
           Comunicate por nuestros medios de contacto:
-          <span className="ml-2 text-zinc-100 font-medium">📱 3458556104</span>
+          <span className="ml-2 text-foreground font-medium">📱 3458556104</span>
         </p>
 
         <div className="mt-4 flex flex-col sm:flex-row gap-3">
-          <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
+          <Button asChild className="bg-green-600 hover:bg-green-700 text-foreground">
             <a
               href={WHATSAPP_TEXT}
               target="_blank"
@@ -143,7 +143,7 @@ export default function PreguntasFrecuentesPage() {
             </a>
           </Button>
 
-          <Button asChild variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800">
+          <Button asChild variant="outline" className="border-border text-foreground hover:bg-muted">
             <a
               href={INSTAGRAM_URL}
               target="_blank"
@@ -155,7 +155,7 @@ export default function PreguntasFrecuentesPage() {
             </a>
           </Button>
 
-          <Button asChild variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800">
+          <Button asChild variant="outline" className="border-border text-foreground hover:bg-muted">
             <a
               href={FACEBOOK_URL}
               target="_blank"
@@ -167,7 +167,7 @@ export default function PreguntasFrecuentesPage() {
             </a>
           </Button>
 
-          <Button asChild variant="ghost" className="text-zinc-300 hover:bg-zinc-800">
+          <Button asChild variant="ghost" className="text-muted-foreground hover:bg-muted">
             <a href="tel:+543458556104" aria-label="Llamar por teléfono">
               <Phone className="h-4 w-4 mr-2" />
               Llamar
@@ -175,13 +175,13 @@ export default function PreguntasFrecuentesPage() {
           </Button>
         </div>
 
-        <p className="text-xs text-zinc-500 mt-3">
+        <p className="text-xs text-muted-foreground mt-3">
           * WhatsApp se abre en una pestaña nueva. Si estás en celular, abre la app.
         </p>
       </Card>
 
       <div className="mt-6">
-        <Link href="/" className="text-zinc-300 hover:text-red-400 underline underline-offset-4">
+        <Link href="/" className="text-muted-foreground hover:text-primary underline underline-offset-4">
           Volver al inicio
         </Link>
       </div>

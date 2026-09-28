@@ -5,7 +5,7 @@ import Closing from "./components/Closing";
 
 export default function SobreNosotrosPage() {
   return (
-    <main className="bg-black text-zinc-200">
+    <main className="bg-background text-foreground">
       <Hero />
 
       <Band

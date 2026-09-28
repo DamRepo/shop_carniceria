@@ -126,7 +126,7 @@ export function AvatarUpload({ size = "sm", onChanged }: AvatarUploadProps) {
       <button
         type="button"
         onClick={() => !uploading && inputRef.current?.click()}
-        className={`relative ${dim} rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
+        className={`relative ${dim} rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
         title="Cambiar foto de perfil"
         disabled={uploading}
       >
@@ -138,7 +138,7 @@ export function AvatarUpload({ size = "sm", onChanged }: AvatarUploadProps) {
             className="object-cover w-full h-full rounded-full"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-orange-500 font-semibold text-white select-none">
+          <div className="w-full h-full flex items-center justify-center bg-primary font-semibold text-primary-foreground select-none">
             {initials}
           </div>
         )}

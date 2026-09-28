@@ -120,7 +120,7 @@ export default function OfertasAdmin() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -130,12 +130,12 @@ export default function OfertasAdmin() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Ofertas</h1>
-          <p className="text-zinc-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             {products.length} producto{products.length !== 1 ? 's' : ''} en oferta
           </p>
         </div>
         <Link href="/admin/productos">
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Tag className="w-4 h-4 mr-2" />
             Gestionar Productos
           </Button>
@@ -143,12 +143,12 @@ export default function OfertasAdmin() {
       </div>
 
       {products.length === 0 ? (
-        <Card className="bg-zinc-900 border-zinc-800 p-12 text-center">
-          <Tag className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">
+        <Card className="bg-card border-border p-12 text-center">
+          <Tag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-foreground mb-2">
             No hay ofertas activas
           </h3>
-          <p className="text-zinc-400">
+          <p className="text-muted-foreground">
             Podés crear ofertas desde la sección de productos
           </p>
         </Card>
@@ -178,19 +178,19 @@ export default function OfertasAdmin() {
             return (
               <Card
                 key={product.id}
-                className={`bg-zinc-900 border-zinc-800 overflow-hidden transition-opacity ${isExpired ? 'opacity-50' : ''}`}
+                className={`bg-card border-border overflow-hidden transition-opacity ${isExpired ? 'opacity-50' : ''}`}
               >
-                <div className="relative aspect-[4/3] bg-zinc-800">
+                <div className="relative aspect-[4/3] bg-muted">
                   {imageSrc ? (
                     <Image src={imageSrc} alt={product.name} fill className="object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                       Sin imagen
                     </div>
                   )}
 
                   {product.discountPercent != null && (
-                    <div className="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                    <div className="absolute top-3 right-3 bg-blood-dark text-white px-3 py-1 rounded-full text-sm font-bold">
                       -{product.discountPercent}%
                     </div>
                   )}
@@ -204,24 +204,24 @@ export default function OfertasAdmin() {
 
                 <div className="p-4">
                   <div className="mb-2">
-                    <h3 className="text-lg font-semibold text-white mb-1">{product.name}</h3>
-                    <p className="text-sm text-zinc-400">{product.category?.name}</p>
+                    <h3 className="text-lg font-semibold text-foreground mb-1">{product.name}</h3>
+                    <p className="text-sm text-muted-foreground">{product.category?.name}</p>
 
                     {content && (
-                      <p className="text-xs text-zinc-400 mt-1">
-                        Contenido: <span className="text-zinc-200">{content}</span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Contenido: <span className="text-foreground">{content}</span>
                       </p>
                     )}
                   </div>
 
                   <div className="mb-2">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-orange-500">
+                      <span className="text-2xl font-bold text-primary">
                         {formatPrice(finalPrice)}
                       </span>
 
                       {product.salePrice && product.salePrice > 0 && (
-                        <span className="text-sm text-zinc-500 line-through">
+                        <span className="text-sm text-muted-foreground line-through">
                           {formatPrice(product.price)}
                         </span>
                       )}
@@ -229,33 +229,33 @@ export default function OfertasAdmin() {
                   </div>
 
                   {pricePerKg != null && (
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-muted-foreground">
                       Precio por 1 kg:{' '}
-                      <span className="text-zinc-200">{formatPrice(pricePerKg)}</span>
+                      <span className="text-foreground">{formatPrice(pricePerKg)}</span>
                     </p>
                   )}
 
                   {pricePerLt != null && (
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-muted-foreground">
                       Precio por 1 L:{' '}
-                      <span className="text-zinc-200">{formatPrice(pricePerLt)}</span>
+                      <span className="text-foreground">{formatPrice(pricePerLt)}</span>
                     </p>
                   )}
 
                   <div className="flex items-center gap-2 text-sm mt-3 mb-4">
-                    <Clock className={`w-4 h-4 ${isExpired ? 'text-red-400' : 'text-zinc-400'}`} />
-                    <span className={isExpired ? 'text-red-400 font-medium' : 'text-zinc-400'}>
+                    <Clock className={`w-4 h-4 ${isExpired ? 'text-red-600' : 'text-muted-foreground'}`} />
+                    <span className={isExpired ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
                       {getRemainingTime(product.saleEndDate)}
                     </span>
                     {isExpired && (
-                      <span className="ml-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-400">
+                      <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                         Vencida
                       </span>
                     )}
                   </div>
 
                   <Link href="/admin/productos">
-                    <Button variant="outline" className="w-full border-zinc-700 hover:bg-zinc-800">
+                    <Button variant="outline" className="w-full border-border hover:bg-muted">
                       Editar Oferta
                     </Button>
                   </Link>

@@ -82,13 +82,13 @@ export default function LoginClient() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <Card className="w-full max-w-md bg-zinc-900 border-zinc-800">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md bg-card border-border">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center text-white">
             Iniciar Sesión
           </CardTitle>
-          <CardDescription className="text-center text-zinc-400">
+          <CardDescription className="text-center text-muted-foreground">
             Ingresa tus credenciales para acceder
           </CardDescription>
         </CardHeader>
@@ -108,7 +108,7 @@ export default function LoginClient() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
                 autoComplete="email"
               />
             </div>
@@ -126,7 +126,7 @@ export default function LoginClient() {
                   setFormData({ ...formData, password: e.target.value })
                 }
                 required
-                className="bg-zinc-800 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
                 autoComplete="current-password"
               />
 
@@ -135,7 +135,7 @@ export default function LoginClient() {
                   href={`/auth/forgot-password?callbackUrl=${encodeURIComponent(
                     callbackUrl
                   )}`}
-                  className="text-xs text-zinc-400 hover:text-white transition-colors"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
@@ -144,7 +144,7 @@ export default function LoginClient() {
 
             <Button
               type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={loading}
             >
               {loading ? "Iniciando..." : "Iniciar Sesión"}
@@ -152,19 +152,19 @@ export default function LoginClient() {
           </form>
 
           <div className="mt-4 text-center text-sm">
-            <span className="text-zinc-400">¿No tienes una cuenta? </span>
+            <span className="text-muted-foreground">¿No tienes una cuenta? </span>
             <Link
               href="/auth/register"
-              className="text-orange-500 hover:text-orange-400 font-medium"
+              className="text-primary hover:text-primary/80 font-medium"
             >
               Regístrate
             </Link>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-zinc-800 text-center">
+          <div className="mt-6 pt-6 border-t border-border text-center">
             <Link
               href="/"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Volver al inicio
             </Link>
