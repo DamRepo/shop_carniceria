@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { estimateReadyAt } from "@/lib/business-hours";
+import { getStoreHours } from "@/lib/business-hours-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -73,8 +74,9 @@ export async function GET() {
 
     type OrderWithItems = typeof orders[number];
 
+    const storeHours = await getStoreHours();
     const enriched = (orders as OrderWithItems[]).map((o) => {
-      const est = estimateReadyAt(o.createdAt, 2);
+      const est = estimateReadyAt(o.createdAt, 2, storeHours);
 
       return {
         ...o,
