@@ -195,7 +195,7 @@ export function HomeClient({ orderStatus }: HomeClientProps) {
                 </Link>
               </div>
 
-              <div className="flex w-full items-center border-t border-white/15 p-4 md:w-auto md:flex-1 md:border-l md:border-t-0 md:p-6">
+              <div className="flex w-full items-center border-t border-white/15 p-4 md:w-auto md:flex-1 min-w-0 md:border-l md:border-t-0 md:p-6">
                 {offersLoading ? (
                   <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     {[...Array(4)].map((_, i) => (
