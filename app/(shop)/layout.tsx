@@ -6,6 +6,7 @@ import { WhatsAppButton } from "@/components/whatsapp-button";
 import { DeliveryBanner } from "@/components/delivery-banner";
 import { OffersBanner } from "@/components/offers-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
+import { GoogleAnalytics } from "@/components/google-analytics";
 
 export default function ShopLayout({
   children,
@@ -27,6 +28,7 @@ export default function ShopLayout({
       <WhatsAppButton />
       <OffersBanner />
       <FeedbackWidget />
+      <GoogleAnalytics />
     </div>
   );
 }
