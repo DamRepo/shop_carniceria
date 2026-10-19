@@ -135,6 +135,7 @@ model User {
   orders           Order[]
   checkoutSessions CheckoutSession[]
   resetTokens      PasswordResetToken[]
+  welcomeBenefit   WelcomeBenefit?
 
   @@index([email])
 }
@@ -195,12 +196,16 @@ model Order {
   deliveryCost Int @default(0)
   total        Int
 
+  // Descuento de bienvenida aplicado (centavos). null = sin descuento.
+  welcomeDiscount Int?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   confirmedAt DateTime?
 
   items             OrderItem[]
   checkoutSessions  CheckoutSession[]
+  welcomeBenefit    WelcomeBenefit?
 
   @@index([userId])
   @@index([orderNumber])
@@ -259,6 +264,9 @@ model CheckoutSession {
   deliveryCost  Int
   total         Int
 
+  // Descuento de bienvenida aplicado (centavos). null = sin descuento.
+  welcomeDiscount Int?
+
   status CheckoutSessionStatus @default(WAITING_MP)
 
   mpPreferenceId String?
@@ -287,6 +295,22 @@ model CheckoutSession {
   @@index([orderId])
   @@index([email])
   @@index([expiresAt])
+}
+
+/// Bienvenida del 10% (una por usuario). Mientras el pago está pendiente la fila
+/// queda RESERVED; al liberarse (rollback, cancelación, expiración) se ELIMINA para
+/// que el usuario pueda reintentar. Solo pasa a USED cuando el pago se confirma.
+model WelcomeBenefit {
+  id            String               @id @default(cuid())
+  userId        String               @unique
+  orderId       String?              @unique
+  status        WelcomeBenefitStatus
+  discountCents Int
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
 }
 
 model TransferCodeSequence {
@@ -363,6 +387,11 @@ enum CheckoutSessionStatus {
 enum ComboPriceType {
   FIXED
   PERCENTAGE_DISCOUNT
+}
+
+enum WelcomeBenefitStatus {
+  RESERVED
+  USED
 }
 /// Horario del local editable desde el admin. Un registro por día (0 = domingo).
 /// Horas en "HH:mm", hora Argentina. Si falta o es inválido, la app usa el horario fijo de lib/business-hours.ts.

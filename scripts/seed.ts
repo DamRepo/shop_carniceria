@@ -144,6 +144,8 @@ async function devReset() {
 
   await prisma.checkoutSession.deleteMany();
   await prisma.orderItem.deleteMany();
+  // WelcomeBenefit referencia Order con ON DELETE RESTRICT: borrar primero.
+  await prisma.welcomeBenefit.deleteMany();
   await prisma.order.deleteMany();
   await prisma.product.deleteMany();
 
