@@ -19,6 +19,7 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
       taloAlias: true,
       taloExpiresAt: true,
       total: true,
+      welcomeDiscount: true,
       orderId: true,
       order: { select: { orderNumber: true, status: true } },
     },
@@ -35,6 +36,7 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
     alias: cs.taloAlias,
     expiresAt: cs.taloExpiresAt,
     total: cs.total, // centavos (igual que el resto de la app) — el cliente lo formatea con formatPrice()
+    welcomeDiscount: cs.welcomeDiscount ?? 0, // centavos; 0 = sin descuento
     orderId: cs.orderId,
     orderNumber: cs.order?.orderNumber ?? null,
     // Estado de la ORDEN (no de la sesión): el admin puede cancelarla sin que

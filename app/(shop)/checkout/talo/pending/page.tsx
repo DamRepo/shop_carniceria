@@ -32,6 +32,7 @@ type TaloStatusResponse = {
   alias: string | null;
   expiresAt: string | null;
   total: number; // centavos — se muestra con formatPrice()
+  welcomeDiscount?: number; // centavos; 0 = sin descuento
   orderId: string | null;
   orderNumber: string | null;
   orderStatus: string | null;
@@ -327,6 +328,11 @@ function TaloPendingContent() {
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center">
             <p className="mb-1 text-sm text-muted-foreground">Monto a transferir</p>
             <p className="text-3xl font-bold text-primary">{formatPrice(data?.total ?? 0)}</p>
+            {(data?.welcomeDiscount ?? 0) > 0 && (
+              <p className="mt-1 text-xs text-green-700 dark:text-green-400">
+                Incluye descuento de bienvenida (10%): -{formatPrice(data?.welcomeDiscount ?? 0)}
+              </p>
+            )}
           </div>
 
           {data?.cvu && (

@@ -126,6 +126,11 @@ export default function MetodoPagoPage() {
 
   const [selected, setSelected] = useState<PaymentMethod | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Bienvenida 10%: solo para mostrar. El servidor recalcula el monto al crear el pago.
+  const [welcomeDiscount, setWelcomeDiscount] = useState(0);
+  // Aviso cuando el servidor rechazó la bienvenida (409): el cliente tiene que
+  // ver el nuevo total y volver a confirmar; no se reintenta solo.
+  const [welcomeNotice, setWelcomeNotice] = useState<string | null>(null);
   const navigatingRef = useRef(false);
 
   useEffect(() => {
@@ -134,6 +139,25 @@ export default function MetodoPagoPage() {
       router.replace("/checkout");
     }
   }, [formData, totals, router]);
+
+  const subtotalForQuote = totals?.subtotal ?? 0;
+  useEffect(() => {
+    if (subtotalForQuote <= 0) return;
+    let cancelled = false;
+    fetch(`/api/loyalty/welcome-quote?subtotal=${Math.round(subtotalForQuote)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { eligible?: boolean; discountCents?: number } | null) => {
+        if (cancelled) return;
+        const cents = Number(data?.discountCents ?? 0);
+        setWelcomeDiscount(data?.eligible && Number.isFinite(cents) && cents > 0 ? cents : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setWelcomeDiscount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subtotalForQuote]);
 
   if (!formData || !totals) {
     return (
@@ -144,6 +168,9 @@ export default function MetodoPagoPage() {
   }
 
   const isDelivery = formData.deliveryMethod === "DELIVERY";
+  // Por ahora la bienvenida solo se aplica con Talo Pay.
+  const showWelcome = selected === "TALO_PAY" && welcomeDiscount > 0;
+  const displayTotal = showWelcome ? totals.total - welcomeDiscount : totals.total;
 
   const buildItems = () =>
     (items ?? [])
@@ -258,11 +285,26 @@ export default function MetodoPagoPage() {
         const res = await fetch("/api/checkout/talo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(buildMPBody()),
+          body: JSON.stringify({
+            ...buildMPBody(),
+            ...(welcomeDiscount > 0 ? { applyWelcome: true } : {}),
+          }),
         });
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
+          // La bienvenida ya no aplica (p. ej. otra pestaña la tomó): se oculta el
+          // descuento, el total vuelve al precio completo y el cliente decide.
+          if (
+            res.status === 409 &&
+            (data?.code === "ALREADY_CLAIMED" || data?.code === "DISABLED")
+          ) {
+            setWelcomeDiscount(0);
+            const notice = `El descuento de bienvenida ya no está disponible para este pedido. El nuevo total es ${formatPrice(totals.total)}. Si querés seguir, tocá "Continuar" de nuevo.`;
+            setWelcomeNotice(notice);
+            toast.warning(notice, { duration: 8000 });
+            return;
+          }
           const detail = data?.detail ? ` — ${data.detail}` : "";
           toast.error((data?.error ?? "No se pudo iniciar el pago") + detail);
           return;
@@ -350,15 +392,32 @@ export default function MetodoPagoPage() {
 
       <Card className="overflow-hidden rounded-3xl border-border/60 shadow-sm">
         <CardHeader className="border-b bg-muted/30 pb-4">
+          {showWelcome && (
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Descuento de bienvenida (10%)</span>
+              <span className="font-medium text-green-700 dark:text-green-400">
+                -{formatPrice(welcomeDiscount)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Total a pagar</CardTitle>
             <span className="text-2xl font-bold text-primary">
-              {formatPrice(totals.total)}
+              {formatPrice(displayTotal)}
             </span>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4 p-5 md:p-6">
+          {welcomeNotice && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300"
+            >
+              {welcomeNotice}
+            </div>
+          )}
+
           <div
             className="space-y-3"
             role="radiogroup"
