@@ -10,6 +10,9 @@ import { sendTelegramMessage } from "@/lib/telegram";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const escHtmlTg = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 export async function PATCH(
   _req: Request,
   { params }: { params: { id: string } }
@@ -24,10 +27,13 @@ export async function PATCH(
 
     const orderId = params.id;
 
-    const order = await (prisma.order.findUnique as any)({
+    const order = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
         id: true,
+        orderNumber: true,
+        status: true,
+        paymentStatus: true,
         paymentMethod: true,
         transferStatus: true,
         transferCode: true,
@@ -39,7 +45,7 @@ export async function PATCH(
         pickupTimeSlot: true,
         address: true,
       },
-    }) as any;
+    });
 
     if (!order) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
@@ -51,9 +57,17 @@ export async function PATCH(
 
     const now = new Date();
 
-    // Atomic: only update if not already CONFIRMED — prevents double email on concurrent requests
-    const result = await (prisma.order.updateMany as any)({
-      where: { id: orderId, transferStatus: { not: "CONFIRMED" } },
+    // Guarda atómica (mismo patrón que MP/Talo): solo una request concurrente
+    // obtiene count=1 (evita doble email), y nunca se cobra una orden cancelada
+    // (p. ej. una transferencia ya rechazada, cuyo stock ya se devolvió).
+    const result = await prisma.order.updateMany({
+      where: {
+        id: orderId,
+        paymentMethod: "BANK_TRANSFER",
+        transferStatus: { not: "CONFIRMED" },
+        paymentStatus: { not: "PAID" },
+        status: { not: "CANCELLED" },
+      },
       data: {
         transferStatus: "CONFIRMED",
         transferConfirmedAt: now,
@@ -65,7 +79,39 @@ export async function PATCH(
     });
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Ya confirmada" }, { status: 400 });
+      const latest = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, paymentStatus: true },
+      });
+
+      if (latest?.status === "CANCELLED" && latest.paymentStatus !== "PAID") {
+        // Si la plata efectivamente entró, hay que devolverla o rehacer el pedido
+        // (el stock de la orden cancelada ya se devolvió).
+        console.error("transfers/confirm: intento de confirmar orden CANCELADA", { orderId });
+        const code = order.transferCode ?? order.orderNumber;
+        sendTelegramMessage({
+          text:
+            `<b>⚠️ Intento de confirmar transferencia en orden cancelada #${escHtmlTg(order.orderNumber)}</b>\n` +
+            `<b>Código:</b> <code>${escHtmlTg(code)}</code>\n` +
+            `<b>Cliente:</b> ${escHtmlTg(order.customerName)}\n` +
+            `<b>Monto:</b> ${escHtmlTg(formatTransferAmount(order.total))}\n` +
+            `No se confirmó. Si se recibió la transferencia, requiere devolución manual.`,
+        }).catch((e) => console.error("Telegram confirmación en orden cancelada falló:", e));
+
+        return NextResponse.json(
+          {
+            error:
+              "La orden está cancelada y no se puede confirmar el pago. Si la transferencia llegó, hay que devolver el dinero o rehacer el pedido.",
+            cancelled: true,
+          },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: "Esta transferencia ya estaba confirmada.", alreadyPaid: true },
+        { status: 409 }
+      );
     }
 
     if (order.email && order.transferCode) {
@@ -93,8 +139,6 @@ export async function PATCH(
     }
 
     const code = order.transferCode ?? order.id.slice(0, 8);
-    const escHtmlTg = (v: string) =>
-      v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     sendTelegramMessage({
       text:
         `<b>✅ Transferencia confirmada</b>\n` +
