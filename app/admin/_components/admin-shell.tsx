@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutAndClearCheckout } from "@/lib/sign-out";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -116,7 +117,7 @@ export function AdminShell({
         </Link>
 
         <Button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => signOutAndClearCheckout({ callbackUrl: "/" })}
           variant="outline"
           className="w-full justify-start gap-3 border-border text-muted-foreground hover:bg-muted hover:text-foreground"
         >

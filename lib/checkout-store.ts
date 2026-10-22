@@ -11,8 +11,10 @@ export interface CheckoutTotals {
 
 interface CheckoutState {
   formData: CheckoutFormData | null;
+  /** Id del usuario dueño de formData; null = invitado. */
+  ownerId: string | null;
   totals: CheckoutTotals | null;
-  setFormData: (data: CheckoutFormData) => void;
+  setFormData: (data: CheckoutFormData, ownerId: string | null) => void;
   setTotals: (totals: CheckoutTotals) => void;
   clear: () => void;
 }
@@ -21,10 +23,11 @@ export const useCheckoutStore = create<CheckoutState>()(
   persist(
     (set) => ({
       formData: null,
+      ownerId: null,
       totals: null,
-      setFormData: (formData) => set({ formData }),
+      setFormData: (formData, ownerId) => set({ formData, ownerId }),
       setTotals: (totals) => set({ totals }),
-      clear: () => set({ formData: null, totals: null }),
+      clear: () => set({ formData: null, ownerId: null, totals: null }),
     }),
     {
       name: "checkout-store",

@@ -41,7 +41,8 @@ import {
 import { useCartStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutAndClearCheckout } from "@/lib/sign-out";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -646,7 +647,7 @@ export function Header() {
 
                       <DropdownMenuItem
                         className="cursor-pointer text-smoke focus:text-white focus:bg-iron hover:text-primary"
-                        onClick={() => signOut()}
+                        onClick={() => signOutAndClearCheckout()}
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Cerrar Sesión
@@ -848,7 +849,7 @@ export function Header() {
                         onClick={() => {
                           setMobileMenuOpen(false);
                           setMobileCatsOpen(false);
-                          signOut();
+                          signOutAndClearCheckout();
                         }}
                         className="w-full text-left px-3 py-3 text-sm text-bone hover:text-primary hover:bg-iron/60"
                       >
