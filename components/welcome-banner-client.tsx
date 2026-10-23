@@ -14,14 +14,14 @@ const VIEW_SESSION_KEY = "ga_welcome_promo_viewed";
 
 const CONTENT: Record<Variant, { title: string; detail: string; cta: string; href: string }> = {
   guest: {
-    title: "Tu primera compra tiene 10% OFF",
+    title: "Tu primera compra tiene 10% de descuento",
     detail:
       "Registrate y pagá con transferencia o en efectivo. Una vez por cuenta, sobre el valor de los productos (sin envío).",
     cta: "Registrarme",
     href: "/auth/register?from=welcome_banner",
   },
   eligible: {
-    title: "Tenés 10% OFF en tu primera compra",
+    title: "Tenés 10% de descuento en tu primera compra",
     detail:
       "Pagá con transferencia o en efectivo. Una vez por cuenta, sobre el valor de los productos (sin envío).",
     cta: "Ver productos",
