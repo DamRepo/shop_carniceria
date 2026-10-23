@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-function stockFromDb(unitType: "PER_KG" | "PER_UNIT", stock: number) {
+function stockFromDb(_unitType: "PER_KG" | "PER_UNIT", stock: number) {
   if (!Number.isFinite(stock) || stock < 0) return 0;
-  if (unitType === "PER_UNIT") return stock;
-  return stock / 1000;
+  return stock;
 }
 
 export async function GET(
