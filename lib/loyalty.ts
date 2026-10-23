@@ -66,29 +66,27 @@ function ineligible(reason: WelcomeIneligibleReason): WelcomeQuote {
 }
 
 /**
- * Calcula si corresponde la bienvenida. Solo lee.
- * Llamar ANTES de crear la orden del pedido actual: si no, esa misma orden
- * cuenta como "orden previa".
+ * Chequeos de cuenta compartidos por la cotización y el banner (no dependen
+ * del carrito). Devuelve el motivo de no elegibilidad, o null si la cuenta
+ * puede usar la bienvenida. No mira el flag: eso lo hace cada llamador.
  */
-export async function computeWelcomeQuote(
-  input: WelcomeQuoteInput,
-  tx?: DbClient
-): Promise<WelcomeQuote> {
-  if (!isLoyaltyEnabled()) return ineligible("DISABLED");
-  if (!input.userId) return ineligible("NOT_LOGGED_IN");
-
-  const db = tx ?? prisma;
+async function checkWelcomeAccount(
+  userId: string | null | undefined,
+  checkoutEmail: string | null | undefined,
+  db: DbClient
+): Promise<WelcomeIneligibleReason | null> {
+  if (!userId) return "NOT_LOGGED_IN";
 
   const user = await db.user.findUnique({
-    where: { id: input.userId },
+    where: { id: userId },
     select: { id: true, email: true, role: true, welcomeBenefit: { select: { id: true } } },
   });
-  if (!user) return ineligible("USER_NOT_FOUND");
-  if (user.role !== "CUSTOMER") return ineligible("NOT_CUSTOMER");
-  if (user.welcomeBenefit) return ineligible("ALREADY_CLAIMED");
+  if (!user) return "USER_NOT_FOUND";
+  if (user.role !== "CUSTOMER") return "NOT_CUSTOMER";
+  if (user.welcomeBenefit) return "ALREADY_CLAIMED";
 
   const emails = Array.from(
-    new Set([normalizeEmail(user.email), normalizeEmail(input.checkoutEmail)].filter(
+    new Set([normalizeEmail(user.email), normalizeEmail(checkoutEmail)].filter(
       (e): e is string => e !== null
     ))
   );
@@ -106,7 +104,42 @@ export async function computeWelcomeQuote(
       AND ("userId" = ${user.id} ${emailFilter})
     LIMIT 1
   `;
-  if (previous.length > 0) return ineligible("PREVIOUS_ORDER");
+  if (previous.length > 0) return "PREVIOUS_ORDER";
+
+  return null;
+}
+
+export type WelcomeEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: WelcomeIneligibleReason };
+
+/**
+ * ¿La cuenta puede usar la bienvenida? Versión liviana para el banner del
+ * home: no depende del subtotal y solo considera el email de la cuenta (el
+ * checkout puede usar otro email; ahí manda computeWelcomeQuote). Solo lee.
+ */
+export async function getWelcomeEligibility(
+  userId: string | null | undefined
+): Promise<WelcomeEligibility> {
+  if (!isLoyaltyEnabled()) return { eligible: false, reason: "DISABLED" };
+
+  const reason = await checkWelcomeAccount(userId, null, prisma);
+  return reason ? { eligible: false, reason } : { eligible: true };
+}
+
+/**
+ * Calcula si corresponde la bienvenida. Solo lee.
+ * Llamar ANTES de crear la orden del pedido actual: si no, esa misma orden
+ * cuenta como "orden previa".
+ */
+export async function computeWelcomeQuote(
+  input: WelcomeQuoteInput,
+  tx?: DbClient
+): Promise<WelcomeQuote> {
+  if (!isLoyaltyEnabled()) return ineligible("DISABLED");
+
+  const reason = await checkWelcomeAccount(input.userId, input.checkoutEmail, tx ?? prisma);
+  if (reason) return ineligible(reason);
 
   const discountCents = computeWelcomeDiscountCents(input.subtotalCents);
   if (discountCents <= 0) return ineligible("ZERO_DISCOUNT");

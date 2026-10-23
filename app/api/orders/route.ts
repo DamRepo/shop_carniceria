@@ -11,6 +11,7 @@ import { generateTransferCode, formatTransferAmount } from "@/lib/transfer-code"
 import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
 import {
   computeWelcomeQuote,
+  isLoyaltyEnabled,
   reserveWelcome,
   WELCOME_ALREADY_CLAIMED_MESSAGE,
   WelcomeBenefitError,
@@ -528,6 +529,11 @@ export async function POST(request: Request) {
         orderId: created.id,
         orderNumber: created.orderNumber,
         transferCode: created.transferCode ?? null,
+        // Solo para medir la compra en GA4 (centavos, valores ya guardados en la
+        // orden). Con el flag apagado la respuesta queda igual que antes.
+        ...(isLoyaltyEnabled()
+          ? { total: totalCents, welcomeDiscount: welcomeDiscountCents }
+          : {}),
       },
       { status: 201 }
     );

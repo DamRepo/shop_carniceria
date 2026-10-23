@@ -18,6 +18,7 @@ import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
+import { trackPurchase } from "@/lib/analytics";
 import { toast } from "sonner";
 
 type PaymentMethod = "MERCADO_PAGO" | "TALO_PAY" | "CASH";
@@ -339,6 +340,17 @@ export default function MetodoPagoPage() {
         if (handleWelcomeConflict(res, data)) return;
         handleOrderError(data);
         return;
+      }
+
+      // GA4: la orden queda pedida (todavía sin cobrar). Importes del servidor;
+      // /api/orders solo los devuelve con LOYALTY_ENABLED, si no, no se mide.
+      if (typeof data?.total === "number") {
+        trackPurchase({
+          transactionId: String(data.orderNumber ?? data.orderId),
+          totalCents: data.total,
+          welcomeDiscountCents: typeof data.welcomeDiscount === "number" ? data.welcomeDiscount : 0,
+          paymentType: "cash",
+        });
       }
 
       navigatingRef.current = true;

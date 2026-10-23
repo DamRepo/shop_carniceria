@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db";
 import {
   computeWelcomeDiscountCents,
   computeWelcomeQuote,
+  getWelcomeEligibility,
   releaseWelcome,
   reserveWelcome,
   settleWelcomeOnPaid,
@@ -172,6 +173,31 @@ async function main() {
   const relUsed = await releaseWelcome(null, orderB.id);
   const stillUsed = await prisma.welcomeBenefit.findUnique({ where: { orderId: orderB.id } });
   check("release no borra una fila USED", relUsed === 0 && stillUsed?.status === "USED", { relUsed, status: stillUsed?.status });
+  setFlag(true);
+
+  // 7) getWelcomeEligibility (banner del home): mismos chequeos de cuenta, sin subtotal
+  const eGuest = await getWelcomeEligibility(null);
+  check("eligibility invitado → NOT_LOGGED_IN", !eGuest.eligible && eGuest.reason === "NOT_LOGGED_IN", eGuest);
+
+  const eAdmin = await getWelcomeEligibility(admin.id);
+  check("eligibility ADMIN → NOT_CUSTOMER", !eAdmin.eligible && eAdmin.reason === "NOT_CUSTOMER", eAdmin);
+
+  const ePrev = await getWelcomeEligibility(withOrder.id);
+  check("eligibility con orden previa → PREVIOUS_ORDER", !ePrev.eligible && ePrev.reason === "PREVIOUS_ORDER", ePrev);
+
+  const reservedUser = await createUser("eligibility-reserved");
+  const reservedOrder = await createOrder({ userId: reservedUser.id });
+  await prisma.$transaction((tx) => reserveWelcome(tx, { userId: reservedUser.id, orderId: reservedOrder.id, discountCents: 500 }));
+  const eReserved = await getWelcomeEligibility(reservedUser.id);
+  check("eligibility con reserva activa → ALREADY_CLAIMED", !eReserved.eligible && eReserved.reason === "ALREADY_CLAIMED", eReserved);
+
+  const newcomer = await createUser("eligibility-new");
+  const eNew = await getWelcomeEligibility(newcomer.id);
+  check("eligibility usuario nuevo → elegible", eNew.eligible, eNew);
+
+  setFlag(false);
+  const eOff = await getWelcomeEligibility(newcomer.id);
+  check("eligibility flag off → DISABLED", !eOff.eligible && eOff.reason === "DISABLED", eOff);
   setFlag(true);
 }
 
