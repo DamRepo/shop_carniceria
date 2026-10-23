@@ -21,72 +21,74 @@ import type { CheckoutFormData } from "@/components/checkout/types";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 
+const EMPTY_FORM: CheckoutFormData = {
+  customerName: "",
+  phone: "",
+  email: "",
+  deliveryMethod: "PICKUP",
+  deliveryZone: "",
+  address: "",
+  addressDetails: "",
+  notes: "",
+  pickupDate: "",
+  pickupTimeSlot: "",
+  pickupNotes: "",
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
   const items = useCartStore((state) => state?.items);
   const checkoutTotal = useCartStore((state) => state?.getTotalPrice?.() ?? 0);
-  const storedFormData = useCheckoutStore((s) => s.formData);
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const [formData, setFormData] = useState<CheckoutFormData>({
-    customerName: "",
-    phone: "",
-    email: "",
-    deliveryMethod: "PICKUP",
-    deliveryZone: "",
-    address: "",
-    addressDetails: "",
-    notes: "",
-    pickupDate: "",
-    pickupTimeSlot: "",
-    pickupNotes: "",
-  });
+  const [formData, setFormData] = useState<CheckoutFormData>(EMPTY_FORM);
 
-  // Restore form from checkout store when navigating back from metodo-pago
-  const restoredRef = useRef(false);
-  useEffect(() => {
-    if (restoredRef.current || !storedFormData) return;
-    restoredRef.current = true;
-    setFormData((prev) => ({
-      customerName: storedFormData.customerName || prev.customerName,
-      phone: storedFormData.phone || prev.phone,
-      email: storedFormData.email || prev.email,
-      deliveryMethod: storedFormData.deliveryMethod || prev.deliveryMethod,
-      deliveryZone: storedFormData.deliveryZone || prev.deliveryZone,
-      address: storedFormData.address || prev.address,
-      addressDetails: storedFormData.addressDetails || prev.addressDetails,
-      notes: storedFormData.notes || prev.notes,
-      pickupDate: storedFormData.pickupDate || prev.pickupDate,
-      pickupTimeSlot: storedFormData.pickupTimeSlot || prev.pickupTimeSlot,
-      pickupNotes: storedFormData.pickupNotes || prev.pickupNotes,
-    }));
-  }, [storedFormData]);
+  const userId = status === "authenticated" ? session?.user?.id ?? null : null;
 
+  // Restore form from checkout store (e.g. navigating back from metodo-pago),
+  // but only if it belongs to whoever is signed in now. Otherwise discard it
+  // and prefill from the profile (or leave empty for guests).
+  // undefined = session not resolved yet; null = guest.
+  const appliedOwnerRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "loading") return;
+    if (appliedOwnerRef.current === userId) return;
+    const identityChanged = appliedOwnerRef.current !== undefined;
+    appliedOwnerRef.current = userId;
+
+    const store = useCheckoutStore.getState();
+    const stored = store.formData;
+    const canRestore = !!stored && store.ownerId === userId;
+    if (stored && !canRestore) store.clear();
 
     setFormData((prev) => {
-      const next = { ...prev };
+      const next: CheckoutFormData =
+        canRestore && stored
+          ? { ...EMPTY_FORM, ...stored }
+          : identityChanged
+            ? { ...EMPTY_FORM }
+            : { ...prev };
 
-      if (!next.customerName && session?.user?.name) {
-        next.customerName = session.user.name;
-      }
+      if (status === "authenticated" && session?.user) {
+        if (!next.customerName && session.user.name) {
+          next.customerName = session.user.name;
+        }
 
-      if (!next.email && session?.user?.email) {
-        next.email = session.user.email;
-      }
+        if (!next.email && session.user.email) {
+          next.email = session.user.email;
+        }
 
-      const phone = (session?.user as any)?.phone as string | null | undefined;
-      if (!next.phone && phone) {
-        next.phone = phone;
+        if (!next.phone && session.user.phone) {
+          next.phone = session.user.phone;
+        }
       }
 
       return next;
     });
-  }, [status, session]);
+  }, [status, userId, session]);
 
   const handleInputChange = (field: keyof CheckoutFormData, value: string) => {
     setFormData((prev) => {
@@ -182,7 +184,7 @@ export default function CheckoutPage() {
     if (!validateContactStep()) return;
     if (!validateDeliveryDetailsStep()) return;
 
-    useCheckoutStore.getState().setFormData(formData);
+    useCheckoutStore.getState().setFormData(formData, userId);
     useCheckoutStore.getState().setTotals({ subtotal, subtotalNet, deliveryCost, total });
 
     router.push("/checkout/metodo-pago");
