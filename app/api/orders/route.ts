@@ -9,6 +9,12 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 import { generateTransferCode, formatTransferAmount } from "@/lib/transfer-code";
 import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
+import {
+  computeWelcomeQuote,
+  reserveWelcome,
+  WELCOME_ALREADY_CLAIMED_MESSAGE,
+  WelcomeBenefitError,
+} from "@/lib/loyalty";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -321,7 +327,29 @@ export async function POST(request: Request) {
         ? getShippingCost(deliveryZoneRaw)
         : 0;
 
-    const totalCents = subtotalCents + deliveryCostCents;
+    // Bienvenida 10% (solo efectivo en esta ruta): se cotiza ANTES de crear la
+    // orden (si no, la propia orden contaría como "orden previa"). Sin la
+    // intención del cliente, welcomeDiscountCents = 0 y todo queda como antes.
+    let welcomeDiscountCents = 0;
+    if (body?.applyWelcome === true) {
+      if (paymentMethod !== "CASH") {
+        throw new HttpError(400, "El descuento de bienvenida no aplica con este método de pago");
+      }
+      const welcomeQuote = await computeWelcomeQuote({
+        userId: safeUserId,
+        checkoutEmail: email,
+        subtotalCents,
+      });
+      // El cliente vio un total con descuento: nunca cobrarle el precio completo
+      // en silencio. Se corta acá (antes de crear orden o tocar stock) y el
+      // catch de afuera responde 409. Incluye el flag apagado.
+      if (!welcomeQuote.eligible) {
+        throw new WelcomeBenefitError(WELCOME_ALREADY_CLAIMED_MESSAGE, "ALREADY_CLAIMED");
+      }
+      welcomeDiscountCents = welcomeQuote.discountCents;
+    }
+
+    const totalCents = subtotalCents - welcomeDiscountCents + deliveryCostCents;
 
     // 🔥 FIX CLAVE: AGRUPAR STOCK
     const decByProductId = new Map<string, number>();
@@ -397,7 +425,7 @@ export async function POST(request: Request) {
           ? await generateTransferCode(tx)
           : null;
 
-      return await tx.order.create({
+      const order = await tx.order.create({
         data: {
           userId: safeUserId,
           customerName,
@@ -416,6 +444,7 @@ export async function POST(request: Request) {
           subtotal: subtotalCents,
           deliveryCost: deliveryCostCents,
           total: totalCents,
+          welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
           items: { create: orderItems },
           ...(transferCode && {
             transferCode,
@@ -423,6 +452,19 @@ export async function POST(request: Request) {
           }),
         },
       });
+
+      // Misma transacción que el descuento de stock. Si choca con el unique
+      // (otra pestaña ya la reservó), el error corta TODA la transacción: no
+      // queda orden ni se descuenta stock. Se mapea a 409 en el catch de afuera.
+      if (welcomeDiscountCents > 0 && safeUserId) {
+        await reserveWelcome(tx, {
+          userId: safeUserId,
+          orderId: order.id,
+          discountCents: welcomeDiscountCents,
+        });
+      }
+
+      return order;
     });
 
     // EMAIL (no bloquea)
@@ -445,6 +487,9 @@ export async function POST(request: Request) {
             unitPrice: it.unitPrice / 100,
           })),
           totalText: `$${(totalCents / 100).toFixed(2)}`,
+          ...(welcomeDiscountCents > 0
+            ? { discountText: `-$${(welcomeDiscountCents / 100).toFixed(2)}` }
+            : {}),
         }).catch((e) => console.log("Email falló:", e));
       }
     }
@@ -464,6 +509,7 @@ export async function POST(request: Request) {
         pickupTimeSlot,
         subtotalCents,
         deliveryCostCents,
+        welcomeDiscountCents,
         totalCents,
         items: orderItems.map((it) => ({
           name: it.itemNameSnapshot,
@@ -487,6 +533,10 @@ export async function POST(request: Request) {
     );
   } catch (e: unknown) {
     console.error("ORDER ERROR:", e);
+
+    if (e instanceof WelcomeBenefitError) {
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+    }
 
     if (e instanceof HttpError) {
       return NextResponse.json(

@@ -92,6 +92,7 @@ export async function GET(req: Request) {
         subtotal: true,
         deliveryCost: true,
         total: true,
+        welcomeDiscount: true,
 
         createdAt: true,
         updatedAt: true,

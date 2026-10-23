@@ -9,6 +9,7 @@ export function orderConfirmationTemplate(params: {
   orderId: string;
   items: OrderItemEmail[];
   totalText: string; // por ejemplo "$12.500"
+  discountText?: string; // por ejemplo "-$1250.00"; se omite si no hay descuento
   appUrl: string;
 }) {
   const name = params.customerName?.trim() || "👋";
@@ -22,7 +23,10 @@ export function orderConfirmationTemplate(params: {
   `).join("");
 
   const subject = `Confirmación de compra - Pedido ${params.orderId}`;
-  const text = `Hola ${name}. Tu compra fue confirmada. Pedido: ${params.orderId}. Total: ${params.totalText}`;
+  const discountLine = params.discountText
+    ? ` Descuento de bienvenida (10%): ${params.discountText}.`
+    : "";
+  const text = `Hola ${name}. Tu compra fue confirmada. Pedido: ${params.orderId}.${discountLine} Total: ${params.totalText}`;
 
   const html = `
   <div style="font-family: Arial, sans-serif; background:#f4f4f4; padding:24px;">
@@ -49,8 +53,12 @@ export function orderConfirmationTemplate(params: {
                 </tr>
                 ${rows}
               </table>
+              ${params.discountText ? `
+              <div style="margin-top:14px; text-align:right; font-size:14px; color:#2e7d32;">
+                Descuento de bienvenida (10%): ${escapeHtml(params.discountText)}
+              </div>` : ""}
 
-              <div style="margin-top:14px; text-align:right; font-size:16px;">
+              <div style="margin-top:${params.discountText ? "6px" : "14px"}; text-align:right; font-size:16px;">
                 <b>Total: ${escapeHtml(params.totalText)}</b>
               </div>
 

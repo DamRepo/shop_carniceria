@@ -168,8 +168,10 @@ export default function MetodoPagoPage() {
   }
 
   const isDelivery = formData.deliveryMethod === "DELIVERY";
-  // Por ahora la bienvenida solo se aplica con Talo Pay.
-  const showWelcome = selected === "TALO_PAY" && welcomeDiscount > 0;
+  // La bienvenida aplica con Talo Pay y efectivo; con tarjeta (MP) no.
+  const welcomeApplies = selected === "TALO_PAY" || selected === "CASH";
+  const showWelcome = welcomeApplies && welcomeDiscount > 0;
+  const welcomeLostWithCard = selected === "MERCADO_PAGO" && welcomeDiscount > 0;
   const displayTotal = showWelcome ? totals.total - welcomeDiscount : totals.total;
 
   const buildItems = () =>
@@ -182,7 +184,7 @@ export default function MetodoPagoPage() {
       .filter((i) => i.quantity > 0);
 
 
-  const buildOrderBody = (paymentMethod: "CASH") => {
+  const buildOrderBody = (paymentMethod: "CASH", applyWelcome: boolean) => {
     const orderItems = buildItems();
 
     return {
@@ -199,6 +201,7 @@ export default function MetodoPagoPage() {
       deliveryZone: isDelivery ? formData.deliveryZone : "",
       items: orderItems,
       paymentMethod,
+      ...(applyWelcome ? { applyWelcome: true } : {}),
     };
   };
 
@@ -235,6 +238,19 @@ export default function MetodoPagoPage() {
     } else {
       toast.error(data?.error ?? "No se pudo crear el pedido");
     }
+  };
+
+  // La bienvenida ya no aplica (p. ej. otra pestaña la tomó): se oculta el
+  // descuento, el total vuelve al precio completo y el cliente decide.
+  const handleWelcomeConflict = (res: Response, data: { code?: string } | null) => {
+    if (res.status !== 409 || (data?.code !== "ALREADY_CLAIMED" && data?.code !== "DISABLED")) {
+      return false;
+    }
+    setWelcomeDiscount(0);
+    const notice = `El descuento de bienvenida ya no está disponible para este pedido. El nuevo total es ${formatPrice(totals.total)}. Si querés seguir, tocá "Continuar" de nuevo.`;
+    setWelcomeNotice(notice);
+    toast.warning(notice, { duration: 8000 });
+    return true;
   };
 
   const handleContinue = async () => {
@@ -293,18 +309,7 @@ export default function MetodoPagoPage() {
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
-          // La bienvenida ya no aplica (p. ej. otra pestaña la tomó): se oculta el
-          // descuento, el total vuelve al precio completo y el cliente decide.
-          if (
-            res.status === 409 &&
-            (data?.code === "ALREADY_CLAIMED" || data?.code === "DISABLED")
-          ) {
-            setWelcomeDiscount(0);
-            const notice = `El descuento de bienvenida ya no está disponible para este pedido. El nuevo total es ${formatPrice(totals.total)}. Si querés seguir, tocá "Continuar" de nuevo.`;
-            setWelcomeNotice(notice);
-            toast.warning(notice, { duration: 8000 });
-            return;
-          }
+          if (handleWelcomeConflict(res, data)) return;
           const detail = data?.detail ? ` — ${data.detail}` : "";
           toast.error((data?.error ?? "No se pudo iniciar el pago") + detail);
           return;
@@ -326,11 +331,12 @@ export default function MetodoPagoPage() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildOrderBody("CASH")),
+        body: JSON.stringify(buildOrderBody("CASH", welcomeDiscount > 0)),
       });
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (handleWelcomeConflict(res, data)) return;
         handleOrderError(data);
         return;
       }
@@ -415,6 +421,15 @@ export default function MetodoPagoPage() {
               className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300"
             >
               {welcomeNotice}
+            </div>
+          )}
+
+          {welcomeLostWithCard && (
+            <div
+              role="status"
+              className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300"
+            >
+              El descuento de bienvenida del 10% no aplica con tarjeta. Si pagás con Mercado Pago el total es {formatPrice(totals.total)}. Para usarlo, elegí Transferencia con Talo o {isDelivery ? "Pagar al recibir" : "Pagar en el local"}.
             </div>
           )}
 
