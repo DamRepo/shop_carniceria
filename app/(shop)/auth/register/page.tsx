@@ -16,6 +16,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { trackEvent, WELCOME_PROMOTION } from '@/lib/analytics';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -86,6 +87,15 @@ export default function RegisterPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Error al registrarse');
       }
+
+      // GA4: todos los registros; promotion_id solo si vienen del banner de bienvenida.
+      // Se lee de window.location para no envolver la página en Suspense (useSearchParams).
+      const fromWelcomeBanner =
+        new URLSearchParams(window.location.search).get('from') === 'welcome_banner';
+      trackEvent('sign_up', {
+        method: 'email',
+        ...(fromWelcomeBanner ? { promotion_id: WELCOME_PROMOTION.promotion_id } : {}),
+      });
 
       toast.success('¡Cuenta creada exitosamente!');
       router.push('/auth/login');

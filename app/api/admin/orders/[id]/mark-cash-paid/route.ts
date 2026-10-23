@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatMoney, sendTelegramMessage } from "@/lib/telegram";
+import { settleWelcomeOnPaid } from "@/lib/loyalty";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,28 +88,37 @@ export async function POST(
     // lock de fila, así que dos clics concurrentes o una cancelación en el medio
     // no pueden dejar la orden cobrada dos veces ni cobrar una cancelada.
     // PENDING_PAYMENT pasa a CONFIRMED; cualquier otro estado conserva el suyo.
+    // En una transacción para que pasar a PAID y consumir la bienvenida
+    // (RESERVED → USED) sean una sola operación.
     const now = new Date();
-    let { count } = await prisma.order.updateMany({
-      where: {
-        id: params.id,
-        paymentMethod: "CASH",
-        paymentStatus: { not: "PAID" },
-        status: "PENDING_PAYMENT",
-      },
-      data: { paymentStatus: "PAID", paidAt: now, status: "CONFIRMED", confirmedAt: now },
-    });
-
-    if (count === 0) {
-      ({ count } = await prisma.order.updateMany({
+    const count = await prisma.$transaction(async (tx) => {
+      let { count } = await tx.order.updateMany({
         where: {
           id: params.id,
           paymentMethod: "CASH",
           paymentStatus: { not: "PAID" },
-          status: { notIn: ["CANCELLED", "PENDING_PAYMENT"] },
+          status: "PENDING_PAYMENT",
         },
-        data: { paymentStatus: "PAID", paidAt: now },
-      }));
-    }
+        data: { paymentStatus: "PAID", paidAt: now, status: "CONFIRMED", confirmedAt: now },
+      });
+
+      if (count === 0) {
+        ({ count } = await tx.order.updateMany({
+          where: {
+            id: params.id,
+            paymentMethod: "CASH",
+            paymentStatus: { not: "PAID" },
+            status: { notIn: ["CANCELLED", "PENDING_PAYMENT"] },
+          },
+          data: { paymentStatus: "PAID", paidAt: now },
+        }));
+      }
+
+      // Solo el request que ganó el guard (count > 0) consume la bienvenida.
+      if (count > 0) await settleWelcomeOnPaid(tx, params.id);
+
+      return count;
+    });
 
     if (count === 0) {
       // Otro request ganó la carrera: ya está cobrada o la cancelaron recién.

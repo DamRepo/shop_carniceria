@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
+import { trackPurchase } from "@/lib/analytics";
 
 const POLL_INTERVAL_MS = 5000;
 // Misma fuente que el botón flotante (components/whatsapp-button.tsx), con el
@@ -32,6 +33,7 @@ type TaloStatusResponse = {
   alias: string | null;
   expiresAt: string | null;
   total: number; // centavos — se muestra con formatPrice()
+  welcomeDiscount?: number; // centavos; 0 = sin descuento
   orderId: string | null;
   orderNumber: string | null;
   orderStatus: string | null;
@@ -162,6 +164,37 @@ function TaloPendingContent() {
       clearCheckout?.();
     }
   }, [data?.status, cartCleared, clearCart, clearCheckout]);
+
+  // GA4: purchase una sola vez por pago aprobado (recargar la página no lo
+  // repite). Importes del servidor (/status), ya pagados.
+  useEffect(() => {
+    if (data?.status !== "APPROVED") return;
+
+    const transactionId = data.orderNumber ?? data.orderId ?? csId;
+    if (!transactionId) return;
+
+    const key = `ga_purchase_${transactionId}`;
+    try {
+      if (localStorage.getItem(key) !== null) return;
+    } catch {
+      // Sin storage: se mide igual (puede repetirse si recarga).
+    }
+
+    const sent = trackPurchase({
+      transactionId,
+      totalCents: data.total,
+      welcomeDiscountCents: data.welcomeDiscount ?? 0,
+      paymentType: "talo",
+    });
+
+    if (sent) {
+      try {
+        localStorage.setItem(key, "1");
+      } catch {
+        // ignorar
+      }
+    }
+  }, [data, csId]);
 
   const countdown = useCountdown(data?.expiresAt ?? null);
 
@@ -327,6 +360,11 @@ function TaloPendingContent() {
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center">
             <p className="mb-1 text-sm text-muted-foreground">Monto a transferir</p>
             <p className="text-3xl font-bold text-primary">{formatPrice(data?.total ?? 0)}</p>
+            {(data?.welcomeDiscount ?? 0) > 0 && (
+              <p className="mt-1 text-xs text-green-700 dark:text-green-400">
+                Incluye descuento de bienvenida (10%): -{formatPrice(data?.welcomeDiscount ?? 0)}
+              </p>
+            )}
           </div>
 
           {data?.cvu && (

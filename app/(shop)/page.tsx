@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { HomeHeroBanner } from "@/components/home-hero-banner";
 import { HomeCategoryShowcase } from "@/components/home-category-showcase";
+import { WelcomeBanner } from "@/components/welcome-banner";
 import { getOrderProcessingStatus } from "@/lib/business-hours";
 import { getStoreHours } from "@/lib/business-hours-server";
 import { HomeClient } from "./HomeClient";
@@ -29,6 +30,7 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col">
       <HomeHeroBanner />
+      <WelcomeBanner />
       <HomeCategoryShowcase existingSlugs={existingSlugs} />
       <HomeClient orderStatus={orderStatus} />
     </div>

@@ -73,6 +73,7 @@ interface Order {
   subtotal: number;
   deliveryCost: number;
   total: number;
+  welcomeDiscount: number | null;
 
   createdAt: string;
   items: {
@@ -322,6 +323,11 @@ function PaymentSection({
                 Paga al retirar — {formatPrice(order.total)}
               </p>
             </div>
+            {Number(order.welcomeDiscount ?? 0) > 0 && (
+              <p className="mb-2 text-xs text-amber-700">
+                Incluye descuento de bienvenida de {formatPrice(order.welcomeDiscount ?? 0)}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => onMarkCashPaid(order.id)}
@@ -558,6 +564,12 @@ export default function OrdenesAdmin() {
                         <span>Subtotal:</span>
                         <span>{formatPrice(order.subtotal ?? 0)}</span>
                       </div>
+                      {Number(order.welcomeDiscount ?? 0) > 0 && (
+                        <div className="flex items-center justify-end gap-2 text-green-700 dark:text-green-400">
+                          <span>Descuento bienvenida (10%):</span>
+                          <span>-{formatPrice(order.welcomeDiscount ?? 0)}</span>
+                        </div>
+                      )}
                       {Number(order.deliveryCost ?? 0) > 0 && (
                         <div className="flex items-center justify-end gap-2">
                           <span>Envío:</span>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { toStockQty } from "@/lib/stock-units";
+import { releaseWelcome } from "@/lib/loyalty";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -144,6 +145,10 @@ export async function PATCH(
       });
 
       if (result.count > 0 && isCancelling && !current.cancelledAt) {
+        // Libera la bienvenida si estaba RESERVED (pago no confirmado). Si ya se
+        // pagó quedó USED y no se toca. Sin filas para la orden es un no-op.
+        await releaseWelcome(tx, orderId);
+
         // MERCADO_PAGO/TALO_PAY reservan stock en `reservedStock` al crear el
         // checkout, y recién descuentan `stock` (junto con `reservedStock`) al
         // confirmarse el pago. Si todavía no se confirmó, cancelar la orden

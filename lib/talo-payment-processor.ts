@@ -3,6 +3,9 @@ import type { Prisma } from "@prisma/client";
 import { consultarPagoTalo, extraerCvuAlias, type TaloPago } from "@/lib/talo";
 import { sendTelegramMessage, buildTelegramOrderMessage, formatMoney } from "@/lib/telegram";
 import { confirmComboSale, getComboReserveQty, releaseComboReservation } from "@/lib/combos";
+// lib/loyalty-lifecycle (no lib/loyalty): este módulo corre también en el cron
+// de reconciliación fuera de Next.js, donde "server-only" rompe.
+import { releaseWelcome, settleWelcomeOnPaid } from "@/lib/loyalty-lifecycle";
 
 /**
  * Procesa la confirmación real de un pago de Talo. Es la ÚNICA función que
@@ -206,6 +209,9 @@ export async function finalizeTaloOrderAsPaid(params: {
       throw new Error("ALREADY_PROCESSED");
     }
 
+    // Solo la llamada que ganó el guard (count > 0) consume la bienvenida.
+    await settleWelcomeOnPaid(tx, orderId);
+
     for (const it of items) {
       if (it.comboId) {
         await confirmComboSale(tx, it.comboId, getComboReserveQty(it.quantity));
@@ -264,6 +270,7 @@ export async function finalizeTaloOrderAsPaid(params: {
       subtotal: true,
       deliveryCost: true,
       total: true,
+      welcomeDiscount: true,
       items: {
         select: {
           quantity: true,
@@ -289,6 +296,7 @@ export async function finalizeTaloOrderAsPaid(params: {
         pickupTimeSlot: fullOrder.pickupTimeSlot,
         subtotalCents: Number(fullOrder.subtotal),
         deliveryCostCents: Number(fullOrder.deliveryCost ?? 0),
+        welcomeDiscountCents: fullOrder.welcomeDiscount ?? 0,
         totalCents: Number(fullOrder.total),
         items: fullOrder.items.map((it) => ({
           name: it.itemNameSnapshot ?? it.product?.name ?? "",
@@ -538,6 +546,7 @@ export async function processTaloPayment(paymentId: string): Promise<TaloProcess
       });
 
       await releaseReservation(tx, cs);
+      await releaseWelcome(tx, order.id);
 
       await tx.checkoutSession.update({
         where: { id: cs.id },

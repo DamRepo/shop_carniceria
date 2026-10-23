@@ -35,6 +35,8 @@ type BuildTelegramOrderMessageParams = {
 
   subtotalCents: number;
   deliveryCostCents?: number;
+  /** Descuento de bienvenida (centavos). Solo se muestra si es > 0. */
+  welcomeDiscountCents?: number;
   totalCents: number;
 
   items?: TelegramOrderItem[];
@@ -183,6 +185,9 @@ export function buildTelegramOrderMessage(
     (notes ? `<b>Notas cliente:</b> ${notes}\n` : "") +
     (itemsText ? `\n<b>Productos:</b>\n${itemsText}\n` : "") +
     `\n<b>Subtotal:</b> ${formatMoney(params.subtotalCents)}\n` +
+    ((params.welcomeDiscountCents ?? 0) > 0
+      ? `<b>Descuento bienvenida (10%):</b> -${formatMoney(params.welcomeDiscountCents ?? 0)}\n`
+      : "") +
     `<b>Envío:</b> ${formatMoney(params.deliveryCostCents ?? 0)}\n` +
     `<b>Total:</b> ${formatMoney(params.totalCents)}`
   );

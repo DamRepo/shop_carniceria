@@ -33,6 +33,8 @@ export async function sendOrderConfirmationEmail(args: {
   orderId: string;
   items: { name: string; quantity: number; unitPrice: number }[];
   totalText: string;
+  /** Línea de descuento de bienvenida ya formateada; solo si es > 0. */
+  discountText?: string;
 }) {
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
@@ -41,6 +43,7 @@ export async function sendOrderConfirmationEmail(args: {
     orderId: args.orderId,
     items: args.items,
     totalText: args.totalText,
+    discountText: args.discountText,
     appUrl,
   });
 

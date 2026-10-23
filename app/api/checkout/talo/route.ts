@@ -12,6 +12,13 @@ import {
   reserveComboStock,
   type ComboReservationItem,
 } from "@/lib/combos";
+import {
+  computeWelcomeQuote,
+  releaseWelcome,
+  reserveWelcome,
+  WELCOME_ALREADY_CLAIMED_MESSAGE,
+  WelcomeBenefitError,
+} from "@/lib/loyalty";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +40,9 @@ type Body = {
   pickupNotes?: string;
 
   items: BodyItem[];
+
+  /** Intención de usar la bienvenida. El monto lo calcula siempre el servidor. */
+  applyWelcome?: boolean;
 };
 
 type ProductPick = {
@@ -413,7 +423,26 @@ export async function POST(req: Request) {
         ? getShippingCost(deliveryZoneRaw)
         : 0;
 
-    const totalCents = subtotalCents + deliveryCostCents;
+    // Bienvenida 10%: se cotiza ANTES de crear la orden (si no, la propia orden
+    // contaría como "orden previa"). Sin la intención del cliente,
+    // welcomeDiscountCents = 0 y todo queda como antes.
+    let welcomeDiscountCents = 0;
+    if (body.applyWelcome === true) {
+      const welcomeQuote = await computeWelcomeQuote({
+        userId,
+        checkoutEmail: resolvedEmail,
+        subtotalCents,
+      });
+      // El cliente vio un total con descuento: nunca cobrarle el precio completo
+      // en silencio. Se corta acá (antes de crear orden o reservar stock) y el
+      // catch de afuera responde 409. Incluye el flag apagado.
+      if (!welcomeQuote.eligible) {
+        throw new WelcomeBenefitError(WELCOME_ALREADY_CLAIMED_MESSAGE, "ALREADY_CLAIMED");
+      }
+      welcomeDiscountCents = welcomeQuote.discountCents;
+    }
+
+    const totalCents = subtotalCents - welcomeDiscountCents + deliveryCostCents;
 
     if (totalCents <= 0) {
       return NextResponse.json({ error: "El total del pedido es inválido" }, { status: 400 });
@@ -479,6 +508,7 @@ export async function POST(req: Request) {
           subtotal: subtotalCents,
           deliveryCost: deliveryCostCents,
           total: totalCents,
+          welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
 
           items: {
             create: itemsSnapshot.map((it) => ({
@@ -516,12 +546,20 @@ export async function POST(req: Request) {
           subtotal: subtotalCents,
           deliveryCost: deliveryCostCents,
           total: totalCents,
+          welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
 
           status: "WAITING_TALO",
           orderId: order.id,
           reservationReleased: false,
         },
       });
+
+      // Misma transacción que la reserva de stock. Si choca con el unique
+      // (otra pestaña ya la reservó), el error corta TODA la transacción: no
+      // queda orden ni stock reservado. Se mapea a 409 en el catch de afuera.
+      if (welcomeDiscountCents > 0 && userId) {
+        await reserveWelcome(tx, { userId, orderId: order.id, discountCents: welcomeDiscountCents });
+      }
 
       return { order, cs };
     });
@@ -547,6 +585,8 @@ export async function POST(req: Request) {
             where: { id: order.id },
             data: { paymentStatus: "FAILED", taloStatus: reason, status: "CANCELLED" },
           });
+          // La bienvenida vuelve a estar disponible para reintentar.
+          await releaseWelcome(tx, order.id);
         })
         .catch((err: any) =>
           console.error("Error en rollback de pago Talo:", err, { reason })
@@ -628,8 +668,12 @@ export async function POST(req: Request) {
       paymentUrl: pago.payment_url ?? null,
       expiresAt: expiresAt.toISOString(),
       total: totalCents,
+      ...(welcomeDiscountCents > 0 ? { welcomeDiscount: welcomeDiscountCents } : {}),
     });
   } catch (e: unknown) {
+    if (e instanceof WelcomeBenefitError) {
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+    }
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error("[talo/checkout] Unhandled error:", {
       message: errMsg,
