@@ -44,6 +44,7 @@ interface TransferOrder {
   pickupDate: string | null;
   pickupTimeSlot: string | null;
   total: number;
+  status: string;
   createdAt: string;
   items: {
     quantity: number;
@@ -221,8 +222,9 @@ function TransferenciasTab() {
             const isConfirming = actionLoading === order.id + "_confirm";
             const isRejecting = actionLoading === order.id + "_reject";
             const isPending =
-              order.transferStatus === "AWAITING_PROOF" ||
-              order.transferStatus === "PENDING_REVIEW";
+              order.status !== "CANCELLED" &&
+              (order.transferStatus === "AWAITING_PROOF" ||
+                order.transferStatus === "PENDING_REVIEW");
 
             return (
               <Card

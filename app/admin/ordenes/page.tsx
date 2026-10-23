@@ -179,7 +179,8 @@ function PaymentSection({
 
       {paymentMethod === 'BANK_TRANSFER' && (
         <>
-          {(transferStatus === 'PENDING_REVIEW' || transferStatus === 'AWAITING_PROOF') && (
+          {order.status !== 'CANCELLED' &&
+            (transferStatus === 'PENDING_REVIEW' || transferStatus === 'AWAITING_PROOF') && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
               <div className="mb-1 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-blue-600" />
@@ -305,7 +306,7 @@ function PaymentSection({
         )
       )}
 
-      {paymentMethod === 'CASH' && (
+      {paymentMethod === 'CASH' && order.status !== 'CANCELLED' && (
         order.paymentStatus === 'PAID' ? (
           <div className="rounded-xl border border-green-200 bg-green-50 p-3">
             <div className="flex items-center gap-2">
@@ -418,7 +419,7 @@ export default function OrdenesAdmin() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? 'Error al marcar como cobrado');
-      toast.success('Efectivo marcado como cobrado');
+      toast.success(data?.alreadyPaid ? 'Esta orden ya estaba cobrada' : 'Efectivo marcado como cobrado');
       fetchOrders();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al marcar como cobrado');
