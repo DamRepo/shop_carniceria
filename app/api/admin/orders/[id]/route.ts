@@ -4,10 +4,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { toStockQty } from "@/lib/stock-units";
 import { releaseWelcome } from "@/lib/loyalty";
-import { releasePoints, revokePointsOnPaidCancel } from "@/lib/loyalty-points";
+import {
+  pointsToCents,
+  releasePoints,
+  revokePointsOnPaidCancel,
+  type RevokeResult,
+} from "@/lib/loyalty-points";
+import { formatMoney, sendTelegramMessage } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const escHtmlTg = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const ALLOWED_STATUSES = [
   "PENDING_PAYMENT",
@@ -163,6 +172,9 @@ export async function PATCH(
       data.cancelledBy = null;
     }
 
+    // Resultado de la revocación de puntos (solo si se canceló un pedido pagado).
+    let pointsRevoke: RevokeResult | null = null;
+
     // Optimistic lock + restauración de stock en una sola transacción
     const { count } = await prisma.$transaction(async (tx) => {
       const result = await tx.order.updateMany({
@@ -182,7 +194,7 @@ export async function PATCH(
         // - revokePointsOnPaidCancel: pedido pagado → devuelve el canje USED y
         //   quita los puntos ganados por el pedido hasta donde alcance.
         await releasePoints(tx, orderId);
-        await revokePointsOnPaidCancel(tx, orderId);
+        pointsRevoke = await revokePointsOnPaidCancel(tx, orderId);
 
         // MERCADO_PAGO/TALO_PAY reservan stock en `reservedStock` al crear el
         // checkout, y recién descuentan `stock` (junto con `reservedStock`) al
@@ -319,7 +331,27 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(order, { status: 200 });
+    // Puntos ganados por el pedido que el cliente ya había usado: no se pueden
+    // quitar (nunca saldo negativo). Se avisa al admin por Telegram y en la
+    // respuesta para que lo vea; es plata que la tienda ya descontó.
+    // Cast: TS no ve la asignación hecha dentro del callback de la transacción.
+    const shortfall = (pointsRevoke as RevokeResult | null)?.shortfall ?? 0;
+    if (shortfall > 0) {
+      sendTelegramMessage({
+        text:
+          `<b>⚠️ Pedido cancelado #${escHtmlTg(order?.orderNumber ?? orderId)}: puntos ya usados</b>\n` +
+          `<b>Cliente:</b> ${escHtmlTg(order?.customerName ?? "")}\n` +
+          `${shortfall} puntos ganados con este pedido ya se habían usado y no se pudieron quitar ` +
+          `(${formatMoney(pointsToCents(shortfall))} en descuentos).`,
+      }).catch((e: unknown) => console.error("Telegram faltante de puntos falló:", e));
+    }
+
+    return NextResponse.json(
+      shortfall > 0
+        ? { ...order, pointsShortfall: shortfall, pointsShortfallCents: pointsToCents(shortfall) }
+        : order,
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error updating order:", error);
 

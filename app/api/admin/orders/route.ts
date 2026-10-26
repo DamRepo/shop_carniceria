@@ -97,6 +97,10 @@ export async function GET(req: Request) {
         pointsDiscount: true,
         pointsEarned: true,
         pointsReservation: { select: { status: true, points: true } },
+        // Lote ganado y su revocación: si se revocó menos de lo ganado, la
+        // diferencia son puntos que el cliente ya había usado (faltante).
+        pointsLot: { select: { earned: true, revokedAt: true } },
+        pointsMovements: { where: { type: "REVOKE" }, select: { points: true } },
 
         createdAt: true,
         updatedAt: true,

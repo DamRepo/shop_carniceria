@@ -78,6 +78,8 @@ interface Order {
   pointsDiscount?: number | null;
   pointsEarned?: number | null;
   pointsReservation?: { status: 'RESERVED' | 'USED' | 'RELEASED'; points: number } | null;
+  pointsLot?: { earned: number; revokedAt: string | null } | null;
+  pointsMovements?: { points: number }[];
 
   createdAt: string;
   items: {
@@ -142,6 +144,19 @@ function getStatusUi(status: string) {
     color: statusColors[safeStatus] ?? 'bg-muted text-muted-foreground',
     Icon: statusIcons[safeStatus] ?? Clock,
   };
+}
+
+// Valor de un punto en centavos. Igual a POINT_VALUE_CENTS de
+// lib/loyalty-points-lifecycle.ts, que no se importa acá porque arrastra Prisma
+// al bundle del cliente.
+const POINT_VALUE_CENTS_UI = 500;
+
+// Puntos ganados que se revocaron al cancelar. shortfall = los que el cliente
+// ya había usado y no se pudieron quitar (nunca se deja saldo negativo).
+function getPointsRevokeInfo(order: Order): { revoked: number; shortfall: number } | null {
+  if (!order.pointsLot?.revokedAt) return null;
+  const revoked = order.pointsMovements?.[0]?.points ?? 0;
+  return { revoked, shortfall: Math.max(0, order.pointsLot.earned - revoked) };
 }
 
 type MpVerifyFeedback = { tone: 'success' | 'warning' | 'error'; message: string };
@@ -418,6 +433,13 @@ export default function OrdenesAdmin() {
       }
       if (!res.ok) throw new Error(data?.error ?? 'Error al actualizar estado');
       toast.success('Estado actualizado');
+      // Cancelación de un pedido pagado cuyos puntos ganados ya se usaron.
+      if (typeof data?.pointsShortfall === 'number' && data.pointsShortfall > 0) {
+        toast.warning(
+          `${data.pointsShortfall} puntos ganados con este pedido ya se habían usado y no se pudieron quitar (${formatPrice(Number(data.pointsShortfallCents ?? 0))} en descuentos).`,
+          { duration: 12000 }
+        );
+      }
       fetchOrders();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al actualizar estado');
@@ -598,12 +620,29 @@ export default function OrdenesAdmin() {
                           <span>-{formatPrice(order.pointsDiscount ?? 0)}</span>
                         </div>
                       )}
-                      {Number(order.pointsEarned ?? 0) > 0 && (
-                        <div className="flex items-center justify-end gap-2">
-                          <span>Puntos ganados:</span>
-                          <span>{order.pointsEarned}</span>
-                        </div>
-                      )}
+                      {Number(order.pointsEarned ?? 0) > 0 && (() => {
+                        const revokeInfo = getPointsRevokeInfo(order);
+                        return (
+                          <>
+                            <div className="flex items-center justify-end gap-2">
+                              <span>Puntos ganados:</span>
+                              <span>
+                                {order.pointsEarned}
+                                {revokeInfo && ' (revocados)'}
+                              </span>
+                            </div>
+                            {revokeInfo && revokeInfo.shortfall > 0 && (
+                              <div className="flex items-start justify-end gap-1.5 text-xs font-medium text-amber-800">
+                                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span>
+                                  {revokeInfo.shortfall} ya se habían usado y no se pudieron quitar
+                                  ({formatPrice(revokeInfo.shortfall * POINT_VALUE_CENTS_UI)} en descuentos).
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       {Number(order.deliveryCost ?? 0) > 0 && (
                         <div className="flex items-center justify-end gap-2">
                           <span>Envío:</span>

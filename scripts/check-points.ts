@@ -303,6 +303,11 @@ async function main() {
   await settlePointsOnPaid(null, oQ.id);
   const rv1 = await revokePointsOnPaidCancel(null, oP.id);
   check("cancelar P (80 ya gastados) → quita 20, faltan 80", rv1.revoked === 20 && rv1.shortfall === 80 && rv1.restored === 0, rv1);
+  // Lo mismo que lee el admin (GET /api/admin/orders): ganados − REVOKE = faltante.
+  const pLot = await prisma.pointsLot.findUnique({ where: { sourceOrderId: oP.id }, select: { earned: true, revokedAt: true } });
+  const pRevoke = await prisma.pointsMovement.findUnique({ where: { orderId_type: { orderId: oP.id, type: "REVOKE" } } });
+  check("admin reconstruye el faltante: 100 ganados − 20 revocados = 80",
+    pLot?.revokedAt !== null && (pLot?.earned ?? 0) - (pRevoke?.points ?? 0) === 80, { pLot, revoke: pRevoke?.points });
   const balCancel = await balanceOf(cancel.id);
   const negLots = await prisma.pointsLot.count({ where: { userId: cancel.id, remaining: { lt: 0 } } });
   check("cancelar P → saldo 0, nunca negativo", balCancel === 0 && negLots === 0, { balCancel, negLots });
