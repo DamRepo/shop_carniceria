@@ -1,17 +1,19 @@
+import { formatPrice } from "@/lib/utils-format";
+
 type OrderItemEmail = {
   name: string;
   quantity: number;
-  unitPrice: number; // en centavos o número normal, según tu sistema
+  unitPrice: number; // centavos
 };
 
 export function orderConfirmationTemplate(params: {
   customerName?: string;
   orderId: string;
   items: OrderItemEmail[];
-  totalText: string; // por ejemplo "$12.500"
-  discountText?: string; // por ejemplo "-$1250.00"; se omite si no hay descuento
+  totalText: string; // formatPrice, por ejemplo "$ 12.500"
+  discountText?: string; // por ejemplo "-$ 1.250"; se omite si no hay descuento
   pointsUsed?: number; // puntos canjeados; se omite si no hubo canje
-  pointsDiscountText?: string; // por ejemplo "-$500.00"; se omite si no hubo canje
+  pointsDiscountText?: string; // por ejemplo "-$ 500"; se omite si no hubo canje
   pointsToEarn?: number; // puntos que gana al confirmarse el pago; se omite si es 0
   appUrl: string;
 }) {
@@ -25,7 +27,7 @@ export function orderConfirmationTemplate(params: {
     <tr>
       <td style="padding:10px; border-bottom:1px solid #eee;">${escapeHtml(it.name)}</td>
       <td style="padding:10px; border-bottom:1px solid #eee; text-align:center;">${it.quantity}</td>
-      <td style="padding:10px; border-bottom:1px solid #eee; text-align:right;">${formatMoney(it.unitPrice)}</td>
+      <td style="padding:10px; border-bottom:1px solid #eee; text-align:right;">${escapeHtml(formatPrice(it.unitPrice))}</td>
     </tr>
   `).join("");
 
@@ -100,11 +102,4 @@ function escapeHtml(input: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-
-// AJUSTAR: si tu sistema usa centavos, convertís acá
-function formatMoney(value: number) {
-  // placeholder simple
-  return `$${value}`;
 }

@@ -31,6 +31,7 @@ export async function sendOrderConfirmationEmail(args: {
   to: string;
   customerName?: string;
   orderId: string;
+  /** unitPrice en centavos; el template lo formatea como el resto del sitio. */
   items: { name: string; quantity: number; unitPrice: number }[];
   totalText: string;
   /** Línea de descuento de bienvenida ya formateada; solo si es > 0. */

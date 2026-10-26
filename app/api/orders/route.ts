@@ -9,6 +9,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getShippingCost, isValidShippingZone } from "@/lib/shipping";
 import { generateTransferCode, formatTransferAmount } from "@/lib/transfer-code";
 import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
+import { formatPrice } from "@/lib/utils-format";
 import {
   computeWelcomeQuote,
   isLoyaltyEnabled,
@@ -540,16 +541,17 @@ export async function POST(request: Request) {
           items: orderItems.map((it) => ({
             name: it.itemNameSnapshot,
             quantity: it.quantity,
-            unitPrice: it.unitPrice / 100,
+            unitPrice: it.unitPrice,
           })),
-          totalText: `$${(totalCents / 100).toFixed(2)}`,
+          // Mismo formato que el resto del sitio ("$ 1.000", sin decimales).
+          totalText: formatPrice(totalCents),
           ...(welcomeDiscountCents > 0
-            ? { discountText: `-$${(welcomeDiscountCents / 100).toFixed(2)}` }
+            ? { discountText: `-${formatPrice(welcomeDiscountCents)}` }
             : {}),
           ...(pointsDiscountCents > 0
             ? {
                 pointsUsed: pointsRedeemed,
-                pointsDiscountText: `-$${(pointsDiscountCents / 100).toFixed(2)}`,
+                pointsDiscountText: `-${formatPrice(pointsDiscountCents)}`,
               }
             : {}),
           ...(pointsToEarn > 0 ? { pointsToEarn } : {}),
