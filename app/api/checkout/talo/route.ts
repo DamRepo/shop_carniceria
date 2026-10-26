@@ -19,6 +19,14 @@ import {
   WELCOME_ALREADY_CLAIMED_MESSAGE,
   WelcomeBenefitError,
 } from "@/lib/loyalty";
+import {
+  computeMaxPointsQuote,
+  isPointsEnabled,
+  PointsError,
+  pointsRejectionMessage,
+  releasePoints,
+  reservePoints,
+} from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,6 +51,9 @@ type Body = {
 
   /** Intención de usar la bienvenida. El monto lo calcula siempre el servidor. */
   applyWelcome?: boolean;
+
+  /** Intención de usar puntos. Cuántos lo decide siempre el servidor. */
+  usePoints?: boolean;
 };
 
 type ProductPick = {
@@ -442,7 +453,27 @@ export async function POST(req: Request) {
       welcomeDiscountCents = welcomeQuote.discountCents;
     }
 
-    const totalCents = subtotalCents - welcomeDiscountCents + deliveryCostCents;
+    // Puntos: el cliente solo pide usarlos; el servidor decide cuántos (máximo
+    // canjeable con el saldo vigente). Con el flag apagado usePoints se ignora.
+    let pointsRedeemed = 0;
+    let pointsDiscountCents = 0;
+    if (body.usePoints === true && isPointsEnabled()) {
+      const pointsQuote = await computeMaxPointsQuote({
+        userId,
+        subtotalCents,
+        welcomeDiscountCents,
+        paymentMethod: "TALO_PAY",
+      });
+      // El cliente vio un total con puntos: nunca cobrarle otro en silencio.
+      // Se corta antes de crear orden o reservar stock; el catch responde 409.
+      if (!pointsQuote.ok) {
+        throw new PointsError(pointsRejectionMessage(pointsQuote.reason), "CONFLICT");
+      }
+      pointsRedeemed = pointsQuote.points;
+      pointsDiscountCents = pointsQuote.discountCents;
+    }
+
+    const totalCents = subtotalCents - welcomeDiscountCents - pointsDiscountCents + deliveryCostCents;
 
     if (totalCents <= 0) {
       return NextResponse.json({ error: "El total del pedido es inválido" }, { status: 400 });
@@ -509,6 +540,8 @@ export async function POST(req: Request) {
           deliveryCost: deliveryCostCents,
           total: totalCents,
           welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
+          pointsRedeemed: pointsRedeemed > 0 ? pointsRedeemed : null,
+          pointsDiscount: pointsDiscountCents > 0 ? pointsDiscountCents : null,
 
           items: {
             create: itemsSnapshot.map((it) => ({
@@ -547,6 +580,8 @@ export async function POST(req: Request) {
           deliveryCost: deliveryCostCents,
           total: totalCents,
           welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
+          pointsRedeemed: pointsRedeemed > 0 ? pointsRedeemed : null,
+          pointsDiscount: pointsDiscountCents > 0 ? pointsDiscountCents : null,
 
           status: "WAITING_TALO",
           orderId: order.id,
@@ -559,6 +594,17 @@ export async function POST(req: Request) {
       // queda orden ni stock reservado. Se mapea a 409 en el catch de afuera.
       if (welcomeDiscountCents > 0 && userId) {
         await reserveWelcome(tx, { userId, orderId: order.id, discountCents: welcomeDiscountCents });
+      }
+
+      // Igual que la bienvenida: si otra pestaña tomó los puntos, CONFLICT
+      // corta TODA la transacción y el catch de afuera responde 409.
+      if (pointsRedeemed > 0 && userId) {
+        await reservePoints(tx, {
+          userId,
+          orderId: order.id,
+          points: pointsRedeemed,
+          discountCents: pointsDiscountCents,
+        });
       }
 
       return { order, cs };
@@ -585,8 +631,9 @@ export async function POST(req: Request) {
             where: { id: order.id },
             data: { paymentStatus: "FAILED", taloStatus: reason, status: "CANCELLED" },
           });
-          // La bienvenida vuelve a estar disponible para reintentar.
+          // La bienvenida y los puntos vuelven a estar disponibles para reintentar.
           await releaseWelcome(tx, order.id);
+          await releasePoints(tx, order.id);
         })
         .catch((err: any) =>
           console.error("Error en rollback de pago Talo:", err, { reason })
@@ -669,10 +716,14 @@ export async function POST(req: Request) {
       expiresAt: expiresAt.toISOString(),
       total: totalCents,
       ...(welcomeDiscountCents > 0 ? { welcomeDiscount: welcomeDiscountCents } : {}),
+      ...(pointsRedeemed > 0 ? { pointsRedeemed, pointsDiscount: pointsDiscountCents } : {}),
     });
   } catch (e: unknown) {
     if (e instanceof WelcomeBenefitError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+    }
+    if (e instanceof PointsError) {
+      return NextResponse.json({ error: e.message, code: `POINTS_${e.code}` }, { status: 409 });
     }
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error("[talo/checkout] Unhandled error:", {
