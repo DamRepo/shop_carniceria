@@ -10,10 +10,12 @@ import type { PaymentMethod, PaymentStatus, OrderStatus, UserRole } from "@prism
 import { prisma } from "@/lib/db";
 import {
   awardPointsOnPaid,
+  computeCheckoutPointsPreview,
   computeMaxPointsQuote,
   computePointsEarned,
   computePointsQuote,
   getPointsBalance,
+  getPointsHistory,
   isPointsEnabled,
   maxRedeemablePoints,
   PointsError,
@@ -469,6 +471,34 @@ async function main() {
   check("Talo vencido → libera, saldo 200", (await balanceOf(cash.id)) === 200);
   check("Talo vencido y después pago tardío → no acredita (cancelado)",
     (await awardPointsOnPaid(null, oTaloExp.id)) === 0);
+
+  // 18) Vista previa del checkout (POST /api/loyalty/points-quote)
+  const preview = (extra: Partial<Parameters<typeof computeCheckoutPointsPreview>[0]> = {}) =>
+    computeCheckoutPointsPreview({ userId: maxU.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH", ...extra });
+  const pv1 = await preview();
+  check("preview saldo 135 → canjea 130, gana 93 usando / 100 sin usar",
+    pv1.canRedeem && pv1.maxPoints === 130 && pv1.discountCents === 65_000 && pv1.balance === 135 &&
+      pv1.balanceCents === 67_500 && pv1.earnIfRedeem === 93 && pv1.earnIfNotRedeem === 100, pv1);
+  const pv2 = await preview({ userId: poor.id });
+  check("preview saldo 90 → no canjea, faltan 10, igual gana 100",
+    !pv2.canRedeem && pv2.reason === "BELOW_MINIMUM" && pv2.missingPoints === 10 && pv2.earnIfNotRedeem === 100, pv2);
+  const pv3 = await preview({ paymentMethod: "MERCADO_PAGO" });
+  check("preview Mercado Pago → no canjea ni gana", !pv3.canRedeem && pv3.reason === "METHOD_NOT_ALLOWED" && pv3.earnIfNotRedeem === 0, pv3);
+  const pv4 = await preview({ welcomeDiscountCents: 100_000 });
+  check("preview con bienvenida → WITH_WELCOME, no gana", pv4.reason === "WITH_WELCOME" && pv4.earnIfNotRedeem === 0, pv4);
+  const pv5 = await preview({ userId: null });
+  check("preview invitado → saldo 0, no gana", pv5.balance === 0 && pv5.reason === "NOT_LOGGED_IN" && pv5.earnIfNotRedeem === 0, pv5);
+
+  // 19) Historial (GET /api/loyalty/points)
+  const hFifo = await getPointsHistory(fifo.id);
+  check("historial muestra el lote vencido (500) y no las reservas internas",
+    hFifo.some((h) => h.kind === "EXPIRED" && h.points === 500) && hFifo.every((h) => h.kind !== ("RESERVE" as string)), hFifo);
+  const hCash = await getPointsHistory(cash.id);
+  const kinds = new Set(hCash.map((h) => h.kind));
+  check("historial con ganados, usados, devueltos y revocados",
+    kinds.has("EARNED") && kinds.has("USED") && kinds.has("RESTORED") && kinds.has("REVOKED"), [...kinds]);
+  check("historial ordenado del más nuevo al más viejo",
+    hCash.every((h, i) => i === 0 || hCash[i - 1].date.getTime() >= h.date.getTime()));
 }
 
 async function cleanup() {

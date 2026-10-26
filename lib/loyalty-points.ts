@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
+  computePointsEarned,
   isPointsEnabled,
   isPointsPaymentMethod,
   MAX_COVER_PERCENT,
@@ -356,4 +357,126 @@ export async function reservePoints(
   await tx.pointsMovement.create({
     data: { userId, orderId, type: "RESERVE", points },
   });
+}
+
+// --- Lectura para pantallas -------------------------------------------------
+
+export interface CheckoutPointsPreview {
+  /** Saldo vigente libre. */
+  balance: number;
+  /** Equivalente del saldo en pesos (centavos). */
+  balanceCents: number;
+  canRedeem: boolean;
+  /** Máximo canjeable en este carrito (0 si no se puede). */
+  maxPoints: number;
+  discountCents: number;
+  reason: PointsIneligibleReason | null;
+  /** Puntos que faltan para llegar al mínimo de canje (0 si ya llega). */
+  missingPoints: number;
+  /** Puntos que ganaría si usa sus puntos / si no los usa (sin envío). */
+  earnIfRedeem: number;
+  earnIfNotRedeem: number;
+}
+
+/** Motivos por los que esta compra tampoco suma puntos. */
+const NO_EARN_REASONS: readonly PointsIneligibleReason[] = [
+  "DISABLED",
+  "NOT_LOGGED_IN",
+  "USER_NOT_FOUND",
+  "NOT_CUSTOMER",
+  "METHOD_NOT_ALLOWED",
+  "WITH_WELCOME",
+];
+
+/**
+ * Vista previa de puntos para la tarjeta del checkout. Solo lee. El subtotal
+ * tiene que venir calculado en el servidor (computeCartSubtotalCents).
+ */
+export async function computeCheckoutPointsPreview(
+  input: Omit<PointsQuoteInput, "requestedPoints">,
+  db?: DbClient
+): Promise<CheckoutPointsPreview> {
+  const client = db ?? prisma;
+  const [quote, balance] = await Promise.all([
+    computeMaxPointsQuote(input, client),
+    input.userId ? getPointsBalance(input.userId, client) : Promise.resolve({ available: 0 }),
+  ]);
+  const reason = quote.ok ? null : quote.reason;
+  const discountCents = quote.ok ? quote.discountCents : 0;
+  const earns = reason === null || !NO_EARN_REASONS.includes(reason);
+  const productCash = input.subtotalCents - input.welcomeDiscountCents;
+
+  return {
+    balance: balance.available,
+    balanceCents: pointsToCents(balance.available),
+    canRedeem: quote.ok,
+    maxPoints: quote.ok ? quote.points : 0,
+    discountCents,
+    reason,
+    missingPoints:
+      reason === "BELOW_MINIMUM" ? Math.max(0, MIN_BALANCE_TO_REDEEM - balance.available) : 0,
+    earnIfRedeem: earns ? computePointsEarned(productCash - discountCents) : 0,
+    earnIfNotRedeem: earns ? computePointsEarned(productCash) : 0,
+  };
+}
+
+export type PointsHistoryKind = "EARNED" | "USED" | "EXPIRED" | "REVOKED" | "RESTORED";
+
+export interface PointsHistoryEntry {
+  kind: PointsHistoryKind;
+  points: number;
+  date: Date;
+  orderNumber: string | null;
+}
+
+const MOVEMENT_KIND: Partial<Record<string, PointsHistoryKind>> = {
+  EARN: "EARNED",
+  SETTLE: "USED",
+  REVOKE: "REVOKED",
+  RESTORE: "RESTORED",
+};
+
+/**
+ * Historial reciente para el perfil: ganados, usados, devueltos, revocados y
+ * vencidos (los vencidos no son movimientos: salen de los lotes vencidos con
+ * puntos sin usar). Las reservas y liberaciones son internas y no se muestran.
+ */
+export async function getPointsHistory(
+  userId: string,
+  limit = 20,
+  db?: DbClient,
+  now: Date = new Date()
+): Promise<PointsHistoryEntry[]> {
+  const client = db ?? prisma;
+  const [movements, expiredLots] = await Promise.all([
+    client.pointsMovement.findMany({
+      where: { userId, type: { in: ["EARN", "SETTLE", "REVOKE", "RESTORE"] }, points: { gt: 0 } },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { type: true, points: true, createdAt: true, order: { select: { orderNumber: true } } },
+    }),
+    client.pointsLot.findMany({
+      where: { userId, revokedAt: null, expiresAt: { lte: now }, remaining: { gt: 0 } },
+      orderBy: { expiresAt: "desc" },
+      take: limit,
+      select: { remaining: true, expiresAt: true, sourceOrder: { select: { orderNumber: true } } },
+    }),
+  ]);
+
+  const entries: PointsHistoryEntry[] = [];
+  for (const m of movements) {
+    const kind = MOVEMENT_KIND[m.type];
+    if (kind) {
+      entries.push({ kind, points: m.points, date: m.createdAt, orderNumber: m.order?.orderNumber ?? null });
+    }
+  }
+  for (const l of expiredLots) {
+    entries.push({
+      kind: "EXPIRED",
+      points: l.remaining,
+      date: l.expiresAt,
+      orderNumber: l.sourceOrder?.orderNumber ?? null,
+    });
+  }
+  return entries.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, limit);
 }
