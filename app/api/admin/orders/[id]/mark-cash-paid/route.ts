@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatMoney, sendTelegramMessage } from "@/lib/telegram";
 import { settleWelcomeOnPaid } from "@/lib/loyalty";
+import { awardPointsOnPaid, settlePointsOnPaid } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -114,8 +115,13 @@ export async function POST(
         }));
       }
 
-      // Solo el request que ganó el guard (count > 0) consume la bienvenida.
-      if (count > 0) await settleWelcomeOnPaid(tx, params.id);
+      // Solo el request que ganó el guard (count > 0) consume la bienvenida,
+      // consume el canje de puntos y acredita los puntos ganados.
+      if (count > 0) {
+        await settleWelcomeOnPaid(tx, params.id);
+        await settlePointsOnPaid(tx, params.id);
+        await awardPointsOnPaid(tx, params.id);
+      }
 
       return count;
     });
