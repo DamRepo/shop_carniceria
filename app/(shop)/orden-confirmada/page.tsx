@@ -106,6 +106,12 @@ function OrderConfirmedContent() {
   const address = searchParams?.get?.("address");
   const addressDetails = searchParams?.get?.("addressDetails");
 
+  // Puntos a ganar: solo para mostrar (lo pone el checkout con el flag de
+  // puntos prendido). Se acreditan de verdad cuando se marca el cobro.
+  const pointsParam = Number(searchParams?.get?.("points") ?? 0);
+  const pointsToEarn =
+    Number.isInteger(pointsParam) && pointsParam > 0 && pointsParam <= 1_000_000 ? pointsParam : 0;
+
   const [guestContact, setGuestContact] = useState<{ name: string; email: string; phone: string } | null>(null);
   const { hours: storeHours } = useStoreHours();
 
@@ -183,6 +189,12 @@ function OrderConfirmedContent() {
               </div>
               <p className="mt-2 font-mono text-2xl font-bold">{displayCode}</p>
             </div>
+          )}
+
+          {pointsToEarn > 0 && (
+            <p className="text-sm font-medium text-green-700 dark:text-green-400">
+              Ganás {pointsToEarn.toLocaleString("es-AR")} {pointsToEarn === 1 ? "punto" : "puntos"} cuando se confirme tu pago.
+            </p>
           )}
 
           {isBankTransfer && (

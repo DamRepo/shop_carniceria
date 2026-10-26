@@ -16,7 +16,12 @@ import {
   ShieldCheck,
   User,
   ChevronRight,
+  Coins,
 } from "lucide-react";
+import {
+  ProfilePointsSection,
+  type ProfilePointsData,
+} from "@/components/loyalty/profile-points-section";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,21 +110,32 @@ const NAV_ITEMS = [
   { id: "cuenta", label: "Mi cuenta", Icon: ShieldCheck },
 ] as const;
 
+// Solo se agrega con el flag de puntos prendido (points != null).
+const POINTS_NAV_ITEM = { id: "mis-puntos", label: "Mis puntos", Icon: Coins } as const;
+
 const MAX_BYTES = 2 * 1024 * 1024;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ProfileClient({ user }: { user: UserProfile }) {
+export function ProfileClient({
+  user,
+  points = null,
+}: {
+  user: UserProfile;
+  points?: ProfilePointsData | null;
+}) {
   const { update } = useSession();
   const badge = roleInfo(user.role);
+  const hasPoints = points !== null;
+  const navItems = hasPoints ? [POINTS_NAV_ITEM, ...NAV_ITEMS] : NAV_ITEMS;
 
   // ── Active section (IntersectionObserver) ────────────────────────────────
-  const [activeSection, setActiveSection] = useState<string>("datos");
+  const [activeSection, setActiveSection] = useState<string>(hasPoints ? "mis-puntos" : "datos");
 
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
 
-    NAV_ITEMS.forEach(({ id }) => {
+    (hasPoints ? [POINTS_NAV_ITEM, ...NAV_ITEMS] : NAV_ITEMS).forEach(({ id }) => {
       const el = document.getElementById(id);
       if (!el) return;
       const obs = new IntersectionObserver(
@@ -133,7 +149,7 @@ export function ProfileClient({ user }: { user: UserProfile }) {
     });
 
     return () => observers.forEach((o) => o.disconnect());
-  }, []);
+  }, [hasPoints]);
 
   function scrollToSection(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -516,7 +532,7 @@ export function ProfileClient({ user }: { user: UserProfile }) {
 
                 {/* Internal nav */}
                 <nav className="space-y-1">
-                  {NAV_ITEMS.map(({ id, label, Icon }) => (
+                  {navItems.map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
@@ -539,6 +555,13 @@ export function ProfileClient({ user }: { user: UserProfile }) {
 
           {/* ── Right content ── */}
           <div className="flex-1 space-y-6 min-w-0">
+
+            {/* ── Sección: Mis puntos (solo con el flag prendido) ── */}
+            {points && (
+              <section id="mis-puntos" className="scroll-mt-28">
+                <ProfilePointsSection points={points} />
+              </section>
+            )}
 
             {/* ── Sección: Datos personales ── */}
             <section id="datos" className="scroll-mt-28">

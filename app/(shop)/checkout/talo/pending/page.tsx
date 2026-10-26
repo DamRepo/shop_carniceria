@@ -34,6 +34,8 @@ type TaloStatusResponse = {
   expiresAt: string | null;
   total: number; // centavos — se muestra con formatPrice()
   welcomeDiscount?: number; // centavos; 0 = sin descuento
+  pointsDiscount?: number; // centavos; solo si se canjearon puntos
+  pointsEarned?: number; // solo cuando el pago se confirmó y sumó puntos
   orderId: string | null;
   orderNumber: string | null;
   orderStatus: string | null;
@@ -99,6 +101,11 @@ function TaloPendingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const csId = searchParams.get("csId");
+  // Puntos a ganar: solo para mostrar (lo pone el checkout con el flag de
+  // puntos prendido). Se acreditan de verdad cuando se confirma el pago.
+  const pointsParam = Number(searchParams.get("points") ?? 0);
+  const pointsToEarn =
+    Number.isInteger(pointsParam) && pointsParam > 0 && pointsParam <= 1_000_000 ? pointsParam : 0;
 
   const clearCart = useCartStore((s) => s.clearCart);
   const clearCheckout = useCheckoutStore((s) => s.clear);
@@ -247,6 +254,11 @@ function TaloPendingContent() {
             <p className="text-sm text-muted-foreground">
               Recibimos tu transferencia. Ya estamos preparando tu pedido.
             </p>
+            {(data.pointsEarned ?? 0) > 0 && (
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                Sumaste {(data.pointsEarned ?? 0).toLocaleString("es-AR")} {data.pointsEarned === 1 ? "punto" : "puntos"}.
+              </p>
+            )}
             <Button asChild className="w-full">
               <a href={`/orden-confirmada?orderNumber=${data.orderNumber ?? ""}&orderId=${data.orderId ?? ""}`}>
                 Ver confirmación
@@ -363,6 +375,16 @@ function TaloPendingContent() {
             {(data?.welcomeDiscount ?? 0) > 0 && (
               <p className="mt-1 text-xs text-green-700 dark:text-green-400">
                 Incluye descuento de bienvenida (10%): -{formatPrice(data?.welcomeDiscount ?? 0)}
+              </p>
+            )}
+            {(data?.pointsDiscount ?? 0) > 0 && (
+              <p className="mt-1 text-xs text-green-700 dark:text-green-400">
+                Incluye descuento por puntos: -{formatPrice(data?.pointsDiscount ?? 0)}
+              </p>
+            )}
+            {pointsToEarn > 0 && (
+              <p className="mt-2 text-sm font-medium text-green-700 dark:text-green-400">
+                Ganás {pointsToEarn.toLocaleString("es-AR")} {pointsToEarn === 1 ? "punto" : "puntos"} cuando se confirme tu pago.
               </p>
             )}
           </div>

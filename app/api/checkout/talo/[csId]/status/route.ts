@@ -20,8 +20,9 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
       taloExpiresAt: true,
       total: true,
       welcomeDiscount: true,
+      pointsDiscount: true,
       orderId: true,
-      order: { select: { orderNumber: true, status: true } },
+      order: { select: { orderNumber: true, status: true, pointsEarned: true } },
     },
   });
 
@@ -42,5 +43,8 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
     // Estado de la ORDEN (no de la sesión): el admin puede cancelarla sin que
     // la CheckoutSession cambie, y el cliente que está esperando tiene que enterarse.
     orderStatus: cs.order?.status ?? null,
+    // Puntos: solo si hubo canje / se acreditaron (sin puntos la respuesta queda igual).
+    ...(cs.pointsDiscount ? { pointsDiscount: cs.pointsDiscount } : {}),
+    ...(cs.order?.pointsEarned ? { pointsEarned: cs.order.pointsEarned } : {}),
   });
 }

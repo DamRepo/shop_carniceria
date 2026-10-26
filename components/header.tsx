@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { formatPrice } from "@/lib/utils-format";
+import { HeaderPointsBadge, useHeaderPointsBalance } from "@/components/loyalty/header-points-badge";
 
 type MenuItem =
   | { type: "link"; href: string; label: string }
@@ -103,8 +104,9 @@ function getBoolParamFromHref(href: string, key: string): boolean {
   return getParamFromHref(href, key) === "true";
 }
 
-export function Header() {
+export function Header({ pointsEnabled = false }: { pointsEnabled?: boolean }) {
   const [mounted, setMounted] = useState(false);
+  const pointsBalance = useHeaderPointsBalance(pointsEnabled);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const totalItems = useCartStore((state) => state.getTotalItems());
@@ -413,6 +415,8 @@ export function Header() {
                 )}
               </div>
 
+              <HeaderPointsBadge balance={pointsBalance} />
+
               {/* Carrito */}
               <Link href="/carrito" className="shrink-0">
                 <Button
@@ -677,6 +681,8 @@ export function Header() {
                   </>
                 )}
               </div>
+
+              <HeaderPointsBadge balance={pointsBalance} />
 
               {/* Carrito (desktop) */}
               <Link href="/carrito">
