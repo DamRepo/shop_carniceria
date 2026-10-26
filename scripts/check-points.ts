@@ -10,12 +10,14 @@ import type { PaymentMethod, PaymentStatus, OrderStatus, UserRole } from "@prism
 import { prisma } from "@/lib/db";
 import {
   awardPointsOnPaid,
+  computeMaxPointsQuote,
   computePointsEarned,
   computePointsQuote,
   getPointsBalance,
   isPointsEnabled,
   maxRedeemablePoints,
   PointsError,
+  pointsRejectionMessage,
   pointsToCents,
   releasePoints,
   reservePoints,
@@ -334,7 +336,108 @@ async function main() {
   check("flag off → settle igual corre", (await settlePointsOnPaid(null, oT.id)) === 1);
   check("flag off → revoke igual corre", (await revokePointsOnPaidCancel(null, oT.id)).restored === 100);
   check("flag off → saldo vuelve a 300", (await balanceOf(off.id)) === 300);
+  const mOff = await computeMaxPointsQuote({ userId: off.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH" });
+  check("flag off → cotización del máximo DISABLED", !mOff.ok && mOff.reason === "DISABLED", mOff);
   setFlag(true);
+
+  // 14) Cotización del máximo (lo que usan las rutas con usePoints: true)
+  const maxU = await createUser("max");
+  await createLot(maxU.id, 135, 10);
+  const maxQuote = (extra: Partial<Parameters<typeof computeMaxPointsQuote>[0]> = {}) =>
+    computeMaxPointsQuote({ userId: maxU.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH", ...extra });
+  const m1 = await maxQuote();
+  check("máximo con saldo 135 → 130 puntos ($650)", m1.ok && m1.points === 130 && m1.discountCents === 65_000, m1);
+  const m2 = await maxQuote({ subtotalCents: 30_000 });
+  check("máximo sobre $300 → 30 puntos (tope 50%)", m2.ok && m2.points === 30, m2);
+  const m3 = await maxQuote({ subtotalCents: 1_000 });
+  check("máximo sobre $10 → EXCEEDS_CAP", !m3.ok && m3.reason === "EXCEEDS_CAP", m3);
+  const m4 = await maxQuote({ paymentMethod: "MERCADO_PAGO" });
+  check("máximo con Mercado Pago → METHOD_NOT_ALLOWED", !m4.ok && m4.reason === "METHOD_NOT_ALLOWED", m4);
+  const m5 = await maxQuote({ welcomeDiscountCents: 100_000 });
+  check("máximo con bienvenida → WITH_WELCOME", !m5.ok && m5.reason === "WITH_WELCOME", m5);
+  const m6 = await maxQuote({ userId: poor.id });
+  check("máximo con saldo 90 → BELOW_MINIMUM", !m6.ok && m6.reason === "BELOW_MINIMUM", m6);
+  check("mensaje de rechazo para el cliente", pointsRejectionMessage("BELOW_MINIMUM").includes("100"));
+
+  // 15) Flujo efectivo completo: pedido con puntos → cobrado → acredita
+  //     sobre subtotal − puntos (mismas llamadas que /api/orders y mark-cash-paid).
+  const cash = await createUser("cash");
+  await createLot(cash.id, 200, 10);
+  const cq = await computeMaxPointsQuote({ userId: cash.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH" });
+  const cashPoints = cq.ok ? cq.points : 0;
+  const cashDiscount = cq.ok ? cq.discountCents : 0;
+  const oCash = await prisma.$transaction(async (tx) => {
+    const o = await tx.order.create({
+      data: {
+        userId: cash.id, customerName: "QA Points", phone: "0", deliveryMethod: "DELIVERY",
+        paymentMethod: "CASH", status: "PENDING", subtotal: 1_000_000, deliveryCost: 150_000,
+        total: 1_000_000 - cashDiscount + 150_000,
+        pointsRedeemed: cashPoints, pointsDiscount: cashDiscount,
+      },
+    });
+    await reservePoints(tx, { userId: cash.id, orderId: o.id, points: cashPoints, discountCents: cashDiscount });
+    return o;
+  });
+  created.orderIds.push(oCash.id);
+  check("efectivo: canjea 200 puntos, total = $10.000 − $1.000 + envío", cashPoints === 200 && oCash.total === 1_050_000, { cashPoints, total: oCash.total });
+  check("efectivo: saldo reservado → 0", (await balanceOf(cash.id)) === 0);
+
+  const markPaid = (orderId: string) =>
+    prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, paymentStatus: { not: "PAID" }, status: { not: "CANCELLED" } },
+        data: { paymentStatus: "PAID", paidAt: new Date() },
+      });
+      if (count > 0) {
+        await settlePointsOnPaid(tx, orderId);
+        await awardPointsOnPaid(tx, orderId);
+      }
+      return count;
+    });
+  const paidResults = await Promise.all([markPaid(oCash.id), markPaid(oCash.id)]);
+  const cashLots = await prisma.pointsLot.findMany({ where: { sourceOrderId: oCash.id } });
+  const cashRes = await prisma.pointsReservation.findUnique({ where: { orderId: oCash.id } });
+  check("efectivo: doble 'marcar cobrado' → un solo guard gana",
+    paidResults.filter((c) => c > 0).length === 1, paidResults);
+  check("efectivo: gana 90 puntos ($9.000 = $10.000 − $1.000, sin envío), un solo lote",
+    cashLots.length === 1 && cashLots[0]?.earned === 90, cashLots.map((l) => l.earned));
+  check("efectivo: canje USED y saldo 90", cashRes?.status === "USED" && (await balanceOf(cash.id)) === 90, cashRes?.status);
+
+  // 16) Cancelación del admin (mismas llamadas que PATCH /api/admin/orders/[id])
+  const adminCancel = (orderId: string) =>
+    prisma.$transaction(async (tx) => {
+      await releasePoints(tx, orderId);
+      return revokePointsOnPaidCancel(tx, orderId);
+    });
+  const cancelPaid = await adminCancel(oCash.id);
+  check("cancelar efectivo pagado → devuelve 200 usados y quita 90 ganados",
+    cancelPaid.restored === 200 && cancelPaid.revoked === 90 && (await balanceOf(cash.id)) === 200, cancelPaid);
+  const cancelAgain = await adminCancel(oCash.id);
+  check("cancelar dos veces → no cambia nada",
+    cancelAgain.restored === 0 && cancelAgain.revoked === 0 && (await balanceOf(cash.id)) === 200, cancelAgain);
+
+  const oUnpaid = await createOrder({ userId: cash.id });
+  await reserve(cash.id, oUnpaid.id, 100);
+  const cancelUnpaid = await adminCancel(oUnpaid.id);
+  const unpaidRes = await prisma.pointsReservation.findUnique({ where: { orderId: oUnpaid.id } });
+  check("cancelar sin pagar → libera (RELEASED), revoke no hace nada",
+    unpaidRes?.status === "RELEASED" && cancelUnpaid.restored === 0 && cancelUnpaid.revoked === 0 && (await balanceOf(cash.id)) === 200,
+    { status: unpaidRes?.status, cancelUnpaid });
+
+  // 17) Talo vencido con reserva (mismas llamadas que la rama EXPIRED)
+  const oTaloExp = await createOrder({ userId: cash.id, paymentMethod: "TALO_PAY" });
+  await reserve(cash.id, oTaloExp.id, 100);
+  check("Talo vencido: saldo reservado → 100", (await balanceOf(cash.id)) === 100);
+  await prisma.$transaction(async (tx) => {
+    await tx.order.updateMany({
+      where: { id: oTaloExp.id, paymentStatus: { not: "PAID" } },
+      data: { paymentStatus: "FAILED", status: "CANCELLED" },
+    });
+    await releasePoints(tx, oTaloExp.id);
+  });
+  check("Talo vencido → libera, saldo 200", (await balanceOf(cash.id)) === 200);
+  check("Talo vencido y después pago tardío → no acredita (cancelado)",
+    (await awardPointsOnPaid(null, oTaloExp.id)) === 0);
 }
 
 async function cleanup() {
