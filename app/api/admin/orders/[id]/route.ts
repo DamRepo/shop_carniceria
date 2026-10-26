@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { toStockQty } from "@/lib/stock-units";
 import { releaseWelcome } from "@/lib/loyalty";
+import { releasePoints, revokePointsOnPaidCancel } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -148,6 +149,15 @@ export async function PATCH(
         // Libera la bienvenida si estaba RESERVED (pago no confirmado). Si ya se
         // pagó quedó USED y no se toca. Sin filas para la orden es un no-op.
         await releaseWelcome(tx, orderId);
+
+        // Puntos: se llaman las dos sin mirar current.paymentStatus (puede estar
+        // desactualizado si el cobro entró recién). Cada una actúa solo en su
+        // caso y es no-op en el otro:
+        // - releasePoints: canje RESERVED (sin pagar) → RELEASED, vuelve al saldo.
+        // - revokePointsOnPaidCancel: pedido pagado → devuelve el canje USED y
+        //   quita los puntos ganados por el pedido hasta donde alcance.
+        await releasePoints(tx, orderId);
+        await revokePointsOnPaidCancel(tx, orderId);
 
         // MERCADO_PAGO/TALO_PAY reservan stock en `reservedStock` al crear el
         // checkout, y recién descuentan `stock` (junto con `reservedStock`) al

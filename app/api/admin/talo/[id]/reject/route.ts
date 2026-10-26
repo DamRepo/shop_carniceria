@@ -10,6 +10,7 @@ import {
   findCheckoutSessionForOrder,
 } from "@/lib/talo-payment-processor";
 import { releaseWelcome } from "@/lib/loyalty";
+import { releasePoints } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -101,6 +102,7 @@ export async function PATCH(
 
       await releaseReservation(tx, cs);
       await releaseWelcome(tx, order.id);
+      await releasePoints(tx, order.id);
 
       await tx.checkoutSession.update({
         where: { id: cs.id },

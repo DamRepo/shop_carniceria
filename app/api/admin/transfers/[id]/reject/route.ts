@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { sendTransferRejectedEmail } from "@/lib/mail/actions";
 import { formatTransferAmount } from "@/lib/transfer-code";
 import { sendTelegramMessage } from "@/lib/telegram";
+import { releasePoints } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,6 +88,10 @@ export async function PATCH(
       });
 
       if (result.count === 0) return false;
+
+      // Hoy la transferencia manual no admite puntos (no-op); se libera igual
+      // por si en el futuro se habilita, para no dejar reservas colgadas.
+      await releasePoints(tx, orderId);
 
       const incByProductId = new Map<string, number>();
       const incByComboId = new Map<string, number>();
