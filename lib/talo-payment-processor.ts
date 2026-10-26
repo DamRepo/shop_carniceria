@@ -6,6 +6,7 @@ import { confirmComboSale, getComboReserveQty, releaseComboReservation } from "@
 // lib/loyalty-lifecycle (no lib/loyalty): este módulo corre también en el cron
 // de reconciliación fuera de Next.js, donde "server-only" rompe.
 import { releaseWelcome, settleWelcomeOnPaid } from "@/lib/loyalty-lifecycle";
+import { awardPointsOnPaid, releasePoints, settlePointsOnPaid } from "@/lib/loyalty-points-lifecycle";
 
 /**
  * Procesa la confirmación real de un pago de Talo. Es la ÚNICA función que
@@ -209,8 +210,11 @@ export async function finalizeTaloOrderAsPaid(params: {
       throw new Error("ALREADY_PROCESSED");
     }
 
-    // Solo la llamada que ganó el guard (count > 0) consume la bienvenida.
+    // Solo la llamada que ganó el guard (count > 0) consume la bienvenida,
+    // consume el canje de puntos y acredita los puntos ganados.
     await settleWelcomeOnPaid(tx, orderId);
+    await settlePointsOnPaid(tx, orderId);
+    await awardPointsOnPaid(tx, orderId);
 
     for (const it of items) {
       if (it.comboId) {
@@ -547,6 +551,7 @@ export async function processTaloPayment(paymentId: string): Promise<TaloProcess
 
       await releaseReservation(tx, cs);
       await releaseWelcome(tx, order.id);
+      await releasePoints(tx, order.id);
 
       await tx.checkoutSession.update({
         where: { id: cs.id },
