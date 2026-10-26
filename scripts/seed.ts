@@ -146,6 +146,11 @@ async function devReset() {
   await prisma.orderItem.deleteMany();
   // WelcomeBenefit referencia Order con ON DELETE RESTRICT: borrar primero.
   await prisma.welcomeBenefit.deleteMany();
+  // Tablas de puntos: también ON DELETE RESTRICT contra Order/User. Orden por FK.
+  await prisma.pointsReservationAllocation.deleteMany();
+  await prisma.pointsReservation.deleteMany();
+  await prisma.pointsMovement.deleteMany();
+  await prisma.pointsLot.deleteMany();
   await prisma.order.deleteMany();
   await prisma.product.deleteMany();
 

@@ -137,6 +137,10 @@ model User {
   resetTokens      PasswordResetToken[]
   welcomeBenefit   WelcomeBenefit?
 
+  pointsLots         PointsLot[]
+  pointsReservations PointsReservation[]
+  pointsMovements    PointsMovement[]
+
   @@index([email])
 }
 
@@ -199,6 +203,12 @@ model Order {
   // Descuento de bienvenida aplicado (centavos). null = sin descuento.
   welcomeDiscount Int?
 
+  // Puntos canjeados en este pedido y su descuento (centavos). null = sin canje.
+  pointsRedeemed Int?
+  pointsDiscount Int?
+  // Puntos ganados por este pedido al confirmarse el pago. null = no ganó.
+  pointsEarned   Int?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   confirmedAt DateTime?
@@ -206,6 +216,9 @@ model Order {
   items             OrderItem[]
   checkoutSessions  CheckoutSession[]
   welcomeBenefit    WelcomeBenefit?
+  pointsLot         PointsLot?
+  pointsReservation PointsReservation?
+  pointsMovements   PointsMovement[]
 
   @@index([userId])
   @@index([orderNumber])
@@ -267,6 +280,10 @@ model CheckoutSession {
   // Descuento de bienvenida aplicado (centavos). null = sin descuento.
   welcomeDiscount Int?
 
+  // Puntos canjeados y su descuento (centavos). null = sin canje.
+  pointsRedeemed Int?
+  pointsDiscount Int?
+
   status CheckoutSessionStatus @default(WAITING_MP)
 
   mpPreferenceId String?
@@ -311,6 +328,75 @@ model WelcomeBenefit {
 
   user  User   @relation(fields: [userId], references: [id], onDelete: Restrict)
   order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+
+/// Lote de puntos ganado por un pedido pagado. Vence a los 45 días corridos.
+/// remaining baja al reservar un canje (del lote que vence primero) y vuelve al
+/// liberarse. Saldo vigente = suma de remaining con expiresAt > ahora y sin revocar.
+model PointsLot {
+  id            String    @id @default(cuid())
+  userId        String
+  earned        Int
+  remaining     Int
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  sourceOrderId String?   @unique
+  createdAt     DateTime  @default(now())
+
+  user        User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sourceOrder Order?                        @relation(fields: [sourceOrderId], references: [id], onDelete: Restrict)
+  allocations PointsReservationAllocation[]
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Canje de puntos de un pedido. RESERVED al crear el checkout, USED al
+/// confirmarse el pago, RELEASED si se cancela/expira antes de pagarse.
+model PointsReservation {
+  id        String                  @id @default(cuid())
+  orderId   String                  @unique
+  userId    String
+  points    Int
+  status    PointsReservationStatus
+  createdAt DateTime                @default(now())
+
+  order       Order                         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user        User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  allocations PointsReservationAllocation[]
+
+  @@index([userId])
+}
+
+/// De qué lote salió cada parte de un canje (para devolverlo al mismo lote).
+model PointsReservationAllocation {
+  id            String @id @default(cuid())
+  reservationId String
+  lotId         String
+  points        Int
+
+  reservation PointsReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  lot         PointsLot         @relation(fields: [lotId], references: [id], onDelete: Restrict)
+
+  @@unique([reservationId, lotId])
+  @@index([lotId])
+}
+
+/// Auditoría de puntos. Un movimiento de cada tipo por pedido: el unique es la
+/// red de idempotencia contra webhooks/confirmaciones duplicadas.
+model PointsMovement {
+  id        String             @id @default(cuid())
+  userId    String
+  orderId   String?
+  type      PointsMovementType
+  points    Int
+  createdAt DateTime           @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, type])
+  @@index([userId, createdAt])
 }
 
 model TransferCodeSequence {
@@ -392,6 +478,21 @@ enum ComboPriceType {
 enum WelcomeBenefitStatus {
   RESERVED
   USED
+}
+
+enum PointsReservationStatus {
+  RESERVED
+  USED
+  RELEASED
+}
+
+enum PointsMovementType {
+  EARN     // lote acreditado al pagarse el pedido
+  RESERVE  // canje reservado al crear el checkout
+  SETTLE   // canje consumido al pagarse el pedido
+  RELEASE  // canje liberado (rollback, cancelación o expiración antes de pagar)
+  RESTORE  // canje devuelto al cancelarse un pedido ya pagado
+  REVOKE   // puntos ganados quitados al cancelarse un pedido ya pagado
 }
 /// Horario del local editable desde el admin. Un registro por día (0 = domingo).
 /// Horas en "HH:mm", hora Argentina. Si falta o es inválido, la app usa el horario fijo de lib/business-hours.ts.
