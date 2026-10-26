@@ -125,32 +125,45 @@ function rejected(reason: PointsIneligibleReason): PointsQuote {
   return { ok: false, reason };
 }
 
+/**
+ * Chequeos que no dependen del saldo ni del monto pedido. Devuelve el motivo
+ * de rechazo, o null si la cuenta y el pedido pueden canjear.
+ */
+async function checkPointsAccount(
+  input: Omit<PointsQuoteInput, "requestedPoints">,
+  client: DbClient
+): Promise<PointsIneligibleReason | null> {
+  if (!isPointsEnabled()) return "DISABLED";
+  if (!input.userId) return "NOT_LOGGED_IN";
+  if (!isPointsPaymentMethod(input.paymentMethod)) return "METHOD_NOT_ALLOWED";
+  // No puede coincidir en la práctica (en la primera compra el saldo es 0),
+  // pero se bloquea igual del lado del servidor.
+  if (input.welcomeDiscountCents > 0) return "WITH_WELCOME";
+
+  const user = await client.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true },
+  });
+  if (!user) return "USER_NOT_FOUND";
+  if (user.role !== "CUSTOMER") return "NOT_CUSTOMER";
+  return null;
+}
+
 /** Valida un pedido de canje contra todas las reglas. Solo lee. */
 export async function computePointsQuote(
   input: PointsQuoteInput,
   db?: DbClient
 ): Promise<PointsQuote> {
-  if (!isPointsEnabled()) return rejected("DISABLED");
-  if (!input.userId) return rejected("NOT_LOGGED_IN");
-  if (!isPointsPaymentMethod(input.paymentMethod)) return rejected("METHOD_NOT_ALLOWED");
-  // No puede coincidir en la práctica (en la primera compra el saldo es 0),
-  // pero se bloquea igual del lado del servidor.
-  if (input.welcomeDiscountCents > 0) return rejected("WITH_WELCOME");
+  const client = db ?? prisma;
+  const reason = await checkPointsAccount(input, client);
+  if (reason) return rejected(reason);
 
   const requested = input.requestedPoints;
   if (!Number.isInteger(requested) || requested <= 0 || requested % REDEEM_BLOCK !== 0) {
     return rejected("NOT_BLOCK_MULTIPLE");
   }
 
-  const client = db ?? prisma;
-  const user = await client.user.findUnique({
-    where: { id: input.userId },
-    select: { role: true },
-  });
-  if (!user) return rejected("USER_NOT_FOUND");
-  if (user.role !== "CUSTOMER") return rejected("NOT_CUSTOMER");
-
-  const { available } = await getPointsBalance(input.userId, client);
+  const { available } = await getPointsBalance(input.userId as string, client);
   if (available < MIN_BALANCE_TO_REDEEM) return rejected("BELOW_MINIMUM");
   if (requested > available) return rejected("EXCEEDS_BALANCE");
 
@@ -158,6 +171,52 @@ export async function computePointsQuote(
   if (requested > maxRedeemablePoints(available, productSubtotal)) return rejected("EXCEEDS_CAP");
 
   return { ok: true, points: requested, discountCents: pointsToCents(requested) };
+}
+
+/**
+ * Cotiza el canje que decide el servidor: el máximo canjeable con el saldo
+ * vigente (bloques de 10, tope 50%, mínimo 100). El cliente solo pide "usar
+ * puntos"; nunca se toma un monto del navegador. Solo lee.
+ */
+export async function computeMaxPointsQuote(
+  input: Omit<PointsQuoteInput, "requestedPoints">,
+  db?: DbClient
+): Promise<PointsQuote> {
+  const client = db ?? prisma;
+  const reason = await checkPointsAccount(input, client);
+  if (reason) return rejected(reason);
+
+  const { available } = await getPointsBalance(input.userId as string, client);
+  if (available < MIN_BALANCE_TO_REDEEM) return rejected("BELOW_MINIMUM");
+
+  const points = maxRedeemablePoints(available, input.subtotalCents - input.welcomeDiscountCents);
+  if (points <= 0) return rejected("EXCEEDS_CAP");
+
+  return { ok: true, points, discountCents: pointsToCents(points) };
+}
+
+/** Mensaje para el cliente según el motivo por el que no se pueden usar puntos. */
+export function pointsRejectionMessage(reason: PointsIneligibleReason): string {
+  switch (reason) {
+    case "DISABLED":
+      return "El canje de puntos no está disponible en este momento.";
+    case "NOT_LOGGED_IN":
+      return "Iniciá sesión para usar tus puntos.";
+    case "USER_NOT_FOUND":
+    case "NOT_CUSTOMER":
+      return "Esta cuenta no puede usar puntos.";
+    case "METHOD_NOT_ALLOWED":
+      return "Los puntos solo se pueden usar pagando en efectivo o por transferencia.";
+    case "WITH_WELCOME":
+      return "Los puntos no se combinan con el descuento de bienvenida.";
+    case "BELOW_MINIMUM":
+      return `Necesitás al menos ${MIN_BALANCE_TO_REDEEM} puntos vigentes para canjear.`;
+    case "EXCEEDS_CAP":
+      return "El total de productos es muy bajo para canjear puntos.";
+    case "NOT_BLOCK_MULTIPLE":
+    case "EXCEEDS_BALANCE":
+      return POINTS_CONFLICT_MESSAGE;
+  }
 }
 
 export class PointsError extends Error {

@@ -16,6 +16,13 @@ import {
   WELCOME_ALREADY_CLAIMED_MESSAGE,
   WelcomeBenefitError,
 } from "@/lib/loyalty";
+import {
+  computeMaxPointsQuote,
+  isPointsEnabled,
+  PointsError,
+  pointsRejectionMessage,
+  reservePoints,
+} from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -350,7 +357,31 @@ export async function POST(request: Request) {
       welcomeDiscountCents = welcomeQuote.discountCents;
     }
 
-    const totalCents = subtotalCents - welcomeDiscountCents + deliveryCostCents;
+    // Puntos (solo efectivo en esta ruta). El cliente solo pide usarlos: el
+    // servidor decide cuántos (máximo canjeable con el saldo vigente). Con el
+    // flag apagado usePoints se ignora y todo queda como antes.
+    let pointsRedeemed = 0;
+    let pointsDiscountCents = 0;
+    if (body?.usePoints === true && isPointsEnabled()) {
+      if (paymentMethod !== "CASH") {
+        throw new HttpError(400, "Los puntos no aplican con este método de pago");
+      }
+      const pointsQuote = await computeMaxPointsQuote({
+        userId: safeUserId,
+        subtotalCents,
+        welcomeDiscountCents,
+        paymentMethod,
+      });
+      // El cliente vio un total con puntos: nunca cobrarle otro en silencio.
+      // Se corta antes de crear orden o tocar stock; el catch responde 409.
+      if (!pointsQuote.ok) {
+        throw new PointsError(pointsRejectionMessage(pointsQuote.reason), "CONFLICT");
+      }
+      pointsRedeemed = pointsQuote.points;
+      pointsDiscountCents = pointsQuote.discountCents;
+    }
+
+    const totalCents = subtotalCents - welcomeDiscountCents - pointsDiscountCents + deliveryCostCents;
 
     // 🔥 FIX CLAVE: AGRUPAR STOCK
     const decByProductId = new Map<string, number>();
@@ -446,6 +477,8 @@ export async function POST(request: Request) {
           deliveryCost: deliveryCostCents,
           total: totalCents,
           welcomeDiscount: welcomeDiscountCents > 0 ? welcomeDiscountCents : null,
+          pointsRedeemed: pointsRedeemed > 0 ? pointsRedeemed : null,
+          pointsDiscount: pointsDiscountCents > 0 ? pointsDiscountCents : null,
           items: { create: orderItems },
           ...(transferCode && {
             transferCode,
@@ -462,6 +495,17 @@ export async function POST(request: Request) {
           userId: safeUserId,
           orderId: order.id,
           discountCents: welcomeDiscountCents,
+        });
+      }
+
+      // Misma transacción: si otra pestaña tomó los puntos, CONFLICT corta
+      // TODO (sin orden ni stock descontado) y el catch responde 409.
+      if (pointsRedeemed > 0 && safeUserId) {
+        await reservePoints(tx, {
+          userId: safeUserId,
+          orderId: order.id,
+          points: pointsRedeemed,
+          discountCents: pointsDiscountCents,
         });
       }
 
@@ -534,6 +578,9 @@ export async function POST(request: Request) {
         ...(isLoyaltyEnabled()
           ? { total: totalCents, welcomeDiscount: welcomeDiscountCents }
           : {}),
+        ...(isPointsEnabled()
+          ? { total: totalCents, pointsRedeemed, pointsDiscount: pointsDiscountCents }
+          : {}),
       },
       { status: 201 }
     );
@@ -542,6 +589,10 @@ export async function POST(request: Request) {
 
     if (e instanceof WelcomeBenefitError) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+    }
+
+    if (e instanceof PointsError) {
+      return NextResponse.json({ error: e.message, code: `POINTS_${e.code}` }, { status: 409 });
     }
 
     if (e instanceof HttpError) {
