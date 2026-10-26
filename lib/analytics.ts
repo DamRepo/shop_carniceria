@@ -56,3 +56,37 @@ export function trackPurchase(args: {
 
   return trackEvent("purchase", params);
 }
+
+// Puntos: solo se llaman desde pantallas que existen con LOYALTY_POINTS_ENABLED
+// prendido (el flag lo decide el servidor), así que con el flag apagado no se
+// manda nada.
+
+/** El cliente prende o apaga "Usar mis puntos" en el checkout. */
+export function trackPointsToggle(args: {
+  on: boolean;
+  points: number;
+  discountCents: number;
+}): boolean {
+  return trackEvent("points_toggle", {
+    state: args.on ? "on" : "off",
+    points: args.points,
+    value: centsToPesos(args.discountCents),
+    currency: "ARS",
+  });
+}
+
+/** Compra con puntos canjeados. Importes del servidor. */
+export function trackPointsRedeem(args: {
+  transactionId: string;
+  points: number;
+  discountCents: number;
+  paymentType: "cash" | "talo";
+}): boolean {
+  return trackEvent("points_redeem", {
+    transaction_id: args.transactionId,
+    points: args.points,
+    value: centsToPesos(args.discountCents),
+    currency: "ARS",
+    payment_type: args.paymentType,
+  });
+}

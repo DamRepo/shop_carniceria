@@ -21,6 +21,7 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
       total: true,
       welcomeDiscount: true,
       pointsDiscount: true,
+      pointsRedeemed: true,
       orderId: true,
       order: { select: { orderNumber: true, status: true, pointsEarned: true } },
     },
@@ -44,7 +45,9 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
     // la CheckoutSession cambie, y el cliente que está esperando tiene que enterarse.
     orderStatus: cs.order?.status ?? null,
     // Puntos: solo si hubo canje / se acreditaron (sin puntos la respuesta queda igual).
-    ...(cs.pointsDiscount ? { pointsDiscount: cs.pointsDiscount } : {}),
+    ...(cs.pointsDiscount
+      ? { pointsDiscount: cs.pointsDiscount, pointsRedeemed: cs.pointsRedeemed ?? 0 }
+      : {}),
     ...(cs.order?.pointsEarned ? { pointsEarned: cs.order.pointsEarned } : {}),
   });
 }

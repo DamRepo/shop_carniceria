@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
-import { trackPurchase } from "@/lib/analytics";
+import { trackPointsRedeem, trackPurchase } from "@/lib/analytics";
 
 const POLL_INTERVAL_MS = 5000;
 // Misma fuente que el botón flotante (components/whatsapp-button.tsx), con el
@@ -35,6 +35,7 @@ type TaloStatusResponse = {
   total: number; // centavos — se muestra con formatPrice()
   welcomeDiscount?: number; // centavos; 0 = sin descuento
   pointsDiscount?: number; // centavos; solo si se canjearon puntos
+  pointsRedeemed?: number; // solo si se canjearon puntos
   pointsEarned?: number; // solo cuando el pago se confirmó y sumó puntos
   orderId: string | null;
   orderNumber: string | null;
@@ -193,6 +194,16 @@ function TaloPendingContent() {
       welcomeDiscountCents: data.welcomeDiscount ?? 0,
       paymentType: "talo",
     });
+    // Mismo guard de una sola vez que purchase. pointsDiscount solo viene si
+    // hubo canje (y solo puede haberlo con el flag de puntos prendido).
+    if (sent && (data.pointsDiscount ?? 0) > 0) {
+      trackPointsRedeem({
+        transactionId,
+        points: data.pointsRedeemed ?? 0,
+        discountCents: data.pointsDiscount ?? 0,
+        paymentType: "talo",
+      });
+    }
 
     if (sent) {
       try {

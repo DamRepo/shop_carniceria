@@ -18,7 +18,7 @@ import { useCartStore } from "@/lib/store";
 import { useCheckoutStore } from "@/lib/checkout-store";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
-import { trackPurchase } from "@/lib/analytics";
+import { trackPointsRedeem, trackPointsToggle, trackPurchase } from "@/lib/analytics";
 import { toast } from "sonner";
 import {
   CheckoutPointsCard,
@@ -460,12 +460,21 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
       }
 
       // GA4: la orden queda pedida (todavía sin cobrar). Importes del servidor;
-      // /api/orders solo los devuelve con LOYALTY_ENABLED, si no, no se mide.
+      // /api/orders solo los devuelve con LOYALTY_ENABLED o
+      // LOYALTY_POINTS_ENABLED, si no, no se mide.
       if (typeof data?.total === "number") {
         trackPurchase({
           transactionId: String(data.orderNumber ?? data.orderId),
           totalCents: data.total,
           welcomeDiscountCents: typeof data.welcomeDiscount === "number" ? data.welcomeDiscount : 0,
+          paymentType: "cash",
+        });
+      }
+      if (typeof data?.pointsRedeemed === "number" && data.pointsRedeemed > 0) {
+        trackPointsRedeem({
+          transactionId: String(data.orderNumber ?? data.orderId),
+          points: data.pointsRedeemed,
+          discountCents: typeof data.pointsDiscount === "number" ? data.pointsDiscount : 0,
           paymentType: "cash",
         });
       }
@@ -625,6 +634,11 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
               welcomeActive={pointsWelcomeActive}
               usePoints={usePoints}
               onToggle={(next) => {
+                trackPointsToggle({
+                  on: next,
+                  points: pointsPreview.maxPoints,
+                  discountCents: pointsPreview.discountCents,
+                });
                 setUsePoints(next);
                 setPointsNotice(null);
               }}
