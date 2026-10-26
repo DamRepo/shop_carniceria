@@ -279,6 +279,26 @@ async function main() {
   check("doble pestaña → una reserva OK y una CONFLICT", okCount === 1 && conflicts === 1, results.map((r) => r.status === "rejected" ? String(r.reason) : "ok"));
   check("doble pestaña → saldo final 50", (await balanceOf(race.id)) === 50);
 
+  // Mínimo de 100 con dos pestañas: saldo 150, cada una pide 70. Con el lock la
+  // segunda ve 80 (< 100) y choca; sin el lock las dos leían 150 y pasaban.
+  const minRace = await createUser("minrace");
+  await createLot(minRace.id, 150, 10);
+  const oM1 = await createOrder({ userId: minRace.id });
+  const oM2 = await createOrder({ userId: minRace.id });
+  const minResults = await Promise.allSettled([reserve(minRace.id, oM1.id, 70), reserve(minRace.id, oM2.id, 70)]);
+  const minOk = minResults.filter((r) => r.status === "fulfilled").length;
+  const minConflicts = minResults.filter((r) => r.status === "rejected" && isPointsError(r.reason, "CONFLICT")).length;
+  check("doble pestaña con saldo 150 y 70 cada una → una OK, una CONFLICT (mínimo 100)",
+    minOk === 1 && minConflicts === 1, minResults.map((r) => r.status === "rejected" ? String(r.reason) : "ok"));
+  check("…saldo final 80", (await balanceOf(minRace.id)) === 80);
+
+  // Los lotes vencidos se bloquean pero no se usan.
+  const expUser = await createUser("expired-only");
+  await createLot(expUser.id, 500, -1);
+  const oExp = await createOrder({ userId: expUser.id });
+  const expErr = await errorOf(() => reserve(expUser.id, oExp.id, 100));
+  check("solo lotes vencidos → CONFLICT", isPointsError(expErr, "CONFLICT"), String(expErr));
+
   const dupErr = await errorOf(() => reserve(race.id, oA.id, 10));
   check("misma orden reservada dos veces → CONFLICT (sin saldo)", isPointsError(dupErr, "CONFLICT"), String(dupErr));
   const dup = await createUser("dup");

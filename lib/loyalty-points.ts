@@ -315,11 +315,19 @@ export async function reservePoints(
     throw new PointsError("Cantidad de puntos inválida.", "INVALID_AMOUNT");
   }
 
-  const lots = await tx.pointsLot.findMany({
-    where: { userId, revokedAt: null, expiresAt: { gt: now }, remaining: { gt: 0 } },
-    orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
-    select: { id: true, remaining: true },
-  });
+  // FOR UPDATE en orden fijo (vencimiento, id): dos checkouts del mismo
+  // cliente se serializan acá, así el segundo calcula el saldo con lo que dejó
+  // el primero y no puede saltearse el mínimo de 100. returnAllocations
+  // (liberar/devolver) bloquea en el mismo orden para no generar deadlocks.
+  // El vencimiento se filtra en JS: comparar fechas en SQL crudo depende de la
+  // zona horaria de la sesión (la columna es timestamp sin zona, en UTC).
+  const locked = await tx.$queryRaw<{ id: string; remaining: number; expiresAt: Date }[]>`
+    SELECT "id", "remaining", "expiresAt" FROM "PointsLot"
+    WHERE "userId" = ${userId} AND "revokedAt" IS NULL AND "remaining" > 0
+    ORDER BY "expiresAt" ASC, "id" ASC
+    FOR UPDATE
+  `;
+  const lots = locked.filter((l) => l.expiresAt.getTime() > now.getTime());
   const available = lots.reduce((acc, l) => acc + l.remaining, 0);
   if (available < MIN_BALANCE_TO_REDEEM || available < points) {
     throw new PointsError(POINTS_CONFLICT_MESSAGE, "CONFLICT");
