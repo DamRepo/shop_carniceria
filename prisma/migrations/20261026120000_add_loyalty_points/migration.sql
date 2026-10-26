@@ -1,5 +1,16 @@
 -- Sistema de puntos (fase 1): solo aditivo. No modifica ni borra nada existente.
 --
+-- ORDEN OBLIGATORIO. El código de puntos lee y escribe estas tablas aunque
+-- LOYALTY_POINTS_ENABLED esté apagada: liquidar, liberar y revocar corren
+-- dentro de las transacciones de cobro (efectivo y Talo, webhook y cron),
+-- cancelación y rechazo, y el listado del admin selecciona las columnas
+-- nuevas. Sin estas tablas, todo eso falla.
+--   DEPLOY:   1) prisma migrate deploy   2) recién después, subir el código nuevo.
+--   ROLLBACK: 1) volver al código anterior   2) recién después, si hace falta,
+--             correr el SQL de abajo. Nunca borrar las tablas con el código
+--             nuevo corriendo. Volver al código anterior sin borrar nada es
+--             seguro: la migración es solo aditiva.
+--
 -- ROLLBACK (manual, solo si hace falta revertir esta migración):
 --   DROP TABLE IF EXISTS "PointsReservationAllocation";
 --   DROP TABLE IF EXISTS "PointsReservation";
