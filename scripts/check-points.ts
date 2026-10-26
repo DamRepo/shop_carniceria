@@ -421,6 +421,8 @@ async function main() {
   const m6 = await maxQuote({ userId: poor.id });
   check("máximo con saldo 90 → BELOW_MINIMUM", !m6.ok && m6.reason === "BELOW_MINIMUM", m6);
   check("mensaje de rechazo para el cliente", pointsRejectionMessage("BELOW_MINIMUM").includes("100"));
+  check("mensaje de método: efectivo o Talo Pay (no transferencia manual)",
+    pointsRejectionMessage("METHOD_NOT_ALLOWED") === "Los puntos solo se pueden usar pagando en efectivo o Talo Pay.");
 
   // 14b) expectedPoints: el servidor solo compara, nunca toma el monto del cliente
   const resolve = (expectedPoints: unknown, extra: Partial<Parameters<typeof computeMaxPointsQuote>[0]> = {}) =>

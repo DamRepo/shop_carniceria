@@ -68,7 +68,7 @@ export function ProfilePointsSection({ points }: { points: ProfilePointsData }) 
         <div>
           <h3 className="mb-2 text-sm font-semibold">Cómo funciona</h3>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            <li>Sumás 1 punto cada $100 de productos, pagando en efectivo o por transferencia. El envío no cuenta.</li>
+            <li>Sumás 1 punto cada $100 de productos, pagando en efectivo o Talo Pay. El envío no cuenta.</li>
             <li>Los puntos se acreditan cuando se confirma el pago.</li>
             <li>Cada 10 puntos valen $50. Podés canjear desde los 100 puntos y cubrir hasta la mitad de tus productos.</li>
             <li>Los puntos vencen a los 45 días de ganarlos. Siempre usamos primero los que vencen antes.</li>

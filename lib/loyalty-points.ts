@@ -209,7 +209,7 @@ export function pointsRejectionMessage(reason: PointsIneligibleReason): string {
     case "NOT_CUSTOMER":
       return "Esta cuenta no puede usar puntos.";
     case "METHOD_NOT_ALLOWED":
-      return "Los puntos solo se pueden usar pagando en efectivo o por transferencia.";
+      return "Los puntos solo se pueden usar pagando en efectivo o Talo Pay.";
     case "WITH_WELCOME":
       return "Los puntos no se combinan con el descuento de bienvenida.";
     case "BELOW_MINIMUM":
