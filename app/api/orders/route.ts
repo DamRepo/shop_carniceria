@@ -17,11 +17,11 @@ import {
   WelcomeBenefitError,
 } from "@/lib/loyalty";
 import {
-  computeMaxPointsQuote,
   isPointsEnabled,
   PointsError,
-  pointsRejectionMessage,
+  pointsErrorBody,
   reservePoints,
+  resolvePointsRedemption,
 } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
@@ -357,28 +357,26 @@ export async function POST(request: Request) {
       welcomeDiscountCents = welcomeQuote.discountCents;
     }
 
-    // Puntos (solo efectivo en esta ruta). El cliente solo pide usarlos: el
-    // servidor decide cuántos (máximo canjeable con el saldo vigente). Con el
-    // flag apagado usePoints se ignora y todo queda como antes.
+    // Puntos (solo efectivo en esta ruta). El cliente pide usarlos y manda los
+    // puntos que vio (expectedPoints); el servidor recalcula el máximo
+    // canjeable y, si no coincide, corta con 409 POINTS_CHANGED y la
+    // cotización nueva, antes de crear orden o tocar stock. Con el flag
+    // apagado usePoints se ignora y todo queda como antes.
     let pointsRedeemed = 0;
     let pointsDiscountCents = 0;
     if (body?.usePoints === true && isPointsEnabled()) {
       if (paymentMethod !== "CASH") {
         throw new HttpError(400, "Los puntos no aplican con este método de pago");
       }
-      const pointsQuote = await computeMaxPointsQuote({
+      const redemption = await resolvePointsRedemption({
         userId: safeUserId,
         subtotalCents,
         welcomeDiscountCents,
         paymentMethod,
+        expectedPoints: body?.expectedPoints,
       });
-      // El cliente vio un total con puntos: nunca cobrarle otro en silencio.
-      // Se corta antes de crear orden o tocar stock; el catch responde 409.
-      if (!pointsQuote.ok) {
-        throw new PointsError(pointsRejectionMessage(pointsQuote.reason), "CONFLICT");
-      }
-      pointsRedeemed = pointsQuote.points;
-      pointsDiscountCents = pointsQuote.discountCents;
+      pointsRedeemed = redemption.points;
+      pointsDiscountCents = redemption.discountCents;
     }
 
     const totalCents = subtotalCents - welcomeDiscountCents - pointsDiscountCents + deliveryCostCents;
@@ -592,7 +590,7 @@ export async function POST(request: Request) {
     }
 
     if (e instanceof PointsError) {
-      return NextResponse.json({ error: e.message, code: `POINTS_${e.code}` }, { status: 409 });
+      return NextResponse.json(pointsErrorBody(e), { status: 409 });
     }
 
     if (e instanceof HttpError) {

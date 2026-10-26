@@ -20,12 +20,12 @@ import {
   WelcomeBenefitError,
 } from "@/lib/loyalty";
 import {
-  computeMaxPointsQuote,
   isPointsEnabled,
   PointsError,
-  pointsRejectionMessage,
+  pointsErrorBody,
   releasePoints,
   reservePoints,
+  resolvePointsRedemption,
 } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +54,8 @@ type Body = {
 
   /** Intención de usar puntos. Cuántos lo decide siempre el servidor. */
   usePoints?: boolean;
+  /** Puntos que vio el cliente al confirmar. Solo se compara, nunca se usa como monto. */
+  expectedPoints?: number;
 };
 
 type ProductPick = {
@@ -453,24 +455,22 @@ export async function POST(req: Request) {
       welcomeDiscountCents = welcomeQuote.discountCents;
     }
 
-    // Puntos: el cliente solo pide usarlos; el servidor decide cuántos (máximo
-    // canjeable con el saldo vigente). Con el flag apagado usePoints se ignora.
+    // Puntos: el cliente pide usarlos y manda los puntos que vio
+    // (expectedPoints); el servidor recalcula el máximo canjeable y, si no
+    // coincide, corta con 409 POINTS_CHANGED y la cotización nueva, antes de
+    // crear orden o reservar stock. Con el flag apagado usePoints se ignora.
     let pointsRedeemed = 0;
     let pointsDiscountCents = 0;
     if (body.usePoints === true && isPointsEnabled()) {
-      const pointsQuote = await computeMaxPointsQuote({
+      const redemption = await resolvePointsRedemption({
         userId,
         subtotalCents,
         welcomeDiscountCents,
         paymentMethod: "TALO_PAY",
+        expectedPoints: body.expectedPoints,
       });
-      // El cliente vio un total con puntos: nunca cobrarle otro en silencio.
-      // Se corta antes de crear orden o reservar stock; el catch responde 409.
-      if (!pointsQuote.ok) {
-        throw new PointsError(pointsRejectionMessage(pointsQuote.reason), "CONFLICT");
-      }
-      pointsRedeemed = pointsQuote.points;
-      pointsDiscountCents = pointsQuote.discountCents;
+      pointsRedeemed = redemption.points;
+      pointsDiscountCents = redemption.discountCents;
     }
 
     const totalCents = subtotalCents - welcomeDiscountCents - pointsDiscountCents + deliveryCostCents;
@@ -723,7 +723,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
     }
     if (e instanceof PointsError) {
-      return NextResponse.json({ error: e.message, code: `POINTS_${e.code}` }, { status: 409 });
+      return NextResponse.json(pointsErrorBody(e), { status: 409 });
     }
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error("[talo/checkout] Unhandled error:", {

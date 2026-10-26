@@ -219,19 +219,72 @@ export function pointsRejectionMessage(reason: PointsIneligibleReason): string {
   }
 }
 
+/** Cotización nueva que el servidor manda cuando el canje no coincide con lo que vio el cliente. */
+export interface PointsChange {
+  points: number;
+  discountCents: number;
+  /** Motivo por el que ya no se puede canjear, o null si solo cambió la cantidad. */
+  reason: PointsIneligibleReason | null;
+}
+
 export class PointsError extends Error {
   constructor(
     message: string,
-    public readonly code: "DISABLED" | "CONFLICT" | "INVALID_AMOUNT"
+    public readonly code: "DISABLED" | "CONFLICT" | "INVALID_AMOUNT" | "CHANGED",
+    public readonly change?: PointsChange
   ) {
     super(message);
     this.name = "PointsError";
   }
 }
 
+/** Cuerpo de la respuesta 409 para un PointsError (code con prefijo POINTS_). */
+export function pointsErrorBody(e: PointsError) {
+  return { error: e.message, code: `POINTS_${e.code}`, ...(e.change ?? {}) };
+}
+
 /** Mensaje para el cliente cuando el saldo cambió entre la cotización y la reserva. */
 export const POINTS_CONFLICT_MESSAGE =
   "Tu saldo de puntos cambió o está aplicado en otro pedido en curso. Volvé a cargar el carrito para ver el total actualizado.";
+
+export const POINTS_CHANGED_MESSAGE = "Tu saldo cambió, revisá el total antes de confirmar.";
+
+/** Motivos que dependen del saldo: para el cliente son "tu saldo cambió". */
+const BALANCE_REASONS: readonly PointsIneligibleReason[] = [
+  "BELOW_MINIMUM",
+  "EXCEEDS_CAP",
+  "EXCEEDS_BALANCE",
+  "NOT_BLOCK_MULTIPLE",
+];
+
+/**
+ * Resuelve el canje de un pedido con usePoints: true. Recalcula el máximo
+ * canjeable y lo compara con expectedPoints (los puntos que vio el cliente al
+ * confirmar). Si no coincide, o ya no se puede canjear, lanza PointsError
+ * CHANGED con la cotización nueva, ANTES de crear el pedido o tocar stock.
+ * Nunca se usa expectedPoints como monto: solo se compara.
+ */
+export async function resolvePointsRedemption(
+  input: Omit<PointsQuoteInput, "requestedPoints"> & { expectedPoints: unknown },
+  db?: DbClient
+): Promise<{ points: number; discountCents: number }> {
+  const { expectedPoints, ...quoteInput } = input;
+  const quote = await computeMaxPointsQuote(quoteInput, db);
+  if (quote.ok && expectedPoints === quote.points) {
+    return { points: quote.points, discountCents: quote.discountCents };
+  }
+  if (quote.ok) {
+    throw new PointsError(POINTS_CHANGED_MESSAGE, "CHANGED", {
+      points: quote.points,
+      discountCents: quote.discountCents,
+      reason: null,
+    });
+  }
+  const message = BALANCE_REASONS.includes(quote.reason)
+    ? POINTS_CHANGED_MESSAGE
+    : pointsRejectionMessage(quote.reason);
+  throw new PointsError(message, "CHANGED", { points: 0, discountCents: 0, reason: quote.reason });
+}
 
 /**
  * Reserva el canje dentro de la MISMA transacción que crea el pedido.

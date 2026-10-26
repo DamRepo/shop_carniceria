@@ -17,10 +17,13 @@ import {
   isPointsEnabled,
   maxRedeemablePoints,
   PointsError,
+  POINTS_CHANGED_MESSAGE,
+  pointsErrorBody,
   pointsRejectionMessage,
   pointsToCents,
   releasePoints,
   reservePoints,
+  resolvePointsRedemption,
   revokePointsOnPaidCancel,
   settlePointsOnPaid,
 } from "@/lib/loyalty-points";
@@ -358,6 +361,34 @@ async function main() {
   const m6 = await maxQuote({ userId: poor.id });
   check("máximo con saldo 90 → BELOW_MINIMUM", !m6.ok && m6.reason === "BELOW_MINIMUM", m6);
   check("mensaje de rechazo para el cliente", pointsRejectionMessage("BELOW_MINIMUM").includes("100"));
+
+  // 14b) expectedPoints: el servidor solo compara, nunca toma el monto del cliente
+  const resolve = (expectedPoints: unknown, extra: Partial<Parameters<typeof computeMaxPointsQuote>[0]> = {}) =>
+    resolvePointsRedemption({
+      userId: maxU.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH", expectedPoints, ...extra,
+    });
+  const rOk = await resolve(130);
+  check("expectedPoints igual → canje 130 ($650)", rOk.points === 130 && rOk.discountCents === 65_000, rOk);
+  const rDiff = await errorOf(() => resolve(120));
+  check("expectedPoints distinto → CHANGED con la cotización nueva (130)",
+    isPointsError(rDiff, "CHANGED") && rDiff instanceof PointsError && rDiff.change?.points === 130 && rDiff.change.discountCents === 65_000 && rDiff.change.reason === null,
+    rDiff instanceof PointsError ? rDiff.change : String(rDiff));
+  const rMissing = await errorOf(() => resolve(undefined));
+  check("sin expectedPoints → CHANGED (nunca canjea a ciegas)", isPointsError(rMissing, "CHANGED"), String(rMissing));
+  const rString = await errorOf(() => resolve("130"));
+  check("expectedPoints como texto → CHANGED", isPointsError(rString, "CHANGED"), String(rString));
+  const rPoor = await errorOf(() => resolve(100, { userId: poor.id }));
+  check("saldo bajó de 100 → CHANGED con 0 puntos, motivo BELOW_MINIMUM y aviso de saldo",
+    rPoor instanceof PointsError && rPoor.code === "CHANGED" && rPoor.change?.points === 0 &&
+      rPoor.change.reason === "BELOW_MINIMUM" && rPoor.message === POINTS_CHANGED_MESSAGE,
+    rPoor instanceof PointsError ? { msg: rPoor.message, change: rPoor.change } : String(rPoor));
+  const rWelcome = await errorOf(() => resolve(130, { welcomeDiscountCents: 100_000 }));
+  check("con bienvenida → CHANGED motivo WITH_WELCOME y su mensaje",
+    rWelcome instanceof PointsError && rWelcome.change?.reason === "WITH_WELCOME" && rWelcome.message.includes("bienvenida"),
+    rWelcome instanceof PointsError ? rWelcome.message : String(rWelcome));
+  const body409 = rDiff instanceof PointsError ? pointsErrorBody(rDiff) : null;
+  check("cuerpo del 409 → code POINTS_CHANGED con puntos y descuento",
+    body409?.code === "POINTS_CHANGED" && body409.points === 130 && body409.discountCents === 65_000, body409);
 
   // 15) Flujo efectivo completo: pedido con puntos → cobrado → acredita
   //     sobre subtotal − puntos (mismas llamadas que /api/orders y mark-cash-paid).
