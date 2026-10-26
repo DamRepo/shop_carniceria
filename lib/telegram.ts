@@ -37,6 +37,9 @@ type BuildTelegramOrderMessageParams = {
   deliveryCostCents?: number;
   /** Descuento de bienvenida (centavos). Solo se muestra si es > 0. */
   welcomeDiscountCents?: number;
+  /** Puntos canjeados y su descuento (centavos). Solo se muestra si hubo canje. */
+  pointsRedeemed?: number;
+  pointsDiscountCents?: number;
   totalCents: number;
 
   items?: TelegramOrderItem[];
@@ -187,6 +190,9 @@ export function buildTelegramOrderMessage(
     `\n<b>Subtotal:</b> ${formatMoney(params.subtotalCents)}\n` +
     ((params.welcomeDiscountCents ?? 0) > 0
       ? `<b>Descuento bienvenida (10%):</b> -${formatMoney(params.welcomeDiscountCents ?? 0)}\n`
+      : "") +
+    ((params.pointsDiscountCents ?? 0) > 0
+      ? `<b>Puntos usados (${params.pointsRedeemed ?? 0}):</b> -${formatMoney(params.pointsDiscountCents ?? 0)}\n`
       : "") +
     `<b>Envío:</b> ${formatMoney(params.deliveryCostCents ?? 0)}\n` +
     `<b>Total:</b> ${formatMoney(params.totalCents)}`

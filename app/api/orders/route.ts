@@ -17,6 +17,7 @@ import {
   WelcomeBenefitError,
 } from "@/lib/loyalty";
 import {
+  computePointsEarned,
   isPointsEnabled,
   PointsError,
   pointsErrorBody,
@@ -510,6 +511,18 @@ export async function POST(request: Request) {
       return order;
     });
 
+    // Puntos que va a ganar cuando se marque el cobro (solo para el mail).
+    // Mismas condiciones que awardPointsOnPaid; se acreditan recién al cobrar.
+    const sessionRole = (session?.user as { role?: string } | undefined)?.role;
+    const pointsToEarn =
+      isPointsEnabled() &&
+      safeUserId &&
+      sessionRole === "CUSTOMER" &&
+      paymentMethod === "CASH" &&
+      welcomeDiscountCents === 0
+        ? computePointsEarned(subtotalCents - pointsDiscountCents)
+        : 0;
+
     // EMAIL (no bloquea)
     if (email) {
       if (paymentMethod === "BANK_TRANSFER" && created.transferCode) {
@@ -533,6 +546,13 @@ export async function POST(request: Request) {
           ...(welcomeDiscountCents > 0
             ? { discountText: `-$${(welcomeDiscountCents / 100).toFixed(2)}` }
             : {}),
+          ...(pointsDiscountCents > 0
+            ? {
+                pointsUsed: pointsRedeemed,
+                pointsDiscountText: `-$${(pointsDiscountCents / 100).toFixed(2)}`,
+              }
+            : {}),
+          ...(pointsToEarn > 0 ? { pointsToEarn } : {}),
         }).catch((e) => console.log("Email falló:", e));
       }
     }
@@ -553,6 +573,8 @@ export async function POST(request: Request) {
         subtotalCents,
         deliveryCostCents,
         welcomeDiscountCents,
+        pointsRedeemed,
+        pointsDiscountCents,
         totalCents,
         items: orderItems.map((it) => ({
           name: it.itemNameSnapshot,

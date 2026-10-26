@@ -93,6 +93,10 @@ export async function GET(req: Request) {
         deliveryCost: true,
         total: true,
         welcomeDiscount: true,
+        pointsRedeemed: true,
+        pointsDiscount: true,
+        pointsEarned: true,
+        pointsReservation: { select: { status: true, points: true } },
 
         createdAt: true,
         updatedAt: true,

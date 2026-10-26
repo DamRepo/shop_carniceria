@@ -102,6 +102,31 @@ export async function PATCH(
       );
     }
 
+    // Efectivo sin cobrar con puntos reservados: completarlo deja el canje
+    // RESERVED para siempre (no se liquida ni se acreditan los puntos de la
+    // compra). No se deja pasar en silencio: el admin tiene que confirmarlo.
+    if (
+      nextStatus === "COMPLETED" &&
+      current.paymentMethod === "CASH" &&
+      current.paymentStatus !== "PAID" &&
+      body?.acknowledgePointsReserved !== true
+    ) {
+      const reservation = await prisma.pointsReservation.findUnique({
+        where: { orderId },
+        select: { status: true, points: true },
+      });
+      if (reservation?.status === "RESERVED") {
+        return NextResponse.json(
+          {
+            error: `Este pedido tiene ${reservation.points} puntos reservados y todavía no está marcado como cobrado. Marcá el cobro antes de completarlo.`,
+            code: "POINTS_RESERVED_UNPAID",
+            points: reservation.points,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const shouldSetConfirmedAt =
       nextStatus === "CONFIRMED" ||
       nextStatus === "PREPARING" ||

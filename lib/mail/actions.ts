@@ -35,6 +35,11 @@ export async function sendOrderConfirmationEmail(args: {
   totalText: string;
   /** Línea de descuento de bienvenida ya formateada; solo si es > 0. */
   discountText?: string;
+  /** Puntos canjeados y su descuento ya formateado; solo si hubo canje. */
+  pointsUsed?: number;
+  pointsDiscountText?: string;
+  /** Puntos que va a ganar al confirmarse el pago; solo si es > 0. */
+  pointsToEarn?: number;
 }) {
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
@@ -44,6 +49,9 @@ export async function sendOrderConfirmationEmail(args: {
     items: args.items,
     totalText: args.totalText,
     discountText: args.discountText,
+    pointsUsed: args.pointsUsed,
+    pointsDiscountText: args.pointsDiscountText,
+    pointsToEarn: args.pointsToEarn,
     appUrl,
   });
 

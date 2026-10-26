@@ -275,6 +275,8 @@ export async function finalizeTaloOrderAsPaid(params: {
       deliveryCost: true,
       total: true,
       welcomeDiscount: true,
+      pointsRedeemed: true,
+      pointsDiscount: true,
       items: {
         select: {
           quantity: true,
@@ -301,6 +303,8 @@ export async function finalizeTaloOrderAsPaid(params: {
         subtotalCents: Number(fullOrder.subtotal),
         deliveryCostCents: Number(fullOrder.deliveryCost ?? 0),
         welcomeDiscountCents: fullOrder.welcomeDiscount ?? 0,
+        pointsRedeemed: fullOrder.pointsRedeemed ?? 0,
+        pointsDiscountCents: fullOrder.pointsDiscount ?? 0,
         totalCents: Number(fullOrder.total),
         items: fullOrder.items.map((it) => ({
           name: it.itemNameSnapshot ?? it.product?.name ?? "",

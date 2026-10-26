@@ -10,9 +10,16 @@ export function orderConfirmationTemplate(params: {
   items: OrderItemEmail[];
   totalText: string; // por ejemplo "$12.500"
   discountText?: string; // por ejemplo "-$1250.00"; se omite si no hay descuento
+  pointsUsed?: number; // puntos canjeados; se omite si no hubo canje
+  pointsDiscountText?: string; // por ejemplo "-$500.00"; se omite si no hubo canje
+  pointsToEarn?: number; // puntos que gana al confirmarse el pago; se omite si es 0
   appUrl: string;
 }) {
   const name = params.customerName?.trim() || "👋";
+  const hasPointsDiscount = Boolean(params.pointsDiscountText);
+  const pointsToEarn = params.pointsToEarn ?? 0;
+  const pointsUsedLabel = `Puntos usados (${params.pointsUsed ?? 0})`;
+  const earnLabel = `Ganás ${pointsToEarn} ${pointsToEarn === 1 ? "punto" : "puntos"} cuando se confirme tu pago.`;
 
   const rows = params.items.map((it) => `
     <tr>
@@ -26,7 +33,9 @@ export function orderConfirmationTemplate(params: {
   const discountLine = params.discountText
     ? ` Descuento de bienvenida (10%): ${params.discountText}.`
     : "";
-  const text = `Hola ${name}. Tu compra fue confirmada. Pedido: ${params.orderId}.${discountLine} Total: ${params.totalText}`;
+  const pointsLine = hasPointsDiscount ? ` ${pointsUsedLabel}: ${params.pointsDiscountText}.` : "";
+  const earnLine = pointsToEarn > 0 ? ` ${earnLabel}` : "";
+  const text = `Hola ${name}. Tu compra fue confirmada. Pedido: ${params.orderId}.${discountLine}${pointsLine} Total: ${params.totalText}${earnLine}`;
 
   const html = `
   <div style="font-family: Arial, sans-serif; background:#f4f4f4; padding:24px;">
@@ -56,11 +65,17 @@ export function orderConfirmationTemplate(params: {
               ${params.discountText ? `
               <div style="margin-top:14px; text-align:right; font-size:14px; color:#2e7d32;">
                 Descuento de bienvenida (10%): ${escapeHtml(params.discountText)}
+              </div>` : ""}${hasPointsDiscount ? `
+              <div style="margin-top:${params.discountText ? "6px" : "14px"}; text-align:right; font-size:14px; color:#2e7d32;">
+                ${escapeHtml(pointsUsedLabel)}: ${escapeHtml(params.pointsDiscountText ?? "")}
               </div>` : ""}
 
-              <div style="margin-top:${params.discountText ? "6px" : "14px"}; text-align:right; font-size:16px;">
+              <div style="margin-top:${params.discountText || hasPointsDiscount ? "6px" : "14px"}; text-align:right; font-size:16px;">
                 <b>Total: ${escapeHtml(params.totalText)}</b>
-              </div>
+              </div>${pointsToEarn > 0 ? `
+              <div style="margin-top:10px; text-align:right; font-size:14px; color:#2e7d32;">
+                ${escapeHtml(earnLabel)}
+              </div>` : ""}
 
               <div style="margin-top:18px; text-align:center;">
                 <a href="${params.appUrl}"

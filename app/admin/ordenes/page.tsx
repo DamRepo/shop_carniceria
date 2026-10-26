@@ -74,6 +74,10 @@ interface Order {
   deliveryCost: number;
   total: number;
   welcomeDiscount: number | null;
+  pointsRedeemed?: number | null;
+  pointsDiscount?: number | null;
+  pointsEarned?: number | null;
+  pointsReservation?: { status: 'RESERVED' | 'USED' | 'RELEASED'; points: number } | null;
 
   createdAt: string;
   items: {
@@ -328,6 +332,12 @@ function PaymentSection({
                 Incluye descuento de bienvenida de {formatPrice(order.welcomeDiscount ?? 0)}
               </p>
             )}
+            {order.pointsReservation?.status === 'RESERVED' && (
+              <p className="mb-2 flex items-start gap-1.5 text-xs font-medium text-amber-800">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Tiene {order.pointsReservation.points} puntos reservados ({formatPrice(order.pointsDiscount ?? 0)} de descuento). Marcá el cobro antes de completar el pedido.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => onMarkCashPaid(order.id)}
@@ -388,12 +398,24 @@ export default function OrdenesAdmin() {
     if (!confirm(`¿Cambiar el estado de esta orden a "${newLabel}"?`)) return;
 
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json().catch(() => null);
+      const patch = (extra: Record<string, unknown> = {}) =>
+        fetch(`/api/admin/orders/${orderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus, ...extra }),
+        });
+      let res = await patch();
+      let data = await res.json().catch(() => null);
+      // Efectivo sin cobrar con puntos reservados: el servidor no lo deja
+      // completar en silencio. Se avisa y solo sigue si el admin lo confirma.
+      if (res.status === 409 && data?.code === 'POINTS_RESERVED_UNPAID') {
+        const proceed = confirm(
+          `${data.error}\n\nSi lo completás igual, los puntos quedan reservados y el cliente no suma los puntos de esta compra. ¿Completar igual?`
+        );
+        if (!proceed) return;
+        res = await patch({ acknowledgePointsReserved: true });
+        data = await res.json().catch(() => null);
+      }
       if (!res.ok) throw new Error(data?.error ?? 'Error al actualizar estado');
       toast.success('Estado actualizado');
       fetchOrders();
@@ -568,6 +590,18 @@ export default function OrdenesAdmin() {
                         <div className="flex items-center justify-end gap-2 text-green-700 dark:text-green-400">
                           <span>Descuento bienvenida (10%):</span>
                           <span>-{formatPrice(order.welcomeDiscount ?? 0)}</span>
+                        </div>
+                      )}
+                      {Number(order.pointsDiscount ?? 0) > 0 && (
+                        <div className="flex items-center justify-end gap-2 text-green-700 dark:text-green-400">
+                          <span>Puntos usados ({order.pointsRedeemed ?? 0}):</span>
+                          <span>-{formatPrice(order.pointsDiscount ?? 0)}</span>
+                        </div>
+                      )}
+                      {Number(order.pointsEarned ?? 0) > 0 && (
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Puntos ganados:</span>
+                          <span>{order.pointsEarned}</span>
                         </div>
                       )}
                       {Number(order.deliveryCost ?? 0) > 0 && (
