@@ -363,10 +363,12 @@ export async function POST(request: Request) {
     // puntos que vio (expectedPoints); el servidor recalcula el máximo
     // canjeable y, si no coincide, corta con 409 POINTS_CHANGED y la
     // cotización nueva, antes de crear orden o tocar stock. Con el flag
-    // apagado usePoints se ignora y todo queda como antes.
+    // apagado también corta (409 POINTS_CHANGED, motivo DISABLED): el cliente
+    // vio un total con descuento y nunca se le cobra el precio completo en
+    // silencio. Sin usePoints todo queda como antes.
     let pointsRedeemed = 0;
     let pointsDiscountCents = 0;
-    if (body?.usePoints === true && isPointsEnabled()) {
+    if (body?.usePoints === true) {
       if (paymentMethod !== "CASH") {
         throw new HttpError(400, "Los puntos no aplican con este método de pago");
       }

@@ -281,9 +281,11 @@ export async function resolvePointsRedemption(
       reason: null,
     });
   }
+  // Incluye DISABLED: con el flag apagado el cliente que vio el descuento
+  // recibe el 409 y el total sin puntos, nunca el precio completo en silencio.
   const message = BALANCE_REASONS.includes(quote.reason)
     ? POINTS_CHANGED_MESSAGE
-    : pointsRejectionMessage(quote.reason);
+    : `${pointsRejectionMessage(quote.reason)} Revisá el total antes de confirmar.`;
   throw new PointsError(message, "CHANGED", { points: 0, discountCents: 0, reason: quote.reason });
 }
 

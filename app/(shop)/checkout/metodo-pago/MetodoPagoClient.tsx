@@ -355,12 +355,9 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
     // Refresca saldo y puntos a ganar con los datos del servidor.
     setPointsQuoteNonce((n) => n + 1);
 
-    const notice =
-      code === "POINTS_CHANGED"
-        ? POINTS_CHANGED_NOTICE
-        : typeof data?.error === "string"
-          ? data.error
-          : POINTS_CHANGED_NOTICE;
+    // El servidor manda el texto según el motivo (saldo cambiado, canje no
+    // disponible, etc.); si no viene, el aviso genérico.
+    const notice = typeof data?.error === "string" ? data.error : POINTS_CHANGED_NOTICE;
     setPointsNotice(notice);
     toast.warning(notice, { duration: 8000 });
     return true;

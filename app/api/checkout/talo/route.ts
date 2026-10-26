@@ -20,7 +20,6 @@ import {
   WelcomeBenefitError,
 } from "@/lib/loyalty";
 import {
-  isPointsEnabled,
   PointsError,
   pointsErrorBody,
   releasePoints,
@@ -458,10 +457,12 @@ export async function POST(req: Request) {
     // Puntos: el cliente pide usarlos y manda los puntos que vio
     // (expectedPoints); el servidor recalcula el máximo canjeable y, si no
     // coincide, corta con 409 POINTS_CHANGED y la cotización nueva, antes de
-    // crear orden o reservar stock. Con el flag apagado usePoints se ignora.
+    // crear orden o reservar stock. Con el flag apagado también corta (409
+    // POINTS_CHANGED, motivo DISABLED): nunca se cobra el total completo en
+    // silencio a quien vio el descuento. Sin usePoints todo queda como antes.
     let pointsRedeemed = 0;
     let pointsDiscountCents = 0;
-    if (body.usePoints === true && isPointsEnabled()) {
+    if (body.usePoints === true) {
       const redemption = await resolvePointsRedemption({
         userId,
         subtotalCents,

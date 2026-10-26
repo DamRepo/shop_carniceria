@@ -343,6 +343,16 @@ async function main() {
   check("flag off → saldo vuelve a 300", (await balanceOf(off.id)) === 300);
   const mOff = await computeMaxPointsQuote({ userId: off.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH" });
   check("flag off → cotización del máximo DISABLED", !mOff.ok && mOff.reason === "DISABLED", mOff);
+  // usePoints: true con el flag apagado (pestaña vieja): 409, nunca precio completo en silencio.
+  const rOff = await errorOf(() =>
+    resolvePointsRedemption({ userId: off.id, subtotalCents: 1_000_000, welcomeDiscountCents: 0, paymentMethod: "CASH", expectedPoints: 300 })
+  );
+  check("flag off + usePoints → CHANGED con 0 puntos, motivo DISABLED y aviso de revisar el total",
+    rOff instanceof PointsError && rOff.code === "CHANGED" && rOff.change?.points === 0 &&
+      rOff.change.reason === "DISABLED" && rOff.message.includes("no está disponible") && rOff.message.includes("Revisá el total"),
+    rOff instanceof PointsError ? { msg: rOff.message, change: rOff.change } : String(rOff));
+  const offBody = rOff instanceof PointsError ? pointsErrorBody(rOff) : null;
+  check("flag off + usePoints → cuerpo 409 POINTS_CHANGED", offBody?.code === "POINTS_CHANGED" && offBody.reason === "DISABLED", offBody);
   setFlag(true);
 
   // 14) Cotización del máximo (lo que usan las rutas con usePoints: true)
