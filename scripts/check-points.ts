@@ -12,9 +12,11 @@ import {
   awardPointsOnPaid,
   computeCheckoutPointsPreview,
   computeMaxPointsQuote,
+  computeOrderEarnablePoints,
   computePointsEarned,
   computePointsQuote,
   getPointsBalance,
+  getOrderPointsInfo,
   getPointsHistory,
   isPointsEnabled,
   maxRedeemablePoints,
@@ -555,6 +557,31 @@ async function main() {
     kinds.has("EARNED") && kinds.has("USED") && kinds.has("RESTORED") && kinds.has("REVOKED"), [...kinds]);
   check("historial ordenado del más nuevo al más viejo",
     hCash.every((h, i) => i === 0 || hCash[i - 1].date.getTime() >= h.date.getTime()));
+
+  // 20) Puntos de la orden para las pantallas post compra (nunca desde la URL)
+  const owner = await createUser("owner");
+  const stranger = await createUser("stranger");
+  const oOwn = await createOrder({ userId: owner.id, subtotal: 1_000_000, pointsDiscount: 50_000 });
+  const infoOwn = await getOrderPointsInfo(oOwn.id, owner.id);
+  check("post compra: dueño ve 'ganás 95' ($10.000 − $500 de puntos)", infoOwn?.toEarn === 95 && infoOwn.earned === 0, infoOwn);
+  check("post compra: otro usuario → null", (await getOrderPointsInfo(oOwn.id, stranger.id)) === null);
+  check("post compra: sin sesión → null", (await getOrderPointsInfo(oOwn.id, null)) === null);
+  check("post compra: orden inexistente → null", (await getOrderPointsInfo("no-existe", owner.id)) === null);
+  setFlag(false);
+  check("post compra: flag apagado → null", (await getOrderPointsInfo(oOwn.id, owner.id)) === null);
+  setFlag(true);
+  const oOwnWelcome = await createOrder({ userId: owner.id, welcomeDiscount: 100_000 });
+  check("post compra: con bienvenida → ganás 0", (await getOrderPointsInfo(oOwnWelcome.id, owner.id))?.toEarn === 0);
+  const oOwnMp = await createOrder({ userId: owner.id, paymentMethod: "MERCADO_PAGO" });
+  check("post compra: Mercado Pago → ganás 0", (await getOrderPointsInfo(oOwnMp.id, owner.id))?.toEarn === 0);
+  const oOwnCancel = await createOrder({ userId: owner.id, status: "CANCELLED" });
+  check("post compra: cancelada → ganás 0", (await getOrderPointsInfo(oOwnCancel.id, owner.id))?.toEarn === 0);
+  const oOwnPaid = await paidOrder(owner.id, { subtotal: 500_000 });
+  await awardPointsOnPaid(null, oOwnPaid.id);
+  const infoPaid = await getOrderPointsInfo(oOwnPaid.id, owner.id);
+  check("post compra: pagada y acreditada → sumaste 50, ganás 0", infoPaid?.earned === 50 && infoPaid.toEarn === 0, infoPaid);
+  check("misma regla: lo que muestra = lo que acredita",
+    computeOrderEarnablePoints({ userId: owner.id, userRole: "CUSTOMER", status: "PENDING", paymentMethod: "CASH", subtotal: 500_000, welcomeDiscount: null, pointsDiscount: null }) === 50);
 }
 
 async function cleanup() {

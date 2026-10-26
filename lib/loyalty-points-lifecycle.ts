@@ -134,6 +134,32 @@ export async function releasePoints(
   });
 }
 
+/** Lo que hace falta de un pedido para saber cuántos puntos suma. */
+export interface EarnableOrder {
+  userId: string | null;
+  userRole: string | null | undefined;
+  status: string;
+  paymentMethod: string;
+  subtotal: number;
+  welcomeDiscount: number | null;
+  pointsDiscount: number | null;
+}
+
+/**
+ * Puntos que suma un pedido si se paga (sin mirar el pago ni el flag). Una
+ * sola regla para acreditar (awardPointsOnPaid) y para mostrar "Ganás N
+ * puntos" (getOrderPointsInfo): invitado, no CUSTOMER, cancelado, método fuera
+ * de efectivo/Talo o pedido con bienvenida → 0.
+ * Base: subtotal − bienvenida − descuento por puntos (sin envío).
+ */
+export function computeOrderEarnablePoints(order: EarnableOrder): number {
+  if (!order.userId || order.userRole !== "CUSTOMER") return 0;
+  if (order.status === "CANCELLED") return 0;
+  if (!isPointsPaymentMethod(order.paymentMethod)) return 0;
+  if ((order.welcomeDiscount ?? 0) > 0) return 0;
+  return computePointsEarned(order.subtotal - (order.welcomeDiscount ?? 0) - (order.pointsDiscount ?? 0));
+}
+
 /**
  * Acredita el lote de puntos de un pedido recién pagado. Devuelve los puntos
  * acreditados (0 si no corresponde o si ya se acreditó).
@@ -165,20 +191,17 @@ export async function awardPointsOnPaid(
         pointsLot: { select: { id: true } },
       },
     });
-    if (!order || !order.userId || order.user?.role !== "CUSTOMER") return 0;
-    if (order.paymentStatus !== "PAID" || order.status === "CANCELLED") return 0;
-    if (!isPointsPaymentMethod(order.paymentMethod)) return 0;
-    if ((order.welcomeDiscount ?? 0) > 0) return 0;
+    if (!order || order.paymentStatus !== "PAID" || !order.userId) return 0;
     // Ya acreditado. El @unique de sourceOrderId es la red de seguridad.
     if (order.pointsLot) return 0;
 
-    const base = order.subtotal - (order.welcomeDiscount ?? 0) - (order.pointsDiscount ?? 0);
-    const earned = computePointsEarned(base);
+    const earned = computeOrderEarnablePoints({ ...order, userRole: order.user?.role });
     if (earned <= 0) return 0;
+    const userId = order.userId;
 
     await db.pointsLot.create({
       data: {
-        userId: order.userId,
+        userId,
         earned,
         remaining: earned,
         expiresAt: new Date(now.getTime() + LOT_VALIDITY_DAYS * 24 * 60 * 60 * 1000),
@@ -186,7 +209,7 @@ export async function awardPointsOnPaid(
       },
     });
     await db.pointsMovement.create({
-      data: { userId: order.userId, orderId, type: "EARN", points: earned },
+      data: { userId, orderId, type: "EARN", points: earned },
     });
     await db.order.update({ where: { id: orderId }, data: { pointsEarned: earned } });
 

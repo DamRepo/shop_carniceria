@@ -242,13 +242,6 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
     selected !== "MERCADO_PAGO" &&
     !pointsWelcomeActive;
   const pointsDiscount = pointsActive && pointsPreview ? pointsPreview.discountCents : 0;
-  // Puntos que ganaría (para la pantalla post compra). Con tarjeta o bienvenida, 0.
-  const pointsToEarn =
-    showPointsCard && pointsPreview && selected !== "MERCADO_PAGO" && !pointsWelcomeActive
-      ? pointsActive
-        ? pointsPreview.earnIfRedeem
-        : pointsPreview.earnIfNotRedeem
-      : 0;
 
   const displayTotal =
     (showWelcome ? totals.total - welcomeDiscount : totals.total) - pointsDiscount;
@@ -435,9 +428,7 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
         navigatingRef.current = true;
         // Misma decisión que en Mercado Pago: se vacía al crear el pago de Talo.
         useCartStore.getState().clearCart();
-        const taloParams = new URLSearchParams({ csId: String(data.csId) });
-        if (pointsToEarn > 0) taloParams.set("points", String(pointsToEarn));
-        router.push(`/checkout/talo/pending?${taloParams.toString()}`);
+        router.push(`/checkout/talo/pending?csId=${data.csId}`);
         return;
       }
 
@@ -494,7 +485,6 @@ export function MetodoPagoClient({ pointsEnabled }: { pointsEnabled: boolean }) 
       if (data?.orderNumber) params.set("orderNumber", data.orderNumber);
       if (data?.orderId) params.set("orderId", data.orderId);
       params.set("deliveryMethod", formData.deliveryMethod);
-      if (pointsToEarn > 0) params.set("points", String(pointsToEarn));
       if (isDelivery) {
         if (formData.address) params.set("address", formData.address);
         if (formData.addressDetails) params.set("addressDetails", formData.addressDetails);

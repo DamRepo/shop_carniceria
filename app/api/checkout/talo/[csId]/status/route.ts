@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/db";
+import { authOptions } from "@/lib/auth";
+import { getOrderPointsInfo, isPointsEnabled } from "@/lib/loyalty-points";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,12 +26,25 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
       pointsDiscount: true,
       pointsRedeemed: true,
       orderId: true,
-      order: { select: { orderNumber: true, status: true, pointsEarned: true } },
+      order: { select: { orderNumber: true, status: true } },
     },
   });
 
   if (!cs) {
     return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
+  }
+
+  // Puntos a ganar / ganados: solo con el flag prendido y solo para el dueño
+  // del pedido (sesión). Quien tenga el csId sin ser el dueño no los ve.
+  let pointsInfo: { toEarn: number; earned: number } | null = null;
+  if (isPointsEnabled()) {
+    try {
+      const session = await getServerSession(authOptions).catch(() => null);
+      const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+      pointsInfo = await getOrderPointsInfo(cs.orderId, userId);
+    } catch (e) {
+      console.error("talo status: error cargando puntos", e);
+    }
   }
 
   return NextResponse.json({
@@ -44,10 +60,11 @@ export async function GET(_req: Request, { params }: { params: { csId: string } 
     // Estado de la ORDEN (no de la sesión): el admin puede cancelarla sin que
     // la CheckoutSession cambie, y el cliente que está esperando tiene que enterarse.
     orderStatus: cs.order?.status ?? null,
-    // Puntos: solo si hubo canje / se acreditaron (sin puntos la respuesta queda igual).
+    // Puntos: solo si hubo canje / hay puntos (sin puntos la respuesta queda igual).
     ...(cs.pointsDiscount
       ? { pointsDiscount: cs.pointsDiscount, pointsRedeemed: cs.pointsRedeemed ?? 0 }
       : {}),
-    ...(cs.order?.pointsEarned ? { pointsEarned: cs.order.pointsEarned } : {}),
+    ...(pointsInfo && pointsInfo.toEarn > 0 ? { pointsToEarn: pointsInfo.toEarn } : {}),
+    ...(pointsInfo && pointsInfo.earned > 0 ? { pointsEarned: pointsInfo.earned } : {}),
   });
 }

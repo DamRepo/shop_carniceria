@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
+  computeOrderEarnablePoints,
   computePointsEarned,
   isPointsEnabled,
   isPointsPaymentMethod,
@@ -37,6 +38,7 @@ import {
 
 export {
   awardPointsOnPaid,
+  computeOrderEarnablePoints,
   computePointsEarned,
   isPointsEnabled,
   releasePoints,
@@ -489,4 +491,47 @@ export async function getPointsHistory(
     });
   }
   return entries.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, limit);
+}
+
+export interface OrderPointsInfo {
+  /** Puntos que va a sumar cuando se confirme el pago (0 si ya se pagó o no suma). */
+  toEarn: number;
+  /** Puntos ya acreditados por el pedido (0 si todavía no). */
+  earned: number;
+}
+
+/**
+ * Puntos de un pedido para las pantallas post compra. Solo con el flag
+ * prendido y solo para el dueño del pedido (userId de la sesión): a nadie más
+ * se le dice nada. null = no mostrar. Solo lee.
+ */
+export async function getOrderPointsInfo(
+  orderId: string | null | undefined,
+  sessionUserId: string | null | undefined,
+  db?: DbClient
+): Promise<OrderPointsInfo | null> {
+  if (!isPointsEnabled() || !orderId || !sessionUserId) return null;
+  const client = db ?? prisma;
+  const order = await client.order.findUnique({
+    where: { id: orderId },
+    select: {
+      userId: true,
+      status: true,
+      paymentStatus: true,
+      paymentMethod: true,
+      subtotal: true,
+      welcomeDiscount: true,
+      pointsDiscount: true,
+      pointsEarned: true,
+      user: { select: { role: true } },
+    },
+  });
+  if (!order || order.userId !== sessionUserId) return null;
+
+  const earned = order.pointsEarned ?? 0;
+  const toEarn =
+    earned > 0 || order.paymentStatus === "PAID"
+      ? 0
+      : computeOrderEarnablePoints({ ...order, userRole: order.user?.role });
+  return { toEarn, earned };
 }
