@@ -62,10 +62,13 @@ async function inTransaction<T>(
 /**
  * Devuelve los puntos de cada asignación a su lote de origen. Si el lote ya
  * venció o fue revocado, los puntos vuelven pero no cuentan en el saldo.
+ * Recorre los lotes en el mismo orden en que los bloquea reservePoints
+ * (vencimiento, id) para no generar deadlocks con un checkout concurrente.
  */
 async function returnAllocations(tx: Prisma.TransactionClient, reservationId: string): Promise<void> {
   const allocations = await tx.pointsReservationAllocation.findMany({
     where: { reservationId },
+    orderBy: [{ lot: { expiresAt: "asc" } }, { lotId: "asc" }],
     select: { lotId: true, points: true },
   });
   for (const a of allocations) {

@@ -314,6 +314,27 @@ async function main() {
   );
   check("reserva con monto que no coincide → INVALID_AMOUNT", isPointsError(badErr, "INVALID_AMOUNT"), String(badErr));
 
+  // 11b) Liberar y reservar a la vez sobre los mismos lotes: mismo orden de
+  //      bloqueo, sin deadlocks, y el saldo cierra.
+  let deadlocks = 0;
+  let badTotals = 0;
+  for (let i = 0; i < 5; i++) {
+    const u = await createUser(`lockorder-${i}`);
+    await createLot(u.id, 60, 10);
+    await createLot(u.id, 100, 30);
+    const oA = await createOrder({ userId: u.id });
+    const oB = await createOrder({ userId: u.id });
+    await reserve(u.id, oA.id, 100);
+    const res = await Promise.allSettled([releasePoints(null, oA.id), reserve(u.id, oB.id, 100)]);
+    for (const r of res) {
+      if (r.status === "rejected" && !isPointsError(r.reason, "CONFLICT")) deadlocks++;
+    }
+    const bReserved = res[1].status === "fulfilled" ? 100 : 0;
+    if ((await balanceOf(u.id)) !== 160 - bReserved) badTotals++;
+  }
+  check("liberar y reservar a la vez (5 veces) → sin deadlocks ni errores", deadlocks === 0, deadlocks);
+  check("…y el saldo siempre cierra (160 − lo reservado)", badTotals === 0, badTotals);
+
   // 12) Cancelación de pedido pagado sin saldo negativo
   const cancel = await createUser("cancel");
   const oP = await paidOrder(cancel.id, { subtotal: 1_000_000 });
