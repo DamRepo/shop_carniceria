@@ -96,7 +96,8 @@ export async function GET(req: Request) {
         pointsRedeemed: true,
         pointsDiscount: true,
         pointsEarned: true,
-        pointsReservation: { select: { status: true, points: true } },
+        // createdAt: el admin marca las reservas RESERVED con más de 3 días.
+        pointsReservation: { select: { status: true, points: true, createdAt: true } },
         // Lote ganado y su revocación: si se revocó menos de lo ganado, la
         // diferencia son puntos que el cliente ya había usado (faltante).
         pointsLot: { select: { earned: true, revokedAt: true } },

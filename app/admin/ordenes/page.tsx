@@ -77,7 +77,7 @@ interface Order {
   pointsRedeemed?: number | null;
   pointsDiscount?: number | null;
   pointsEarned?: number | null;
-  pointsReservation?: { status: 'RESERVED' | 'USED' | 'RELEASED'; points: number } | null;
+  pointsReservation?: { status: 'RESERVED' | 'USED' | 'RELEASED'; points: number; createdAt: string } | null;
   pointsLot?: { earned: number; revokedAt: string | null } | null;
   pointsMovements?: { points: number }[];
 
@@ -157,6 +157,21 @@ function getPointsRevokeInfo(order: Order): { revoked: number; shortfall: number
   if (!order.pointsLot?.revokedAt) return null;
   const revoked = order.pointsMovements?.[0]?.points ?? 0;
   return { revoked, shortfall: Math.max(0, order.pointsLot.earned - revoked) };
+}
+
+// Reserva de puntos en RESERVED hace más de esto: probablemente colgada
+// (pedido sin cobrar ni cancelar). Mientras tanto los lotes del cliente vencen.
+const STALE_POINTS_RESERVATION_DAYS = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Días que lleva reservada, si está RESERVED hace más de 3 días; si no, null. */
+function getStaleReservationDays(order: Order, now: number): number | null {
+  const r = order.pointsReservation;
+  if (r?.status !== 'RESERVED') return null;
+  const created = new Date(r.createdAt).getTime();
+  if (Number.isNaN(created)) return null;
+  const days = Math.floor((now - created) / DAY_MS);
+  return days > STALE_POINTS_RESERVATION_DAYS ? days : null;
 }
 
 type MpVerifyFeedback = { tone: 'success' | 'warning' | 'error'; message: string };
@@ -413,22 +428,26 @@ export default function OrdenesAdmin() {
     if (!confirm(`¿Cambiar el estado de esta orden a "${newLabel}"?`)) return;
 
     try {
-      const patch = (extra: Record<string, unknown> = {}) =>
+      const patch = () =>
         fetch(`/api/admin/orders/${orderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus, ...extra }),
+          body: JSON.stringify({ status: newStatus }),
         });
       let res = await patch();
       let data = await res.json().catch(() => null);
       // Efectivo sin cobrar con puntos reservados: el servidor no lo deja
-      // completar en silencio. Se avisa y solo sigue si el admin lo confirma.
+      // completar. Se ofrece marcar el cobro (liquida el canje y acredita los
+      // puntos de la compra) y después completar. Si no, queda como estaba.
       if (res.status === 409 && data?.code === 'POINTS_RESERVED_UNPAID') {
         const proceed = confirm(
-          `${data.error}\n\nSi lo completás igual, los puntos quedan reservados y el cliente no suma los puntos de esta compra. ¿Completar igual?`
+          `${data.error}\n\n¿Marcar como cobrado y completar?`
         );
         if (!proceed) return;
-        res = await patch({ acknowledgePointsReserved: true });
+        const paidRes = await fetch(`/api/admin/orders/${orderId}/mark-cash-paid`, { method: 'POST' });
+        const paidData = await paidRes.json().catch(() => null);
+        if (!paidRes.ok) throw new Error(paidData?.error ?? 'Error al marcar como cobrado');
+        res = await patch();
         data = await res.json().catch(() => null);
       }
       if (!res.ok) throw new Error(data?.error ?? 'Error al actualizar estado');
@@ -575,6 +594,7 @@ export default function OrdenesAdmin() {
           {filteredOrders.map((order) => {
             const { Icon: StatusIcon, color: statusColor, label: statusLabel } = getStatusUi(order.status);
             const pickupDateLabel = formatPickupDate(order.pickupDate);
+            const staleReservationDays = getStaleReservationDays(order, Date.now());
 
             return (
               <Card key={order.id} className="border-border bg-card p-6">
@@ -589,6 +609,15 @@ export default function OrdenesAdmin() {
                         <StatusIcon className="h-4 w-4" />
                         {statusLabel}
                       </span>
+                      {staleReservationDays !== null && (
+                        <span
+                          className="flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800"
+                          title="Cobralo o cancelalo para que el cliente no pierda los puntos cuando venzan."
+                        >
+                          <AlertTriangle className="h-4 w-4" />
+                          {order.pointsReservation?.points} puntos reservados hace {staleReservationDays} días
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {new Date(order.createdAt).toLocaleDateString('es-AR', {
