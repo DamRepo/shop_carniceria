@@ -560,6 +560,30 @@ async function main() {
   check("historial ordenado del más nuevo al más viejo",
     hCash.every((h, i) => i === 0 || hCash[i - 1].date.getTime() >= h.date.getTime()));
 
+  // 19b) Restricciones CHECK de la base (migración 20261026130000)
+  const chk = await createUser("checks");
+  const chkLot = await createLot(chk.id, 100, 10);
+  const negErr = await errorOf(() => prisma.pointsLot.update({ where: { id: chkLot.id }, data: { remaining: -1 } }));
+  check("base: remaining negativo → rechazado", negErr !== null, String(negErr));
+  const overErr = await errorOf(() => prisma.pointsLot.update({ where: { id: chkLot.id }, data: { remaining: 101 } }));
+  check("base: remaining mayor que earned → rechazado", overErr !== null, String(overErr));
+  const zeroLotErr = await errorOf(() => createLot(chk.id, 0, 10));
+  check("base: lote con earned 0 → rechazado", zeroLotErr !== null, String(zeroLotErr));
+  const oChk = await createOrder({ userId: chk.id });
+  const zeroResErr = await errorOf(() =>
+    prisma.pointsReservation.create({ data: { orderId: oChk.id, userId: chk.id, points: 0, status: "RESERVED" } })
+  );
+  check("base: reserva de 0 puntos → rechazada", zeroResErr !== null, String(zeroResErr));
+  const negMoveErr = await errorOf(() =>
+    prisma.pointsMovement.create({ data: { userId: chk.id, orderId: oChk.id, type: "EARN", points: -5 } })
+  );
+  check("base: movimiento negativo → rechazado", negMoveErr !== null, String(negMoveErr));
+  const zeroMove = await errorOf(() =>
+    prisma.pointsMovement.create({ data: { userId: chk.id, orderId: oChk.id, type: "REVOKE", points: 0 } })
+  );
+  check("base: movimiento REVOKE de 0 → permitido (lote usado entero)", zeroMove === null, String(zeroMove));
+  check("base: el lote quedó intacto en 100", (await balanceOf(chk.id)) === 100);
+
   // 20) Puntos de la orden para las pantallas post compra (nunca desde la URL)
   const owner = await createUser("owner");
   const stranger = await createUser("stranger");

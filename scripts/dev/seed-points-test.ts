@@ -50,8 +50,9 @@ function parseArgs(argv: string[]): { reset: boolean; points: number } {
       reset = true;
     } else if (arg.startsWith("--points=")) {
       const n = Number(arg.slice("--points=".length));
-      if (!Number.isInteger(n) || n < 0 || n > 100_000) {
-        throw new Error(`--points inválido: "${arg}". Tiene que ser un entero entre 0 y 100000.`);
+      // Mínimo 1: la base exige earned > 0 en PointsLot. Para quedar sin puntos, --reset.
+      if (!Number.isInteger(n) || n < 1 || n > 100_000) {
+        throw new Error(`--points inválido: "${arg}". Tiene que ser un entero entre 1 y 100000 (para 0, usá --reset).`);
       }
       points = n;
     } else {
@@ -133,7 +134,7 @@ async function seed(userId: string, points: number) {
   }
 
   // Orden pagada que originó el lote de prueba (1 punto cada $100).
-  const subtotal = Math.max(points, 1) * 10_000;
+  const subtotal = points * 10_000;
   let lotOrder = await prisma.order.findUnique({
     where: { orderNumber: POINTS_ORDER_NUMBER },
     select: { id: true, pointsLot: { select: { id: true, _count: { select: { allocations: true } } } } },
