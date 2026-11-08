@@ -7,10 +7,8 @@ import { verifyMpPaymentForOrder } from "@/lib/mp-payment-processor";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions).catch(() => null);
 

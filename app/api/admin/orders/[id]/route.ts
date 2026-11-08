@@ -37,10 +37,8 @@ const VALID_TRANSITIONS: Record<AllowedStatus, readonly AllowedStatus[]> = {
   CANCELLED:       [],
 };
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions).catch(() => null);
 

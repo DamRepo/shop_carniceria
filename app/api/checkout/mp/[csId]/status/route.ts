@@ -10,7 +10,8 @@ export const runtime = "nodejs";
  * adivinable) desde las pantallas de retorno de MP. Devuelve solo un estado
  * derivado: ni mpStatus crudo, ni ids de pago, ni montos, ni datos personales.
  */
-export async function GET(_req: Request, { params }: { params: { csId: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ csId: string }> }) {
+  const params = await props.params;
   const cs = await prisma.checkoutSession.findUnique({
     where: { id: params.csId },
     select: {

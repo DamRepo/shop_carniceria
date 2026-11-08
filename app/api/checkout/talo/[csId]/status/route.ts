@@ -9,7 +9,8 @@ export const runtime = "nodejs";
  * (cuid no adivinable) mientras el cliente espera la confirmación del pago.
  * No expone datos personales del cliente.
  */
-export async function GET(_req: Request, { params }: { params: { csId: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ csId: string }> }) {
+  const params = await props.params;
   const cs = await prisma.checkoutSession.findUnique({
     where: { id: params.csId },
     select: {

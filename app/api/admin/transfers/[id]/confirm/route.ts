@@ -13,10 +13,8 @@ export const runtime = "nodejs";
 const escHtmlTg = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export async function PATCH(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions).catch(() => null);
     const role = (session?.user as any)?.role as string | undefined;

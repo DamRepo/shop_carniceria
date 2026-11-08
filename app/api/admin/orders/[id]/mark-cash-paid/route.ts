@@ -47,10 +47,8 @@ function cancelledOrderResponse(
   );
 }
 
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions).catch(() => null);
     const role = (session?.user as any)?.role as string | undefined;

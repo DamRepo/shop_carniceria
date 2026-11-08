@@ -17,10 +17,8 @@ function computeStockIncrement(unitType: "PER_UNIT" | "PER_KG", qty: number): nu
   return Math.round(qty * 1000);
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions).catch(() => null);
     const role = (session?.user as any)?.role as string | undefined;
