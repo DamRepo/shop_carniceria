@@ -7,7 +7,7 @@ import { ProductJsonLd } from "@/components/ProductJsonLd";
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://carniceriaelnegro.com";
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 const getProductSeo = cache((slug: string) =>
   prisma.product.findFirst({
@@ -25,7 +25,8 @@ const getProductSeo = cache((slug: string) =>
   })
 );
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const p = await getProductSeo(params.slug);
   if (!p) return { title: "Producto no encontrado" };
 
@@ -48,7 +49,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProductDetailPage({ params }: Props) {
+export default async function ProductDetailPage(props: Props) {
+  const params = await props.params;
   const p = await getProductSeo(params.slug);
 
   return (
