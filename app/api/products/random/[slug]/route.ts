@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic"; // explícito: resultado aleatorio, no se cachea
+
 function stockFromDb(_unitType: "PER_KG" | "PER_UNIT", stock: number) {
   if (!Number.isFinite(stock) || stock < 0) return 0;
   return stock;
