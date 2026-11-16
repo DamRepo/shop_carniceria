@@ -134,10 +134,8 @@ const COMBO_SELECT = {
 /* =========================
    PATCH /api/admin/combos/[id]
    ========================= */
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ADMIN") {
@@ -262,10 +260,8 @@ export async function PATCH(
    DELETE /api/admin/combos/[id]
    (soft delete)
    ========================= */
-export async function DELETE(
-  _request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ADMIN") {

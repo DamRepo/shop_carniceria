@@ -7,10 +7,8 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { orderId: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ orderId: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions).catch(() => null);
   const role = (session?.user as any)?.role as string | undefined;
 

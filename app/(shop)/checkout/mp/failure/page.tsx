@@ -2,11 +2,12 @@ import { MpPaymentStatusWatcher } from "../MpPaymentStatusWatcher";
 
 export const dynamic = "force-dynamic";
 
-export default function MpFailurePage({
-  searchParams,
-}: {
-  searchParams: { csId?: string };
-}) {
+export default async function MpFailurePage(
+  props: {
+    searchParams: Promise<{ csId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // MP vuelve con el csId de la back_url (preference/route.ts). El redirect a
   // failure no es definitivo: el pago puede acreditarse después, y el watcher
   // corrige el mensaje si pasa.

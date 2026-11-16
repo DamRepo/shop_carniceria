@@ -5,10 +5,8 @@ import { computeComboPricing, sumComboComponentsCents } from "@/lib/combos";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { slug: string } }
-) {
+export async function GET(_request: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   try {
     const combo = await prisma.combo.findUnique({
       where: { slug: params.slug },

@@ -9,11 +9,12 @@ import { formatPrice } from "@/lib/utils-format";
 
 export const dynamic = "force-dynamic";
 
-export default async function MpSuccessPage({
-  searchParams,
-}: {
-  searchParams: { csId?: string };
-}) {
+export default async function MpSuccessPage(
+  props: {
+    searchParams: Promise<{ csId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Mercado Pago vuelve a la back_url que arma preference/route.ts, que lleva
   // csId (el id de la CheckoutSession). La orden se resuelve a través de ella.
   const csId = searchParams?.csId ?? "";

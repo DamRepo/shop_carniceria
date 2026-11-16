@@ -15,7 +15,7 @@ function stockFromDb(stock: number, unitType: UnitType): number {
 }
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     search?: string;
     category?: string;
     estado?: string;
@@ -24,10 +24,11 @@ interface PageProps {
     page?: string;
     orderBy?: string;
     order?: string;
-  };
+  }>;
 }
 
-export default async function ProductosAdminPage({ searchParams }: PageProps) {
+export default async function ProductosAdminPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const search = searchParams.search?.trim() ?? "";
   const category = searchParams.category ?? "";
   const estado = searchParams.estado ?? "";

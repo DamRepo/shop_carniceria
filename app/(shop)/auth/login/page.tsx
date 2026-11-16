@@ -4,11 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import LoginClient from "./LoginClient";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { callbackUrl?: string };
-}) {
+export default async function LoginPage(
+  props: {
+    searchParams?: Promise<{ callbackUrl?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   if (session) {
     const raw = searchParams?.callbackUrl ?? "";

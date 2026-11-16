@@ -20,10 +20,8 @@ function requireAdmin(session: any) {
   return session && session.user?.role === "ADMIN";
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!requireAdmin(session)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -73,10 +71,8 @@ export async function PATCH(
   return NextResponse.json(updated);
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!requireAdmin(session)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });

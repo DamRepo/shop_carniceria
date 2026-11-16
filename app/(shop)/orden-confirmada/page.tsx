@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
  * "Ganás N puntos cuando se confirme tu pago": sale de la orden, nunca de la
  * URL. Con el flag apagado no se consulta nada y la página queda igual.
  */
-export default async function OrdenConfirmadaPage({
-  searchParams,
-}: {
-  searchParams: { orderId?: string | string[] };
-}) {
+export default async function OrdenConfirmadaPage(
+  props: {
+    searchParams: Promise<{ orderId?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   let pointsToEarn = 0;
   if (isPointsEnabled()) {
     const orderId = typeof searchParams.orderId === "string" ? searchParams.orderId : null;

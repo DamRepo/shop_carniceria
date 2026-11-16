@@ -10,7 +10,9 @@ const nextConfig = {
 
   // ✅ images optimizadas + Cloudinary permitido
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "res.cloudinary.com" }],
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/dku7noipe/**" },
+    ],
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 7, // 7 días
   },
