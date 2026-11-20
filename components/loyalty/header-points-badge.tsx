@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Coins } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -44,22 +43,25 @@ export function useHeaderPointsBalance(enabled: boolean): number | null {
   return balance;
 }
 
-/** Indicador de puntos: solo si hay saldo. */
+/** Indicador compacto de puntos ("1.128 pts"): solo si hay saldo. */
 export function HeaderPointsBadge({ balance, className }: { balance: number | null; className?: string }) {
   if (balance === null || balance <= 0) return null;
   const label = balance.toLocaleString("es-AR");
   return (
     <Link
       href="/perfil#mis-puntos"
-      aria-label={`Tenés ${label} ${balance === 1 ? "punto" : "puntos"}. Ver mis puntos`}
+      title="Puntos"
+      aria-label={`${label} ${balance === 1 ? "punto" : "puntos"}`}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-bone transition-colors hover:bg-iron",
+        "inline-flex shrink-0 items-baseline gap-1 whitespace-nowrap rounded-full px-2 py-1 leading-none text-bone",
+        "bg-gradient-to-r from-blood/25 to-blood-dark/40 ring-1 ring-inset ring-blood/40",
+        "transition-colors hover:from-blood/35 hover:to-blood-dark/50",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
     >
-      <Coins className="h-4 w-4" aria-hidden="true" />
-      <span>{label}</span>
+      <span className="text-xs font-semibold tabular-nums">{label}</span>
+      <span className="text-[10px] font-medium uppercase tracking-wide text-bone/75">pts</span>
     </Link>
   );
 }
