@@ -24,6 +24,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils-format';
+import {
+  CANCELLED_MESSAGE,
+  CANCELLED_WITH_LOYALTY_MESSAGE,
+  orderHadLoyalty,
+} from '@/lib/order-reactivation';
 import { toast } from 'sonner';
 
 type OrderStatus =
@@ -779,11 +784,12 @@ export default function OrdenesAdmin() {
                   />
                 </div>
 
-                {/* Cambiar estado */}
-                <div className="flex gap-2">
+                {/* Cambiar estado. Cancelada es terminal (la API también lo rechaza). */}
+                <div className="flex flex-col gap-2">
                   <Select
                     value={order.status}
                     onValueChange={(value) => handleStatusChange(order.id, value as OrderStatus)}
+                    disabled={order.status === 'CANCELLED'}
                   >
                     <SelectTrigger className="w-56 border-border bg-muted">
                       <SelectValue />
@@ -798,6 +804,21 @@ export default function OrdenesAdmin() {
                       <SelectItem value="CANCELLED">Cancelado</SelectItem>
                     </SelectContent>
                   </Select>
+                  {order.status === 'CANCELLED' && (
+                    <p className="max-w-md text-xs text-muted-foreground">
+                      {orderHadLoyalty({
+                        welcomeDiscount: order.welcomeDiscount,
+                        pointsRedeemed: order.pointsRedeemed ?? null,
+                        pointsEarned: order.pointsEarned ?? null,
+                        // El listado no trae WelcomeBenefit; welcomeDiscount alcanza.
+                        hasWelcomeBenefit: false,
+                        hasPointsReservation: Boolean(order.pointsReservation),
+                        hasPointsLot: Boolean(order.pointsLot),
+                      })
+                        ? CANCELLED_WITH_LOYALTY_MESSAGE
+                        : CANCELLED_MESSAGE}
+                    </p>
+                  )}
                 </div>
               </Card>
             );

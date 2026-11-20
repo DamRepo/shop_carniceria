@@ -11,6 +11,12 @@ import {
   type RevokeResult,
 } from "@/lib/loyalty-points";
 import { formatMoney, sendTelegramMessage } from "@/lib/telegram";
+import {
+  CANCELLED_MESSAGE,
+  CANCELLED_WITH_LOYALTY_CODE,
+  CANCELLED_WITH_LOYALTY_MESSAGE,
+  orderHadLoyalty,
+} from "@/lib/order-reactivation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -79,6 +85,12 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         cancelledAt: true,
         paymentStatus: true,
         paymentMethod: true,
+        welcomeDiscount: true,
+        pointsRedeemed: true,
+        pointsEarned: true,
+        welcomeBenefit: { select: { id: true } },
+        pointsReservation: { select: { id: true } },
+        pointsLot: { select: { id: true } },
         items: {
           select: {
             id: true,
@@ -95,6 +107,25 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
       return NextResponse.json(
         { error: "Orden no encontrada" },
         { status: 404 }
+      );
+    }
+
+    // Cancelada es terminal. Mensaje claro para el admin; si tuvo bienvenida
+    // o puntos, se explica que ya se devolvieron.
+    if (current.status === "CANCELLED") {
+      const hadLoyalty = orderHadLoyalty({
+        welcomeDiscount: current.welcomeDiscount,
+        pointsRedeemed: current.pointsRedeemed,
+        pointsEarned: current.pointsEarned,
+        hasWelcomeBenefit: current.welcomeBenefit !== null,
+        hasPointsReservation: current.pointsReservation !== null,
+        hasPointsLot: current.pointsLot !== null,
+      });
+      return NextResponse.json(
+        hadLoyalty
+          ? { error: CANCELLED_WITH_LOYALTY_MESSAGE, code: CANCELLED_WITH_LOYALTY_CODE, allowedNext: [] }
+          : { error: CANCELLED_MESSAGE, allowedNext: [] },
+        { status: 422 }
       );
     }
 
