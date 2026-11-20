@@ -7,17 +7,20 @@ import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 /**
- * Saldo de puntos del cliente logueado para el header. Con el flag apagado
- * (enabled=false, lo decide el layout en el servidor) no hace ningún pedido.
- * Se pide una vez por sesión, no en cada navegación.
+ * Saldo de puntos del cliente logueado para el header. No depende del flag:
+ * el header también vive en páginas prerenderizadas en el build, donde un
+ * valor pasado por el layout quedaría fijo hasta reconstruir. Se le pregunta
+ * siempre a /api/loyalty/points, que lee el flag en cada request: con el flag
+ * apagado responde 404 y no se muestra nada (igual ante cualquier error).
+ * Se pide al montar el header, no en cada navegación.
  */
-export function useHeaderPointsBalance(enabled: boolean): number | null {
+export function useHeaderPointsBalance(): number | null {
   const { data: session, status } = useSession();
   const role = session?.user?.role;
   const [balance, setBalance] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!enabled || status !== "authenticated" || role !== "CUSTOMER") {
+    if (status !== "authenticated" || role !== "CUSTOMER") {
       setBalance(null);
       return;
     }
@@ -38,7 +41,7 @@ export function useHeaderPointsBalance(enabled: boolean): number | null {
     return () => {
       cancelled = true;
     };
-  }, [enabled, status, role]);
+  }, [status, role]);
 
   return balance;
 }

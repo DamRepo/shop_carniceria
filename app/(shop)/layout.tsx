@@ -7,8 +7,6 @@ import { DeliveryBanner } from "@/components/delivery-banner";
 import { OffersBanner } from "@/components/offers-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { GoogleAnalytics } from "@/components/google-analytics";
-// El flag de puntos se lee en el servidor; el header solo recibe true/false.
-import { isPointsEnabled } from "@/lib/loyalty-points";
 
 export default function ShopLayout({
   children,
@@ -18,7 +16,7 @@ export default function ShopLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <PromoTopBanner />
-      <Header pointsEnabled={isPointsEnabled()} />
+      <Header />
       <DeliveryBanner />
 
       <main className="flex-1">{children}</main>

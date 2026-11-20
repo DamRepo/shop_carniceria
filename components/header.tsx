@@ -104,9 +104,9 @@ function getBoolParamFromHref(href: string, key: string): boolean {
   return getParamFromHref(href, key) === "true";
 }
 
-export function Header({ pointsEnabled = false }: { pointsEnabled?: boolean }) {
+export function Header() {
   const [mounted, setMounted] = useState(false);
-  const pointsBalance = useHeaderPointsBalance(pointsEnabled);
+  const pointsBalance = useHeaderPointsBalance();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const totalItems = useCartStore((state) => state.getTotalItems());
