@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
-import type { TvCombo, TvData, TvOffer } from "@/lib/tv-data";
+import type { TvCombo, TvData, TvProduct } from "@/lib/tv-data";
 import { getOrderProcessingStatus, isStoreHoursShape, type ProcessingStatus } from "@/lib/business-hours";
 import { formatPrice } from "@/lib/utils-format";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,19 @@ import styles from "./tv.module.css";
 
 const STAGE_W = 1920;
 const STAGE_H = 1080;
+// Margen de seguridad (~4%) por el overscan de muchas teles: el contenido
+// importante (logo, QR, textos, precios) queda dentro de x 77–1843 / y 43–1037.
+// Los textos arrancan en x 110 y lo de la derecha termina en x 1824 (right 96).
 
 const BRAND_SECONDS = 12;
-const OFFER_PAGE_SECONDS = 12;
-const COMBO_PAGE_SECONDS = 10;
-const OFFERS_PER_PAGE = 3;
+const SPOTLIGHT_SECONDS = 6;
+const COMBO_SECONDS = 7;
+const SUMMARY_SECONDS = 10;
+
+const OFFERS_PER_LAP = 8;
+const FEATURED_PER_LAP = 8;
+const COMBOS_PER_LAP = 5;
+const SUMMARY_MAX = 6;
 
 const FADE_MS = 700;
 const REFRESH_MS = 60_000;
@@ -26,6 +34,7 @@ const VIDEO_LOAD_TIMEOUT_MS = 8_000;
 // Margen sobre la duración del video por si se traba a mitad de camino.
 const VIDEO_STALL_MARGIN_MS = 10_000;
 const STATUS_REFRESH_MS = 30_000;
+const FULLSCREEN_HINT_MS = 15_000;
 
 // Recarga completa cada ~3 h para que el navegador de la tele no acumule memoria.
 const RELOAD_BASE_MS = 3 * 60 * 60 * 1000;
@@ -38,7 +47,11 @@ const LOGO_SRC = "/logo-el-negro.png";
 const STORE_PHOTO_SRC = "/tv/local.jpg";
 const QR_SRC = "/tv/qr.svg";
 
-const PHASES = ["brand", "offers", "video-pedir", "combos", "video-talo", "qr"] as const;
+// Todas las fotos de producto se piden con el mismo `sizes`: así la precarga,
+// el spotlight y la grilla comparten la misma URL optimizada (y la caché).
+const PRODUCT_IMAGE_SIZES = "820px";
+
+const PHASES = ["brand", "offers", "video-pedir", "featured", "combos", "video-talo", "qr"] as const;
 type Phase = (typeof PHASES)[number];
 
 const VIDEOS: Partial<Record<Phase, string>> = {
@@ -46,31 +59,79 @@ const VIDEOS: Partial<Record<Phase, string>> = {
   "video-talo": "/tv/videos/pago-talo.mp4",
 };
 
-type Step = { phase: Phase; page: number; n: number };
+/** `lap` cuenta las vueltas completas: cambia qué productos salen y en qué orden. */
+type Step = { phase: Phase; page: number; n: number; lap: number };
 
-function pageCount(phase: Phase, data: TvData): number {
-  if (phase === "offers") return Math.ceil(data.offers.length / OFFERS_PER_PAGE);
-  if (phase === "combos") return data.combos.length;
+/** Lo que muestra un spotlight: producto o combo. */
+type SpotlightItem = {
+  id: string;
+  name: string;
+  images: string[];
+  price: number;
+  oldPrice: number | null;
+  discountPercent: number | null;
+};
+
+const fromProduct = (p: TvProduct): SpotlightItem => ({ ...p, images: p.image ? [p.image] : [] });
+const fromCombo = (c: TvCombo): SpotlightItem => c;
+
+/**
+ * Hasta `perLap` elementos, arrancando en un punto distinto en cada vuelta para
+ * que no salgan siempre los mismos primero. Con el tiempo pasan todos.
+ */
+function pickForLap<T>(items: T[], lap: number, perLap: number): T[] {
+  const count = Math.min(perLap, items.length);
+  if (count === 0) return [];
+  const start = (lap * perLap) % items.length;
+  return Array.from({ length: count }, (_, i) => items[(start + i) % items.length]);
+}
+
+const lapOffers = (data: TvData, lap: number) => pickForLap(data.offers, lap, OFFERS_PER_LAP).map(fromProduct);
+const lapFeatured = (data: TvData, lap: number) =>
+  pickForLap(data.featured, lap, FEATURED_PER_LAP).map(fromProduct);
+const lapCombos = (data: TvData, lap: number) => pickForLap(data.combos, lap, COMBOS_PER_LAP).map(fromCombo);
+
+/** El resumen en grilla va al final de las ofertas cuando hay más de una. */
+const hasOffersSummary = (data: TvData) => data.offers.length > 1;
+
+function pageCount(phase: Phase, data: TvData, lap: number): number {
+  if (phase === "offers") return lapOffers(data, lap).length + (hasOffersSummary(data) ? 1 : 0);
+  if (phase === "featured") return lapFeatured(data, lap).length;
+  if (phase === "combos") return lapCombos(data, lap).length;
   return 1;
 }
 
 /** Siguiente paso: otra página de la misma fase, o la próxima fase con contenido. */
 function nextStep(step: Step, data: TvData): Step {
-  if (step.page + 1 < pageCount(step.phase, data)) {
-    return { phase: step.phase, page: step.page + 1, n: step.n + 1 };
+  if (step.page + 1 < pageCount(step.phase, data, step.lap)) {
+    return { ...step, page: step.page + 1, n: step.n + 1 };
   }
   const i = PHASES.indexOf(step.phase);
   for (let k = 1; k <= PHASES.length; k++) {
-    const phase = PHASES[(i + k) % PHASES.length];
-    if (pageCount(phase, data) > 0) return { phase, page: 0, n: step.n + 1 };
+    const idx = (i + k) % PHASES.length;
+    const lap = i + k >= PHASES.length ? step.lap + 1 : step.lap;
+    const phase = PHASES[idx];
+    if (pageCount(phase, data, lap) > 0) return { phase, page: 0, n: step.n + 1, lap };
   }
-  return { phase: "brand", page: 0, n: step.n + 1 };
+  return { phase: "brand", page: 0, n: step.n + 1, lap: step.lap + 1 };
 }
 
-function stepSeconds(step: Step, qrSeconds: number): number {
+/** Spotlight (producto o combo) que muestra un paso, si es uno. */
+function spotlightFor(step: Step, data: TvData): SpotlightItem | null {
+  if (step.phase === "offers") return lapOffers(data, step.lap)[step.page] ?? null;
+  if (step.phase === "featured") return lapFeatured(data, step.lap)[step.page] ?? null;
+  if (step.phase === "combos") return lapCombos(data, step.lap)[step.page] ?? null;
+  return null;
+}
+
+const isOffersSummary = (step: Step, data: TvData) =>
+  step.phase === "offers" && step.page === lapOffers(data, step.lap).length;
+
+function stepSeconds(step: Step, data: TvData, qrSeconds: number): number {
   if (step.phase === "brand") return BRAND_SECONDS;
-  if (step.phase === "offers") return OFFER_PAGE_SECONDS;
-  if (step.phase === "combos") return COMBO_PAGE_SECONDS;
+  if (step.phase === "offers") return isOffersSummary(step, data) ? SUMMARY_SECONDS : SPOTLIGHT_SECONDS;
+  if (step.phase === "featured") return SPOTLIGHT_SECONDS;
+  if (step.phase === "combos") return COMBO_SECONDS;
   return qrSeconds;
 }
 
@@ -92,7 +153,7 @@ function isPriced(value: Record<string, unknown>): boolean {
   );
 }
 
-function isTvOffer(value: unknown): value is TvOffer {
+function isTvProduct(value: unknown): value is TvProduct {
   return isRecord(value) && isPriced(value) && (value.image === null || typeof value.image === "string");
 }
 
@@ -102,13 +163,16 @@ function isTvCombo(value: unknown): value is TvCombo {
   return Array.isArray(images) && images.every((src: unknown) => typeof src === "string");
 }
 
+function isProductList(value: unknown): value is TvProduct[] {
+  return Array.isArray(value) && value.every((p: unknown) => isTvProduct(p));
+}
+
 function isTvData(value: unknown): value is TvData {
   if (!isRecord(value)) return false;
-  const offers: unknown = value.offers;
   const combos: unknown = value.combos;
   return (
-    Array.isArray(offers) &&
-    offers.every((o: unknown) => isTvOffer(o)) &&
+    isProductList(value.offers) &&
+    isProductList(value.featured) &&
     Array.isArray(combos) &&
     combos.every((c: unknown) => isTvCombo(c)) &&
     isStoreHoursShape(value.hours)
@@ -122,14 +186,19 @@ type TvClientProps = {
   qrSeconds: number;
   speed: number;
   debug: boolean;
+  /** Pide pantalla completa con el primer click o tecla (?fs=0 lo apaga). */
+  fullscreen: boolean;
+  /** Datos de ejemplo (?mock=1, solo desarrollo): no se refrescan desde la API. */
+  mock: boolean;
 };
 
-export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps) {
+export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, mock }: TvClientProps) {
   const [mounted, setMounted] = useState(false);
   const [scale, setScale] = useState(1);
   const [data, setData] = useState<TvData>(initialData);
-  const [step, setStep] = useState<Step>({ phase: "brand", page: 0, n: 0 });
+  const [step, setStep] = useState<Step>({ phase: "brand", page: 0, n: 0, lap: 0 });
   const [leaving, setLeaving] = useState<Step | null>(null);
+  const [fsHint, setFsHint] = useState(fullscreen);
 
   const dataRef = useRef(data);
   const stepRef = useRef(step);
@@ -144,20 +213,59 @@ export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps
     setStep(next);
   }, []);
 
-  // Escenario fijo de 1920x1080 escalado a la pantalla. Se renderiza recién en
-  // el cliente: depende del tamaño de la ventana y de la hora.
+  // Escenario fijo de 1920x1080 escalado para que entre entero (por ancho Y por
+  // alto), centrado y con barras del color de fondo. Se renderiza recién en el
+  // cliente: depende del tamaño de la ventana y de la hora.
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H));
+    const fit = () => {
+      const width = window.visualViewport?.width ?? window.innerWidth;
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      setScale(Math.min(width / STAGE_W, height / STAGE_H));
+    };
     fit();
     setMounted(true);
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    document.addEventListener("fullscreenchange", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+      document.removeEventListener("fullscreenchange", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
   }, []);
+
+  // Pantalla completa: el navegador solo la permite tras un gesto del usuario,
+  // así que se pide con el primer click, tecla o botón OK del control remoto.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const root = document.documentElement;
+    const request = () => {
+      if (document.fullscreenElement || typeof root.requestFullscreen !== "function") return;
+      root.requestFullscreen().catch(() => {
+        // Sin permiso (o no soportado): la pantalla sigue igual.
+      });
+    };
+    const onChange = () => {
+      if (document.fullscreenElement) setFsHint(false);
+    };
+    const hintTimer = setTimeout(() => setFsHint(false), FULLSCREEN_HINT_MS);
+    window.addEventListener("keydown", request);
+    window.addEventListener("pointerdown", request);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      clearTimeout(hintTimer);
+      window.removeEventListener("keydown", request);
+      window.removeEventListener("pointerdown", request);
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, [fullscreen]);
 
   // Slides con duración fija (los videos avanzan solos al terminar).
   useEffect(() => {
     if (!mounted || isVideo(step.phase)) return;
-    const ms = (stepSeconds(step, qrSeconds) * 1000) / speed;
+    const ms = (stepSeconds(step, dataRef.current, qrSeconds) * 1000) / speed;
     const timer = setTimeout(() => advanceFrom(step.n), ms);
     return () => clearTimeout(timer);
   }, [mounted, step, qrSeconds, speed, advanceFrom]);
@@ -171,6 +279,7 @@ export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps
 
   // Refresco de datos. Si falla, sigue con el último contenido.
   useEffect(() => {
+    if (mock) return;
     let alive = true;
     const refresh = async () => {
       const controller = new AbortController();
@@ -194,11 +303,11 @@ export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps
       alive = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [mock]);
 
-  // Si tras un refresco la página actual ya no existe (menos ofertas o combos), pasa a la siguiente.
+  // Si tras un refresco la página actual ya no existe (menos productos), pasa a la siguiente.
   useEffect(() => {
-    if (step.page >= pageCount(step.phase, data)) advanceFrom(step.n);
+    if (step.page >= pageCount(step.phase, data, step.lap)) advanceFrom(step.n);
   }, [data, step, advanceFrom]);
 
   // Recarga periódica. Antes de recargar confirma que el servidor responde:
@@ -222,11 +331,13 @@ export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps
   }, []);
 
   const showMark = !isVideo(step.phase);
-  const showCornerQr = step.phase === "brand" || step.phase === "offers" || step.phase === "combos";
+  const showCornerQr = !isVideo(step.phase) && step.phase !== "qr";
   const layers = leaving ? [leaving, step] : [step];
+  // Fotos del próximo spotlight, para que ya estén cargadas cuando entre.
+  const upcoming = spotlightFor(nextStep(step, data), data);
 
   return (
-    <div className="fixed inset-0 cursor-none overflow-hidden bg-black text-bone">
+    <div className="fixed inset-0 cursor-none overflow-hidden bg-[#141414] text-bone">
       {mounted && (
         <div
           className={cn("absolute left-1/2 top-1/2 overflow-hidden", styles.stage)}
@@ -256,14 +367,23 @@ export function TvClient({ initialData, qrSeconds, speed, debug }: TvClientProps
             <div
               key={step.n}
               className={cn("absolute bottom-0 left-0 z-30 h-2 bg-blood", styles.progress)}
-              style={{ animationDuration: `${(stepSeconds(step, qrSeconds) * 1000) / speed}ms` }}
+              style={{ animationDuration: `${(stepSeconds(step, data, qrSeconds) * 1000) / speed}ms` }}
             />
+          )}
+
+          {upcoming && upcoming.images.length > 0 && <Preload images={upcoming.images} />}
+
+          {fsHint && (
+            <div className="absolute bottom-[70px] left-1/2 z-40 -translate-x-1/2 rounded-full bg-black/75 px-[34px] py-[14px] text-[30px] font-medium text-bone">
+              Presioná OK para pantalla completa
+            </div>
           )}
 
           {debug && (
             <div className="absolute left-2.5 top-2.5 z-50 bg-black/60 px-2.5 py-1.5 font-mono text-xl text-green-400">
-              {step.phase} {step.page + 1}/{pageCount(step.phase, data)} · paso {step.n} · x{speed} ·{" "}
-              {data.offers.length} ofertas · {data.combos.length} combos
+              {step.phase} {step.page + 1}/{pageCount(step.phase, data, step.lap)} · vuelta {step.lap} · paso{" "}
+              {step.n} · x{speed} · {data.offers.length} ofertas · {data.featured.length} destacados ·{" "}
+              {data.combos.length} combos{mock ? " · MOCK" : ""} · escala {scale.toFixed(3)}
             </div>
           )}
         </div>
@@ -304,7 +424,7 @@ function Mark({ visible }: { visible: boolean }) {
   return (
     <div
       className={cn(
-        "absolute left-[110px] top-[40px] z-20 flex items-center gap-[28px] transition-opacity duration-500",
+        "absolute left-[110px] top-[50px] z-20 flex items-center gap-[28px] transition-opacity duration-500",
         visible ? "opacity-100" : "opacity-0"
       )}
     >
@@ -319,12 +439,25 @@ function CornerQr({ visible }: { visible: boolean }) {
   return (
     <div
       className={cn(
-        "absolute right-[44px] top-[44px] z-20 rounded-[22px] bg-white p-[14px] text-center shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-opacity duration-500",
+        "absolute right-[96px] top-[56px] z-20 rounded-[22px] bg-white p-[14px] text-center shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-opacity duration-500",
         visible ? "opacity-100" : "opacity-0"
       )}
     >
       <Image src={QR_SRC} alt="" width={170} height={170} unoptimized priority />
       <div className="mt-1 font-display text-[32px] leading-none tracking-wide text-charcoal">Pedí online</div>
+    </div>
+  );
+}
+
+/** Carga fuera de pantalla las fotos del próximo spotlight (misma URL que usará). */
+function Preload({ images }: { images: string[] }) {
+  return (
+    <div aria-hidden className="pointer-events-none invisible absolute left-[-4000px] top-0 h-[400px] w-[400px]">
+      {images.map((src) => (
+        <div key={src} className="relative h-full w-full">
+          <Image src={src} alt="" fill sizes={PRODUCT_IMAGE_SIZES} loading="eager" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -344,13 +477,52 @@ function SlideContent({ step, active, data, qrSeconds, speed, onDone }: SlideCon
   switch (step.phase) {
     case "brand":
       return <BrandSlide data={data} />;
-    case "offers":
-      return (
-        <OffersSlide offers={data.offers.slice(step.page * OFFERS_PER_PAGE, (step.page + 1) * OFFERS_PER_PAGE)} />
-      );
+    case "offers": {
+      if (isOffersSummary(step, data)) {
+        return <OffersSummarySlide offers={lapOffers(data, step.lap).slice(0, SUMMARY_MAX)} />;
+      }
+      const item = spotlightFor(step, data);
+      return item ? (
+        <SpotlightSlide
+          title={
+            <>
+              Ofertas <span className="text-blood">especiales</span>
+            </>
+          }
+          item={item}
+          index={step.page}
+          // Los puntos incluyen el resumen final.
+          total={pageCount(step.phase, data, step.lap)}
+        />
+      ) : null;
+    }
+    case "featured": {
+      const item = spotlightFor(step, data);
+      return item ? (
+        <SpotlightSlide
+          title={<span className="text-blood">Destacados</span>}
+          subtitle="La selección del carnicero"
+          item={item}
+          index={step.page}
+          total={pageCount(step.phase, data, step.lap)}
+        />
+      ) : null;
+    }
     case "combos": {
-      const combo = data.combos[step.page];
-      return combo ? <ComboSlide combo={combo} /> : null;
+      const item = spotlightFor(step, data);
+      return item ? (
+        <SpotlightSlide
+          title={
+            <>
+              Combos <span className="text-blood">para el finde</span>
+            </>
+          }
+          kicker="Combo"
+          item={item}
+          index={step.page}
+          total={pageCount(step.phase, data, step.lap)}
+        />
+      ) : null;
     }
     case "qr":
       return <QrSlide durationMs={(qrSeconds * 1000) / speed} speed={speed} />;
@@ -362,7 +534,7 @@ function SlideContent({ step, active, data, qrSeconds, speed, onDone }: SlideCon
   }
 }
 
-/** Retardo de la animación de entrada (`styles.rise`). */
+/** Retardo de la animación de entrada (`styles.rise` / `styles.slideIn`). */
 const delay = (seconds: number) => ({ animationDelay: `${seconds}s` });
 
 function BrandSlide({ data }: { data: TvData }) {
@@ -398,7 +570,7 @@ function BrandSlide({ data }: { data: TvData }) {
       <div
         style={delay(0)}
         className={cn(
-          "absolute left-[110px] top-[200px] z-10 text-[34px] font-semibold uppercase tracking-[0.2em] text-blood",
+          "absolute left-[110px] top-[220px] z-10 text-[34px] font-semibold uppercase tracking-[0.2em] text-blood",
           styles.rise
         )}
       >
@@ -407,7 +579,7 @@ function BrandSlide({ data }: { data: TvData }) {
       <h1
         style={delay(0.1)}
         className={cn(
-          "absolute left-[110px] top-[255px] z-10 w-[1100px] font-display text-[160px] leading-[0.92] tracking-wide text-white",
+          "absolute left-[110px] top-[275px] z-10 w-[1100px] font-display text-[160px] leading-[0.92] tracking-wide text-white",
           styles.rise
         )}
       >
@@ -418,7 +590,7 @@ function BrandSlide({ data }: { data: TvData }) {
       <p
         style={delay(0.25)}
         className={cn(
-          "absolute left-[110px] top-[575px] z-10 w-[860px] text-[46px] font-medium leading-[1.25] text-bone",
+          "absolute left-[110px] top-[590px] z-10 w-[860px] text-[46px] font-medium leading-[1.25] text-bone",
           styles.rise
         )}
       >
@@ -427,7 +599,7 @@ function BrandSlide({ data }: { data: TvData }) {
       <div
         style={delay(0.4)}
         className={cn(
-          "absolute left-[110px] top-[830px] z-10 inline-flex items-center gap-[22px] text-[52px] font-semibold text-white",
+          "absolute left-[110px] top-[840px] z-10 inline-flex items-center gap-[22px] text-[52px] font-semibold text-white",
           styles.rise
         )}
       >
@@ -440,20 +612,6 @@ function BrandSlide({ data }: { data: TvData }) {
         {statusText}
       </div>
     </>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2
-      style={delay(0)}
-      className={cn(
-        "absolute left-[110px] top-[215px] font-display text-[130px] leading-none tracking-wide text-white",
-        styles.rise
-      )}
-    >
-      {children}
-    </h2>
   );
 }
 
@@ -470,86 +628,132 @@ function SavingsPill({ cents, className }: { cents: number; className?: string }
   );
 }
 
-const CARD_WIDTH_BY_COUNT: Record<number, number> = { 1: 820, 2: 825, 3: 533 };
-
-function OffersSlide({ offers }: { offers: TvOffer[] }) {
-  const width = CARD_WIDTH_BY_COUNT[offers.length] ?? 533;
+/**
+ * Foto de producto entera (object-contain, nunca recortada) sobre la tarjeta.
+ * Sin imagen o si falla la carga: el logo de placeholder, nunca un hueco.
+ */
+function ProductImage({ src, className, zoom }: { src: string | null; className?: string; zoom?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <ImagePlaceholder />;
   return (
-    <>
-      <SectionTitle>
-        Ofertas <span className="text-blood">especiales</span>
-      </SectionTitle>
-      <div className="absolute left-[110px] top-[370px] flex gap-[50px]">
-        {offers.map((offer, i) => (
-          <OfferCard key={offer.id} offer={offer} width={width} delayS={0.15 + i * 0.15} />
-        ))}
-      </div>
-    </>
-  );
-}
-
-function OfferCard({ offer, width, delayS }: { offer: TvOffer; width: number; delayS: number }) {
-  const narrow = width < 700;
-  return (
-    <div
-      className={cn(
-        "relative flex h-[640px] flex-col overflow-hidden rounded-[36px] border-4 border-white/10 bg-iron",
-        styles.rise
-      )}
-      style={{ width, animationDelay: `${delayS}s` }}
-    >
-      <div className="relative h-[300px] w-full shrink-0 bg-charcoal">
-        {offer.image ? (
-          <Image src={offer.image} alt="" fill sizes={`${width}px`} className="object-cover" />
-        ) : (
-          <ImagePlaceholder />
-        )}
-        {offer.discountPercent !== null && (
-          <div className="absolute left-[24px] top-[24px] rounded-2xl bg-blood px-[26px] py-[6px] font-display text-[64px] leading-tight text-white">
-            -{offer.discountPercent}%
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-1 flex-col px-[34px] pb-[28px] pt-[22px]">
-        <div className={cn("line-clamp-2 font-semibold leading-[1.1] text-white", narrow ? "text-[40px]" : "text-[48px]")}>
-          {offer.name}
-        </div>
-        <div className="mt-auto">
-          {offer.oldPrice !== null && (
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[36px] text-smoke line-through">{formatPrice(offer.oldPrice)}</span>
-              <SavingsPill cents={offer.oldPrice - offer.price} className={narrow ? "text-[28px]" : undefined} />
-            </div>
-          )}
-          <div className={cn("font-display leading-none text-blood", narrow ? "text-[110px]" : "text-[130px]")}>
-            {formatPrice(offer.price)}
-          </div>
-        </div>
-      </div>
+    <div className={cn("relative h-full w-full", className)}>
+      <Image
+        src={src}
+        alt=""
+        fill
+        sizes={PRODUCT_IMAGE_SIZES}
+        loading="eager"
+        className={cn("object-contain", zoom && styles.slowZoom)}
+        onError={() => setFailed(true)}
+        // Si la misma URL ya había fallado (por ejemplo en la precarga), el error
+        // puede llegar antes de que React escuche el evento: se revisa al montar.
+        ref={(img) => {
+          if (img && img.complete && img.naturalWidth === 0) setFailed(true);
+        }}
+      />
     </div>
   );
 }
 
-function ComboSlide({ combo }: { combo: TvCombo }) {
-  const images = combo.images.slice(0, 2);
+function ImagePlaceholder({ small }: { small?: boolean }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <Image
+        src={LOGO_SRC}
+        alt=""
+        width={240}
+        height={170}
+        className={cn("w-auto opacity-30", small ? "h-[110px]" : "h-[200px]")}
+      />
+    </div>
+  );
+}
+
+function ProgressDots({ index, total }: { index: number; total: number }) {
+  if (total < 2) return null;
+  return (
+    <div className="absolute left-[110px] top-[992px] flex items-center gap-[16px]">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "h-[16px] rounded-full transition-all duration-500",
+            i === index ? "w-[56px] bg-blood" : i < index ? "w-[16px] bg-bone/60" : "w-[16px] bg-bone/20"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+type SpotlightSlideProps = {
+  title: React.ReactNode;
+  subtitle?: string;
+  kicker?: string;
+  item: SpotlightItem;
+  index: number;
+  total: number;
+};
+
+/** Un producto (o combo) por vez: foto grande a la derecha, datos y precio a la izquierda. */
+function SpotlightSlide({ title, subtitle, kicker, item, index, total }: SpotlightSlideProps) {
+  const images = item.images.slice(0, 2);
+  const nameSize = item.name.length <= 16 ? "text-[124px]" : item.name.length <= 30 ? "text-[104px]" : "text-[84px]";
+
   return (
     <>
-      <SectionTitle>
-        Combos <span className="text-blood">para el finde</span>
-      </SectionTitle>
+      <div className="absolute left-[110px] top-[236px] flex w-[820px] flex-col" style={{ height: 724 }}>
+        <h2 style={delay(0)} className={cn("font-display text-[78px] leading-none tracking-wide text-white", styles.rise)}>
+          {title}
+        </h2>
+        {subtitle && (
+          <div style={delay(0.05)} className={cn("mt-[10px] text-[34px] font-medium text-smoke", styles.rise)}>
+            {subtitle}
+          </div>
+        )}
+
+        {/* El nombre ocupa el espacio libre y nunca pisa los precios. */}
+        <div className="mt-[36px] min-h-0 flex-1 overflow-hidden">
+          {kicker && (
+            <div
+              style={delay(0.1)}
+              className={cn("text-[32px] font-semibold uppercase tracking-[0.3em] text-smoke", styles.rise)}
+            >
+              {kicker}
+            </div>
+          )}
+          <div
+            style={delay(0.15)}
+            // El tamaño va antes del interlineado: tailwind-merge descarta el leading si va después.
+            className={cn(nameSize, "line-clamp-3 font-display leading-[0.95] tracking-wide text-white", styles.rise)}
+          >
+            {item.name}
+          </div>
+        </div>
+
+        <div style={delay(0.3)} className={cn("shrink-0 pt-[16px]", styles.rise)}>
+          {item.oldPrice !== null && (
+            <div className="flex flex-wrap items-center gap-[24px]">
+              <span className="text-[48px] text-smoke line-through">{formatPrice(item.oldPrice)}</span>
+              <SavingsPill cents={item.oldPrice - item.price} />
+            </div>
+          )}
+          <div className="font-display text-[200px] leading-[0.9] text-blood">{formatPrice(item.price)}</div>
+        </div>
+      </div>
+
       <div
-        style={delay(0.15)}
+        style={delay(0.05)}
         className={cn(
-          "absolute left-[110px] top-[370px] flex h-[600px] w-[1700px] overflow-hidden rounded-[36px] border-4 border-white/10 bg-iron",
-          styles.rise
+          "absolute right-[96px] top-[320px] h-[640px] w-[820px] rounded-[40px] border-4 border-white/10 bg-iron shadow-[0_30px_90px_rgba(0,0,0,0.45)]",
+          styles.slideIn
         )}
       >
-        <div className="flex w-[760px] shrink-0 bg-charcoal">
+        <div className="flex h-full w-full gap-[24px] overflow-hidden rounded-[36px] p-[40px]">
           {images.length > 0 ? (
             images.map((src) => (
               <div key={src} className="relative h-full flex-1">
-                <Image src={src} alt="" fill sizes={`${760 / images.length}px`} className="object-cover" />
+                <ProductImage src={src} zoom />
               </div>
             ))
           ) : (
@@ -557,36 +761,77 @@ function ComboSlide({ combo }: { combo: TvCombo }) {
           )}
         </div>
 
-        <div className="relative flex flex-1 flex-col px-[56px] py-[48px]">
-          <div className="text-[36px] font-semibold uppercase tracking-[0.3em] text-smoke">Combo</div>
-          <div className="mt-[10px] line-clamp-2 font-display text-[84px] leading-[0.95] tracking-wide text-white">
-            {combo.name}
-          </div>
-          <div className="mt-auto">
-            {combo.oldPrice !== null && (
-              <div className="flex items-center gap-[28px]">
-                <span className="text-[42px] text-smoke line-through">{formatPrice(combo.oldPrice)}</span>
-                <SavingsPill cents={combo.oldPrice - combo.price} />
-                {combo.discountPercent !== null && (
-                  <span className="rounded-2xl bg-blood px-[22px] py-[4px] font-display text-[52px] leading-tight text-white">
-                    -{combo.discountPercent}%
-                  </span>
-                )}
-              </div>
+        {item.discountPercent !== null && (
+          <div
+            style={delay(0.45)}
+            className={cn(
+              "absolute -left-[36px] -top-[36px] flex h-[190px] w-[190px] rotate-[-8deg] items-center justify-center rounded-full bg-blood font-display text-[84px] leading-none text-white shadow-[0_14px_40px_rgba(0,0,0,0.5)]",
+              styles.pop
             )}
-            <div className="font-display text-[170px] leading-none text-blood">{formatPrice(combo.price)}</div>
+          >
+            -{item.discountPercent}%
           </div>
-        </div>
+        )}
       </div>
+
+      <ProgressDots index={index} total={total} />
     </>
   );
 }
 
-function ImagePlaceholder() {
+/** Cierre de las ofertas: hasta 6 en grilla con sus precios. */
+function OffersSummarySlide({ offers }: { offers: SpotlightItem[] }) {
+  const twoRows = offers.length > 3;
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <Image src={LOGO_SRC} alt="" width={240} height={170} className="h-[170px] w-auto opacity-30" />
-    </div>
+    <>
+      <h2
+        style={delay(0)}
+        className={cn(
+          "absolute left-[110px] top-[236px] font-display text-[78px] leading-none tracking-wide text-white",
+          styles.rise
+        )}
+      >
+        Todas las <span className="text-blood">ofertas</span>
+      </h2>
+
+      <div
+        className={cn(
+          "absolute left-[110px] grid w-[1700px] grid-cols-3 gap-[40px]",
+          twoRows ? "top-[340px]" : "top-[420px]"
+        )}
+      >
+        {offers.map((offer, i) => (
+          <div
+            key={offer.id}
+            style={delay(0.1 + i * 0.08)}
+            className={cn(
+              "relative flex h-[300px] overflow-hidden rounded-[30px] border-4 border-white/10 bg-iron",
+              styles.rise
+            )}
+          >
+            <div className="h-full w-[230px] shrink-0 bg-charcoal p-[18px]">
+              {offer.images[0] ? <ProductImage src={offer.images[0]} /> : <ImagePlaceholder small />}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col px-[24px] py-[20px]">
+              <div className="line-clamp-2 text-[34px] font-semibold leading-[1.1] text-white">{offer.name}</div>
+              <div className="mt-auto">
+                {offer.oldPrice !== null && (
+                  <div className="flex items-center gap-[14px]">
+                    <span className="text-[28px] text-smoke line-through">{formatPrice(offer.oldPrice)}</span>
+                    {offer.discountPercent !== null && (
+                      <span className="rounded-xl bg-blood px-[14px] font-display text-[36px] leading-tight text-white">
+                        -{offer.discountPercent}%
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="font-display text-[82px] leading-none text-blood">{formatPrice(offer.price)}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -1,5 +1,10 @@
 /* Pantalla del local: solo lo que Tailwind no cubre (keyframes y fondos). */
 
+/* `font-display` de Tailwind apunta a "Bebas Neue"; en /tv usa la copia de next/font. */
+.fonts :global(.font-display) {
+  font-family: var(--font-tv-display), "Bebas Neue", Impact, sans-serif;
+}
+
 .stage {
   background:
     radial-gradient(900px 700px at 8% 100%, rgba(228, 12, 24, 0.26), transparent 60%),
@@ -69,4 +74,50 @@
 
 .dotClosed {
   box-shadow: 0 0 24px rgb(251 191 36);
+}
+
+/* Tarjeta del spotlight: entra deslizando desde la derecha */
+.slideIn {
+  animation: slideIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(140px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Etiqueta de descuento: aparece con un pequeño rebote (mantiene la rotación) */
+.pop {
+  animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+/* Zoom muy suave de la foto (queda dentro del padding de la tarjeta, no recorta) */
+.slowZoom {
+  animation: slowZoom 7s ease-out both;
+}
+
+@keyframes slowZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.04);
+  }
 }
