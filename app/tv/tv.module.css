@@ -1,0 +1,72 @@
+/* Pantalla del local: solo lo que Tailwind no cubre (keyframes y fondos). */
+
+.stage {
+  background:
+    radial-gradient(900px 700px at 8% 100%, rgba(228, 12, 24, 0.26), transparent 60%),
+    radial-gradient(800px 600px at 100% 0%, rgba(228, 12, 24, 0.12), transparent 60%),
+    #1a1a1a;
+}
+
+.slide {
+  transition: opacity 0.6s ease;
+}
+
+.rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(46px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Foto del local: banda inferior fundida hacia arriba con el fondo, con zoom lento */
+.band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, #1a1a1a 0%, rgba(26, 26, 26, 0) 38%);
+}
+
+.kenBurns {
+  transform-origin: 75% 60%;
+  animation: kenBurns 14s ease-out both;
+}
+
+@keyframes kenBurns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+.progress {
+  animation-name: progress;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.dotOpen {
+  box-shadow: 0 0 24px rgb(34 197 94);
+}
+
+.dotClosed {
+  box-shadow: 0 0 24px rgb(251 191 36);
+}

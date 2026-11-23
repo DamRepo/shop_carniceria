@@ -17,6 +17,12 @@ import {
   netFromGrossCents,
 } from "@/lib/utils-format";
 import { computeUnitPrice } from "@/lib/unitPrice";
+import {
+  getEffectivePrice,
+  getOfferDiscountPercent,
+  getPriceInfo,
+  hasActiveOffer,
+} from "@/lib/offers";
 import { useCartStore } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -75,47 +81,6 @@ function extractProducts(data: unknown): ProductWithCategory[] {
   }
 
   return [];
-}
-
-function hasActiveOffer(product: ProductWithCategory) {
-  if (!product.isOnSale) return false;
-  if (!product.saleEndDate) return true;
-
-  const t = new Date(product.saleEndDate).getTime();
-  if (!Number.isFinite(t)) return true;
-
-  return t > Date.now();
-}
-
-function getEffectivePrice(product: ProductWithCategory) {
-  const offerActive = hasActiveOffer(product);
-
-  if (offerActive && product.salePrice != null && product.salePrice > 0) {
-    return product.salePrice;
-  }
-
-  return product.price;
-}
-
-function getPriceInfo(product: ProductWithCategory) {
-  const hasSale =
-    hasActiveOffer(product) &&
-    typeof product.salePrice === "number" &&
-    product.salePrice > 0 &&
-    product.salePrice < product.price;
-
-  return {
-    hasSale,
-    originalPrice: product.price,
-    salePrice: hasSale ? product.salePrice : null,
-    unitLabel: (product.unitType ?? "PER_KG") === "PER_KG" ? "kg" : "unidad",
-  };
-}
-
-function calcDiscountPercent(original: number, sale: number) {
-  if (!Number.isFinite(original) || !Number.isFinite(sale)) return null;
-  if (original <= 0 || sale <= 0 || sale >= original) return null;
-  return Math.round(((original - sale) / original) * 100);
 }
 
 export default function OfertasClient() {
@@ -222,14 +187,7 @@ export default function OfertasClient() {
               const netPrice = netFromGrossCents(effectivePrice, vatRate);
               const canBuy = (product.stock ?? 0) > 0;
 
-              const discount =
-                priceInfo.hasSale &&
-                typeof priceInfo.originalPrice === "number" &&
-                typeof priceInfo.salePrice === "number" &&
-                priceInfo.salePrice < priceInfo.originalPrice
-                  ? product.discountPercent ??
-                    calcDiscountPercent(priceInfo.originalPrice, priceInfo.salePrice)
-                  : null;
+              const discount = getOfferDiscountPercent(product);
 
               const initialQty =
                 product.unitType === "PER_KG"
