@@ -13,6 +13,7 @@ import {
   Star,
   Flame,
   Clock,
+  Award,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -108,12 +109,16 @@ interface HomeClientProps {
 
 export function HomeClient({ orderStatus }: HomeClientProps) {
   const [ref5, inView5] = useInView({ triggerOnce: true, threshold: 0.1 });
+  const [refFeatured, inViewFeatured] = useInView({ triggerOnce: true, threshold: 0.1 });
 
   const [offers, setOffers] = useState<ProductWithSale[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
 
   const [bestSellers, setBestSellers] = useState<ProductWithSale[]>([]);
   const [bestSellersLoading, setBestSellersLoading] = useState(true);
+
+  const [featured, setFeatured] = useState<ProductWithSale[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
 
   useEffect(() => {
     const fetchOffers = async () => {
@@ -142,8 +147,23 @@ export function HomeClient({ orderStatus }: HomeClientProps) {
       }
     };
 
+    // Productos marcados como "Destacado" desde el admin (isFeatured).
+    const fetchFeatured = async () => {
+      try {
+        const response = await fetch("/api/products?featured=true&limit=8", { cache: "no-store" });
+        if (!response.ok) throw new Error("Error al cargar destacados");
+        const data = (await response.json()) as unknown;
+        setFeatured(Array.isArray(data) ? (data as ProductWithSale[]) : []);
+      } catch (error) {
+        console.error("Error fetching featured:", error);
+      } finally {
+        setFeaturedLoading(false);
+      }
+    };
+
     fetchOffers();
     fetchBestSellers();
+    fetchFeatured();
   }, []);
 
   const offerEnd = getOfferEndSummary(offers);
@@ -271,6 +291,55 @@ export function HomeClient({ orderStatus }: HomeClientProps) {
           )}
         </div>
       </section>
+
+      {/* Sin destacados (o si falla la carga) la sección no se muestra. */}
+      {(featuredLoading || featured.length > 0) && (
+        <section ref={refFeatured} className="w-full bg-background py-8 sm:py-16">
+          <div className="container mx-auto max-w-7xl px-4">
+            <motion.div
+              initial={{ opacity: 0, x: -24 }}
+              animate={inViewFeatured ? { opacity: 1, x: 0 } : { opacity: 0, x: -24 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="mb-6 flex flex-col gap-4 sm:mb-12 md:flex-row md:items-end md:justify-between"
+            >
+              <div>
+                <div className="mb-4 flex items-center gap-2">
+                  <Award className="h-8 w-8 text-primary" />
+                  <h2 className="font-display text-4xl md:text-5xl tracking-wider">Destacados</h2>
+                </div>
+                <p className="text-lg text-muted-foreground">La selección del carnicero</p>
+              </div>
+              <Link href="/destacados" className="w-fit">
+                <Button variant="outline" type="button">
+                  Ver todos los destacados →
+                </Button>
+              </Link>
+            </motion.div>
+
+            {featuredLoading ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border bg-card p-4"
+                  >
+                    <div className="mb-4 aspect-square rounded-lg bg-muted" />
+                    <div className="mb-2 h-6 rounded bg-muted" />
+                    <div className="h-4 w-2/3 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ProductRowSlider
+                items={featured}
+                renderItem={(product) => (
+                  <ProductCard product={adaptForCard(product)} />
+                )}
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       <StoreLocation status={orderStatus} />
     </div>
