@@ -92,61 +92,69 @@ export default async function TvPage({ searchParams }: { searchParams: Promise<S
 /* ─── Datos de ejemplo (?mock=1, solo desarrollo) ─────────────────────────────
  * Van acá y no en un archivo aparte a propósito: el trazado del build standalone
  * copia cualquier archivo importado, aunque el import esté en una rama muerta.
- * Imágenes: las de categorías que ya están en /public. Hay un producto sin imagen
- * y otro con una imagen rota para ver el placeholder.
+ *
+ * Las fotos son las que el cliente subió desde el admin (Cloudinary, el mismo
+ * origen que usa la tienda), con nombres reales y precios inventados: sirven para
+ * ver el diseño con fotos reales cuando la base local no tiene imágenes. Nada sale
+ * de /public. Hay un producto sin imagen y otro con una URL rota para ver el placeholder.
  */
 function buildMockTvData(): TvData {
-  function product(
-    id: string,
-    name: string,
-    image: string | null,
-    price: number,
-    oldPrice: number | null = null
-  ): TvProduct {
+  const cdn = (path: string) => `https://res.cloudinary.com/dku7noipe/image/upload/${path}`;
+
+  function product(id: string, name: string, image: string | null, price: number, oldPrice: number | null = null) {
     const discountPercent = oldPrice !== null ? Math.round(((oldPrice - price) / oldPrice) * 100) : null;
-    return { id: `mock-${id}`, name, image, price, oldPrice, discountPercent };
+    const item: TvProduct = { id: `mock-${id}`, name, image, price, oldPrice, discountPercent };
+    return item;
   }
 
   const offers: TvProduct[] = [
-    product("o1", "Asado de novillo", "/carne.png", 1_299_900, 1_549_900),
-    product("o2", "Chorizo parrillero artesanal", "/embutidos.png", 899_900, 1_049_900),
-    product("o3", "Pollo entero fresco", "/pollo.png", 549_900, 649_900),
-    product("o4", "Milanesas de nalga rebozadas", "/elaborados.png", 1_099_900, 1_299_900),
-    product("o5", "Vacío a la parrilla", "/cortes.jpg", 1_399_900, 1_599_900),
-    product("o6", "Hamburguesas caseras x 4", null, 649_900, 749_900),
-    product("o7", "Bondiola de cerdo", "/no-existe-imagen-rota.png", 989_900, 1_149_900),
-    product("o8", "Verduras para el puchero", "/frutas_y_verduras.png", 299_900, 349_900),
-    product("o9", "Patitas de pollo congeladas", "/congelados.png", 459_900, 519_900),
+    product("o1", "2 Kg Hamburguesa de pollo", cdn("v1777849553/shop_carniceria/products/u0lchbdzqlj2jirul3mg.png"), 1_500_000, 1_800_000),
+    product("o2", "2 Kg Milanesas de Cerdo", cdn("v1777849140/shop_carniceria/products/ynpmdep062yhvql01e5m.png"), 1_800_000, 2_100_000),
+    product("o3", "2 Kg Milanesa de Pollo", cdn("v1776847779/shop_carniceria/products/fcowywy5loviziwf4w6o.jpg"), 1_900_000, 2_260_000),
+    product("o4", "2 Kg Costeletas de Cerdo", cdn("v1776599183/shop_carniceria/products/ttqcei4etqhi1ncvgn5i.png"), 1_800_000, 2_040_000),
+    product("o5", "2 Kg Muslo Pollo CALISA", cdn("v1776847852/shop_carniceria/products/wtuqgcywhaoenxggang2.jpg"), 1_000_000, 1_100_000),
+    product("o6", "Hamburguesas caseras x 4 (sin foto)", null, 649_900, 749_900),
+    product("o7", "Producto con foto rota", cdn("v1/shop_carniceria/products/no-existe-tv-mock.png"), 989_900, 1_149_900),
+    product("o8", "Papa x 2 kg", cdn("v1776596083/shop_carniceria/products/xsxvc0fwjzbrpunwlokn.jpg"), 399_900, 450_000),
+    product("o9", "Huevo Blanco Maple 30U.", cdn("v1777903013/shop_carniceria/products/kfsxqqzbewcka8jshgs6.jpg"), 549_900, 600_000),
   ];
 
   const featured: TvProduct[] = [
-    product("f1", "Ojo de bife madurado", "/cortes.jpg", 1_899_900),
-    product("f2", "Salame de la casa", "/embutidos.png", 1_249_900),
-    product("f3", "Matambre de cerdo", "/carne.png", 1_149_900, 1_299_900),
-    product("f4", "Empanadas de carne cortada a cuchillo x 12", "/elaborados.png", 1_399_900),
-    product("f5", "Suprema de pollo", "/pollo.png", 899_900),
+    product("f1", "Picaña o Tapa de Cuadril", cdn("v1776109365/shop_carniceria/products/keqrl7cu2ljgtygdtmir.png"), 2_100_000),
+    product("f2", "Salame de Cordero EL NEGRO", cdn("v1776846017/shop_carniceria/products/l1ycug1mxo2ksdbk7yvb.png"), 572_000),
+    product("f3", "Bola de Lomo en Bifes por Kg.", cdn("v1776112391/shop_carniceria/products/lwgjfvmrmvmk7sww0nud.jpg"), 2_100_000),
+    product(
+      "f4",
+      "Fernet Branca Edición Limitada Mundial 750 Ml.",
+      cdn("v1779473043/shop_carniceria/products/th9qtngkuqqifeudlrkz.webp"),
+      2_390_000
+    ),
+    product("f5", "Salame Picado Grueso EL NEGRO", cdn("v1776845611/shop_carniceria/products/isfeu2ar9dv6slk1mkvo.png"), 664_000),
   ];
 
   const combos: TvCombo[] = [
     {
       id: "mock-c1",
-      name: "Combo parrillero para 6",
-      images: ["/carne.png", "/embutidos.png"],
+      name: "Combo milanesas para la semana",
+      images: [
+        cdn("v1777849140/shop_carniceria/products/ynpmdep062yhvql01e5m.png"),
+        cdn("v1776847779/shop_carniceria/products/fcowywy5loviziwf4w6o.jpg"),
+      ],
       price: 3_499_900,
       oldPrice: 3_999_900,
       discountPercent: 13,
     },
     {
       id: "mock-c2",
-      name: "Combo milanesas + verduras",
-      images: ["/caja.jpeg"],
-      price: 1_899_900,
+      name: "Combo picada El Negro",
+      images: [cdn("v1776846017/shop_carniceria/products/l1ycug1mxo2ksdbk7yvb.png")],
+      price: 1_099_900,
       oldPrice: null,
       discountPercent: null,
     },
     {
       id: "mock-c3",
-      name: "Combo pollo para la semana",
+      name: "Combo sin foto",
       images: [],
       price: 1_499_900,
       oldPrice: 1_699_900,

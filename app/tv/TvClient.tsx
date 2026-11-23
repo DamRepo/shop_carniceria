@@ -17,29 +17,47 @@ const STAGE_H = 1080;
 // importante (logo, QR, textos, precios) queda dentro de x 77–1843 / y 43–1037.
 // Los textos arrancan en x 110 y lo de la derecha termina en x 1824 (right 96).
 
-const BRAND_SECONDS = 12;
-const SPOTLIGHT_SECONDS = 6;
-const COMBO_SECONDS = 7;
-const SUMMARY_SECONDS = 10;
+/**
+ * TODOS los tiempos de la pantalla, en un solo lugar para ajustarlos fácil.
+ * Los segundos de cada slide se dividen por ?speed (solo en desarrollo); las
+ * animaciones de entrada y salida no.
+ */
+const TIMING = {
+  /** Slide de marca (foto del local + horario). */
+  brandSeconds: 10,
+  /** Cada producto en spotlight: ofertas, destacados y combos. */
+  spotlightSeconds: 10,
+  /** Grilla de resumen al final de las ofertas. */
+  summarySeconds: 12,
+  /** Entrada de cada elemento (foto, textos, precio), con easing suave. */
+  enterMs: 1200,
+  /** Pausa entre la entrada de un elemento y el siguiente. */
+  staggerMs: 150,
+  /** Salida del slide anterior (fundido). */
+  exitMs: 600,
+  /** Zoom lento de las fotos (más largo que el slide, así nunca se "frena"). */
+  photoZoomMs: 14_000,
+  /** Cartel "Presioná OK para pantalla completa". */
+  fullscreenHintMs: 15_000,
+  /** Refresco de datos desde /api/tv/data y su timeout. */
+  refreshMs: 60_000,
+  fetchTimeoutMs: 10_000,
+  /** Abierto/cerrado del slide de marca. */
+  statusRefreshMs: 30_000,
+  /** Un video que no cargó en este tiempo se saltea. */
+  videoLoadTimeoutMs: 8_000,
+  /** Margen sobre la duración del video por si se traba a mitad de camino. */
+  videoStallMarginMs: 10_000,
+  /** Recarga completa cada ~3 h (+ hasta 15 min al azar) para no acumular memoria. */
+  reloadBaseMs: 3 * 60 * 60 * 1000,
+  reloadJitterMs: 15 * 60 * 1000,
+  reloadRetryMs: 5 * 60 * 1000,
+} as const;
 
 const OFFERS_PER_LAP = 8;
 const FEATURED_PER_LAP = 8;
 const COMBOS_PER_LAP = 5;
 const SUMMARY_MAX = 6;
-
-const FADE_MS = 700;
-const REFRESH_MS = 60_000;
-const FETCH_TIMEOUT_MS = 10_000;
-const VIDEO_LOAD_TIMEOUT_MS = 8_000;
-// Margen sobre la duración del video por si se traba a mitad de camino.
-const VIDEO_STALL_MARGIN_MS = 10_000;
-const STATUS_REFRESH_MS = 30_000;
-const FULLSCREEN_HINT_MS = 15_000;
-
-// Recarga completa cada ~3 h para que el navegador de la tele no acumule memoria.
-const RELOAD_BASE_MS = 3 * 60 * 60 * 1000;
-const RELOAD_JITTER_MS = 15 * 60 * 1000;
-const RELOAD_RETRY_MS = 5 * 60 * 1000;
 
 const SITE_HOST = "carniceriaelnegro.com";
 const LOCALITY = "San José de Feliciano";
@@ -128,10 +146,9 @@ const isOffersSummary = (step: Step, data: TvData) =>
   step.phase === "offers" && step.page === lapOffers(data, step.lap).length;
 
 function stepSeconds(step: Step, data: TvData, qrSeconds: number): number {
-  if (step.phase === "brand") return BRAND_SECONDS;
-  if (step.phase === "offers") return isOffersSummary(step, data) ? SUMMARY_SECONDS : SPOTLIGHT_SECONDS;
-  if (step.phase === "featured") return SPOTLIGHT_SECONDS;
-  if (step.phase === "combos") return COMBO_SECONDS;
+  if (step.phase === "brand") return TIMING.brandSeconds;
+  if (step.phase === "offers") return isOffersSummary(step, data) ? TIMING.summarySeconds : TIMING.spotlightSeconds;
+  if (step.phase === "featured" || step.phase === "combos") return TIMING.spotlightSeconds;
   return qrSeconds;
 }
 
@@ -214,27 +231,40 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
   }, []);
 
   // Escenario fijo de 1920x1080 escalado para que entre entero (por ancho Y por
-  // alto), centrado y con barras del color de fondo. Se renderiza recién en el
-  // cliente: depende del tamaño de la ventana y de la hora.
+  // alto) y centrado. Se recalcula ante cualquier cambio de tamaño: ventana,
+  // zoom del navegador, herramientas de desarrollo, F11, rotación. Se renderiza
+  // recién en el cliente: depende del tamaño de la ventana y de la hora.
+  const fit = useCallback(() => {
+    const root = document.documentElement;
+    const width = root.clientWidth || window.innerWidth;
+    const height = root.clientHeight || window.innerHeight;
+    if (width > 0 && height > 0) setScale(Math.min(width / STAGE_W, height / STAGE_H));
+  }, []);
+
   useEffect(() => {
-    const fit = () => {
-      const width = window.visualViewport?.width ?? window.innerWidth;
-      const height = window.visualViewport?.height ?? window.innerHeight;
-      setScale(Math.min(width / STAGE_W, height / STAGE_H));
-    };
     fit();
     setMounted(true);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    observer?.observe(document.documentElement);
     window.addEventListener("resize", fit);
     window.addEventListener("orientationchange", fit);
+    window.addEventListener("pageshow", fit);
     document.addEventListener("fullscreenchange", fit);
     window.visualViewport?.addEventListener("resize", fit);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("resize", fit);
       window.removeEventListener("orientationchange", fit);
+      window.removeEventListener("pageshow", fit);
       document.removeEventListener("fullscreenchange", fit);
       window.visualViewport?.removeEventListener("resize", fit);
     };
-  }, []);
+  }, [fit]);
+
+  // Red de seguridad: también se recalcula en cada cambio de slide.
+  useEffect(() => {
+    fit();
+  }, [step.n, fit]);
 
   // Pantalla completa: el navegador solo la permite tras un gesto del usuario,
   // así que se pide con el primer click, tecla o botón OK del control remoto.
@@ -250,7 +280,7 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
     const onChange = () => {
       if (document.fullscreenElement) setFsHint(false);
     };
-    const hintTimer = setTimeout(() => setFsHint(false), FULLSCREEN_HINT_MS);
+    const hintTimer = setTimeout(() => setFsHint(false), TIMING.fullscreenHintMs);
     window.addEventListener("keydown", request);
     window.addEventListener("pointerdown", request);
     document.addEventListener("fullscreenchange", onChange);
@@ -273,7 +303,7 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
   // Saca el slide anterior cuando termina el fundido.
   useEffect(() => {
     if (!leaving) return;
-    const timer = setTimeout(() => setLeaving(null), FADE_MS);
+    const timer = setTimeout(() => setLeaving(null), TIMING.exitMs);
     return () => clearTimeout(timer);
   }, [leaving]);
 
@@ -283,7 +313,7 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
     let alive = true;
     const refresh = async () => {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), TIMING.fetchTimeoutMs);
       try {
         const res = await fetch("/api/tv/data", { cache: "no-store", signal: controller.signal });
         if (!res.ok) return;
@@ -298,7 +328,7 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
         clearTimeout(timer);
       }
     };
-    const interval = setInterval(refresh, REFRESH_MS);
+    const interval = setInterval(refresh, TIMING.refreshMs);
     return () => {
       alive = false;
       clearInterval(interval);
@@ -324,11 +354,18 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
       } catch {
         // Sin conexión: se reintenta más tarde.
       }
-      timer = setTimeout(tryReload, RELOAD_RETRY_MS);
+      timer = setTimeout(tryReload, TIMING.reloadRetryMs);
     };
-    timer = setTimeout(tryReload, RELOAD_BASE_MS + Math.random() * RELOAD_JITTER_MS);
+    timer = setTimeout(tryReload, TIMING.reloadBaseMs + Math.random() * TIMING.reloadJitterMs);
     return () => clearTimeout(timer);
   }, []);
+
+  // Duraciones que usa tv.module.css (las animaciones leen estas variables).
+  const animationVars = {
+    "--tv-enter": `${TIMING.enterMs}ms`,
+    "--tv-exit": `${TIMING.exitMs}ms`,
+    "--tv-photo-zoom": `${TIMING.photoZoomMs}ms`,
+  } as React.CSSProperties;
 
   const showMark = !isVideo(step.phase);
   const showCornerQr = !isVideo(step.phase) && step.phase !== "qr";
@@ -337,14 +374,18 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
   const upcoming = spotlightFor(nextStep(step, data), data);
 
   return (
-    <div className="fixed inset-0 cursor-none overflow-hidden bg-[#141414] text-bone">
+    // El fondo (color y degradé) va en el contenedor que ocupa todo el viewport:
+    // si la pantalla no es 16:9, las franjas sobrantes se funden con el fondo.
+    <div className={cn("fixed inset-0 cursor-none overflow-hidden text-bone", styles.backdrop)} style={animationVars}>
       {mounted && (
         <div
-          className={cn("absolute left-1/2 top-1/2 overflow-hidden", styles.stage)}
+          data-tv-stage=""
+          className="absolute left-1/2 top-1/2 overflow-hidden"
           style={{
             width: STAGE_W,
             height: STAGE_H,
             transform: `translate(-50%, -50%) scale(${scale})`,
+            transformOrigin: "50% 50%",
           }}
         >
           {layers.map((s) => (
@@ -363,14 +404,6 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
           <Mark visible={showMark} />
           <CornerQr visible={showCornerQr} />
 
-          {!isVideo(step.phase) && (
-            <div
-              key={step.n}
-              className={cn("absolute bottom-0 left-0 z-30 h-2 bg-blood", styles.progress)}
-              style={{ animationDuration: `${(stepSeconds(step, data, qrSeconds) * 1000) / speed}ms` }}
-            />
-          )}
-
           {upcoming && upcoming.images.length > 0 && <Preload images={upcoming.images} />}
 
           {fsHint && (
@@ -387,6 +420,19 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
             </div>
           )}
         </div>
+      )}
+
+      {/* Barra de tiempo del slide: va en el borde inferior de la ventana (no del
+          escenario), así en pantallas que no son 16:9 no queda flotando. */}
+      {mounted && !isVideo(step.phase) && (
+        <div
+          key={step.n}
+          className={cn("absolute bottom-0 left-0 z-30 bg-blood", styles.progress)}
+          style={{
+            height: Math.max(3, Math.round(8 * scale)),
+            animationDuration: `${(stepSeconds(step, data, qrSeconds) * 1000) / speed}ms`,
+          }}
+        />
       )}
     </div>
   );
@@ -534,8 +580,8 @@ function SlideContent({ step, active, data, qrSeconds, speed, onDone }: SlideCon
   }
 }
 
-/** Retardo de la animación de entrada (`styles.rise` / `styles.slideIn`). */
-const delay = (seconds: number) => ({ animationDelay: `${seconds}s` });
+/** Entrada escalonada: el elemento `order` arranca `order × staggerMs` después del primero. */
+const stagger = (order: number) => ({ animationDelay: `${order * TIMING.staggerMs}ms` });
 
 function BrandSlide({ data }: { data: TvData }) {
   const [status, setStatus] = useState<ProcessingStatus>(() => getOrderProcessingStatus(new Date(), data.hours));
@@ -543,7 +589,7 @@ function BrandSlide({ data }: { data: TvData }) {
   useEffect(() => {
     const update = () => setStatus(getOrderProcessingStatus(new Date(), data.hours));
     update();
-    const interval = setInterval(update, STATUS_REFRESH_MS);
+    const interval = setInterval(update, TIMING.statusRefreshMs);
     return () => clearInterval(interval);
   }, [data.hours]);
 
@@ -568,7 +614,7 @@ function BrandSlide({ data }: { data: TvData }) {
 
       {/* Textos del hero del home */}
       <div
-        style={delay(0)}
+        style={stagger(0)}
         className={cn(
           "absolute left-[110px] top-[220px] z-10 text-[34px] font-semibold uppercase tracking-[0.2em] text-blood",
           styles.rise
@@ -577,7 +623,7 @@ function BrandSlide({ data }: { data: TvData }) {
         Calidad local, como siempre
       </div>
       <h1
-        style={delay(0.1)}
+        style={stagger(1)}
         className={cn(
           "absolute left-[110px] top-[275px] z-10 w-[1100px] font-display text-[160px] leading-[0.92] tracking-wide text-white",
           styles.rise
@@ -588,7 +634,7 @@ function BrandSlide({ data }: { data: TvData }) {
         en <span className="text-blood">tu mesa</span>
       </h1>
       <p
-        style={delay(0.25)}
+        style={stagger(2)}
         className={cn(
           "absolute left-[110px] top-[590px] z-10 w-[860px] text-[46px] font-medium leading-[1.25] text-bone",
           styles.rise
@@ -597,7 +643,7 @@ function BrandSlide({ data }: { data: TvData }) {
         Carnes frescas, embutidos artesanales y todo lo que necesitás, sin salir de casa.
       </p>
       <div
-        style={delay(0.4)}
+        style={stagger(3)}
         className={cn(
           "absolute left-[110px] top-[840px] z-10 inline-flex items-center gap-[22px] text-[52px] font-semibold text-white",
           styles.rise
@@ -703,11 +749,11 @@ function SpotlightSlide({ title, subtitle, kicker, item, index, total }: Spotlig
   return (
     <>
       <div className="absolute left-[110px] top-[236px] flex w-[820px] flex-col" style={{ height: 724 }}>
-        <h2 style={delay(0)} className={cn("font-display text-[78px] leading-none tracking-wide text-white", styles.rise)}>
+        <h2 style={stagger(0)} className={cn("font-display text-[78px] leading-none tracking-wide text-white", styles.rise)}>
           {title}
         </h2>
         {subtitle && (
-          <div style={delay(0.05)} className={cn("mt-[10px] text-[34px] font-medium text-smoke", styles.rise)}>
+          <div style={stagger(1)} className={cn("mt-[10px] text-[34px] font-medium text-smoke", styles.rise)}>
             {subtitle}
           </div>
         )}
@@ -716,14 +762,14 @@ function SpotlightSlide({ title, subtitle, kicker, item, index, total }: Spotlig
         <div className="mt-[36px] min-h-0 flex-1 overflow-hidden">
           {kicker && (
             <div
-              style={delay(0.1)}
+              style={stagger(2)}
               className={cn("text-[32px] font-semibold uppercase tracking-[0.3em] text-smoke", styles.rise)}
             >
               {kicker}
             </div>
           )}
           <div
-            style={delay(0.15)}
+            style={stagger(3)}
             // El tamaño va antes del interlineado: tailwind-merge descarta el leading si va después.
             className={cn(nameSize, "line-clamp-3 font-display leading-[0.95] tracking-wide text-white", styles.rise)}
           >
@@ -731,7 +777,7 @@ function SpotlightSlide({ title, subtitle, kicker, item, index, total }: Spotlig
           </div>
         </div>
 
-        <div style={delay(0.3)} className={cn("shrink-0 pt-[16px]", styles.rise)}>
+        <div style={stagger(4)} className={cn("shrink-0 pt-[16px]", styles.rise)}>
           {item.oldPrice !== null && (
             <div className="flex flex-wrap items-center gap-[24px]">
               <span className="text-[48px] text-smoke line-through">{formatPrice(item.oldPrice)}</span>
@@ -743,7 +789,7 @@ function SpotlightSlide({ title, subtitle, kicker, item, index, total }: Spotlig
       </div>
 
       <div
-        style={delay(0.05)}
+        style={stagger(1)}
         className={cn(
           "absolute right-[96px] top-[320px] h-[640px] w-[820px] rounded-[40px] border-4 border-white/10 bg-iron shadow-[0_30px_90px_rgba(0,0,0,0.45)]",
           styles.slideIn
@@ -763,7 +809,7 @@ function SpotlightSlide({ title, subtitle, kicker, item, index, total }: Spotlig
 
         {item.discountPercent !== null && (
           <div
-            style={delay(0.45)}
+            style={stagger(5)}
             className={cn(
               "absolute -left-[36px] -top-[36px] flex h-[190px] w-[190px] rotate-[-8deg] items-center justify-center rounded-full bg-blood font-display text-[84px] leading-none text-white shadow-[0_14px_40px_rgba(0,0,0,0.5)]",
               styles.pop
@@ -785,7 +831,7 @@ function OffersSummarySlide({ offers }: { offers: SpotlightItem[] }) {
   return (
     <>
       <h2
-        style={delay(0)}
+        style={stagger(0)}
         className={cn(
           "absolute left-[110px] top-[236px] font-display text-[78px] leading-none tracking-wide text-white",
           styles.rise
@@ -803,7 +849,7 @@ function OffersSummarySlide({ offers }: { offers: SpotlightItem[] }) {
         {offers.map((offer, i) => (
           <div
             key={offer.id}
-            style={delay(0.1 + i * 0.08)}
+            style={stagger(1 + i)}
             className={cn(
               "relative flex h-[300px] overflow-hidden rounded-[30px] border-4 border-white/10 bg-iron",
               styles.rise
@@ -855,7 +901,7 @@ function QrSlide({ durationMs, speed }: { durationMs: number; speed: number }) {
   return (
     <>
       <h2
-        style={delay(0)}
+        style={stagger(0)}
         className={cn(
           "absolute left-[110px] top-[250px] w-[960px] font-display text-[160px] leading-[0.95] tracking-wide text-white",
           styles.rise
@@ -874,7 +920,7 @@ function QrSlide({ durationMs, speed }: { durationMs: number; speed: number }) {
       </div>
 
       <div
-        style={delay(0.1)}
+        style={stagger(1)}
         className={cn(
           "absolute right-[170px] top-[130px] rounded-[40px] bg-white p-[34px] text-center shadow-[0_30px_100px_rgba(0,0,0,0.55)]",
           styles.rise
@@ -926,12 +972,12 @@ function VideoSlide({
     // Si en 8 s no cargó, se saltea.
     const loadTimer = setTimeout(() => {
       if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) done();
-    }, VIDEO_LOAD_TIMEOUT_MS);
+    }, TIMING.videoLoadTimeoutMs);
 
     const onMetadata = () => {
       if (!Number.isFinite(video.duration)) return;
       clearTimeout(stallTimer);
-      stallTimer = setTimeout(done, (video.duration * 1000) / rate + VIDEO_STALL_MARGIN_MS);
+      stallTimer = setTimeout(done, (video.duration * 1000) / rate + TIMING.videoStallMarginMs);
     };
     const onTime = () => {
       if (barRef.current && video.duration > 0) {
@@ -960,7 +1006,8 @@ function VideoSlide({
   }, [active, speed]);
 
   return (
-    <div className="absolute inset-0 bg-black">
+    // Sin fondo propio: si la pantalla no es 16:9, alrededor se ve el fondo general.
+    <div className="absolute inset-0">
       <video ref={videoRef} src={src} muted playsInline preload="auto" className="h-full w-full object-contain" />
       <div ref={barRef} className="absolute bottom-0 left-0 h-2 w-0 bg-blood" />
     </div>

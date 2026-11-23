@@ -12,6 +12,25 @@ Bucle a pantalla completa para la tele de la carnicería: marca → ofertas → 
   Si una sección no tiene productos, se saltea.
 - La página se recarga sola cada ~3 h (solo si el servidor responde).
 
+## Fotos de los productos
+
+Son exactamente las mismas que muestra la tienda: el campo `image` del producto
+(`imageUrl` en combos). Cuando el cliente sube una foto desde el admin, se guarda
+en **Cloudinary** (`lib/uploads/upload-images.ts`) y en la base queda la URL
+`https://res.cloudinary.com/dku7noipe/...`. La tienda (`components/product-card.tsx`)
+y la tele la pasan tal cual a `next/image`, que la optimiza vía `/_next/image`
+(permitida en `images.remotePatterns` de `next.config.js`).
+
+- No dependen de `public/` ni del VPS: un producto nuevo se ve sin rebuild ni deploy.
+- El logo aparece en lugar de la foto solo si el producto no tiene imagen o si la
+  URL falla.
+
+## Tiempos
+
+Todos están en el objeto `TIMING`, al principio de `TvClient.tsx`: marca 10 s,
+cada producto 10 s, grilla de ofertas 12 s, entrada de cada elemento 1,2 s
+(escalonada cada 150 ms) y salida 0,6 s. La barra roja y los puntos siguen esos valores.
+
 ## Parámetros de la URL
 
 | Parámetro | Qué hace | En producción |
@@ -20,7 +39,7 @@ Bucle a pantalla completa para la tele de la carnicería: marca → ofertas → 
 | `?fs=0`   | No pide pantalla completa ni muestra el cartel "Presioná OK" | Sí |
 | `?speed=10` | Acelera el bucle (revisión) | Se ignora |
 | `?debug`  | Muestra fase, vuelta y escala arriba a la izquierda | Se ignora |
-| `?mock=1` | Productos de ejemplo, para ver el diseño con la base vacía | Se ignora (ni siquiera está en el build) |
+| `?mock=1` | Productos de ejemplo para ver el diseño con la base vacía (fotos reales del Cloudinary del cliente, precios inventados) | Se ignora (ni siquiera está en el build) |
 
 ## Dejarla fija en la tele
 

@@ -1,29 +1,36 @@
-/* Pantalla del local: solo lo que Tailwind no cubre (keyframes y fondos). */
+/* Pantalla del local: solo lo que Tailwind no cubre (keyframes y fondos).
+ * Las duraciones salen de TIMING en TvClient.tsx, vía las variables
+ * --tv-enter, --tv-exit y --tv-photo-zoom (los valores de acá son respaldo). */
 
 /* `font-display` de Tailwind apunta a "Bebas Neue"; en /tv usa la copia de next/font. */
 .fonts :global(.font-display) {
   font-family: var(--font-tv-display), "Bebas Neue", Impact, sans-serif;
 }
 
-.stage {
+/* Fondo de toda la ventana (no del escenario): en pantallas que no son 16:9 las
+ * franjas que sobran tienen el mismo color y degradé, y no se ve el borde. */
+.backdrop {
+  --tv-ease: cubic-bezier(0.22, 1, 0.36, 1);
   background:
-    radial-gradient(900px 700px at 8% 100%, rgba(228, 12, 24, 0.26), transparent 60%),
-    radial-gradient(800px 600px at 100% 0%, rgba(228, 12, 24, 0.12), transparent 60%),
-    #1a1a1a;
+    radial-gradient(60vmax 55vmax at 8% 100%, rgba(228, 12, 24, 0.24), transparent 60%),
+    radial-gradient(55vmax 45vmax at 100% 0%, rgba(228, 12, 24, 0.12), transparent 60%),
+    #141414;
 }
 
+/* Fundido de cada slide: el que sale tarda --tv-exit; el que entra aparece igual
+ * de rápido y cada elemento hace después su propia entrada escalonada. */
 .slide {
-  transition: opacity 0.6s ease;
+  transition: opacity var(--tv-exit, 600ms) ease;
 }
 
 .rise {
-  animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise var(--tv-enter, 1200ms) var(--tv-ease, ease-out) both;
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(46px);
+    transform: translateY(40px);
   }
   to {
     opacity: 1;
@@ -31,17 +38,22 @@
   }
 }
 
-/* Foto del local: banda inferior fundida hacia arriba con el fondo, con zoom lento */
-.band::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, #1a1a1a 0%, rgba(26, 26, 26, 0) 38%);
+/* Foto del local: se funde con el fondo arriba, abajo y a los costados (así no
+ * se nota el borde del escenario en pantallas que no son 16:9). */
+.band {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 38%, #000 90%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 38%, #000 90%, transparent 100%);
+  mask-composite: intersect;
 }
 
 .kenBurns {
   transform-origin: 75% 60%;
-  animation: kenBurns 14s ease-out both;
+  animation: kenBurns var(--tv-photo-zoom, 14000ms) ease-out both;
 }
 
 @keyframes kenBurns {
@@ -76,15 +88,15 @@
   box-shadow: 0 0 24px rgb(251 191 36);
 }
 
-/* Tarjeta del spotlight: entra deslizando desde la derecha */
+/* Tarjeta del spotlight: entra deslizando suave desde la derecha */
 .slideIn {
-  animation: slideIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: slideIn var(--tv-enter, 1200ms) var(--tv-ease, ease-out) both;
 }
 
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateX(140px);
+    transform: translateX(120px);
   }
   to {
     opacity: 1;
@@ -94,7 +106,7 @@
 
 /* Etiqueta de descuento: aparece con un pequeño rebote (mantiene la rotación) */
 .pop {
-  animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  animation: pop calc(var(--tv-enter, 1200ms) * 0.6) cubic-bezier(0.3, 1.5, 0.5, 1) both;
 }
 
 @keyframes pop {
@@ -110,7 +122,7 @@
 
 /* Zoom muy suave de la foto (queda dentro del padding de la tarjeta, no recorta) */
 .slowZoom {
-  animation: slowZoom 7s ease-out both;
+  animation: slowZoom var(--tv-photo-zoom, 14000ms) ease-out both;
 }
 
 @keyframes slowZoom {
