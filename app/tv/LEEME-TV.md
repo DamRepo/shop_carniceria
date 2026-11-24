@@ -27,9 +27,25 @@ y la tele la pasan tal cual a `next/image`, que la optimiza vía `/_next/image`
 
 ## Tiempos
 
-Todos están en el objeto `TIMING`, al principio de `TvClient.tsx`: marca 10 s,
-cada producto 10 s, grilla de ofertas 12 s, entrada de cada elemento 1,2 s
-(escalonada cada 150 ms) y salida 0,6 s. La barra roja y los puntos siguen esos valores.
+Todos están en el objeto `TIMING`, al principio de `TvClient.tsx`:
+
+| Qué | Tiempo |
+|-----|--------|
+| Slide de marca | 12 s |
+| Cada producto (ofertas, destacados, combos) | 14 s |
+| Grilla de ofertas | 16 s |
+| Entrada de cada elemento (foto, textos, precio) | 1,8 s, easing suave |
+| Escalonado entre elementos | 250 ms |
+| Salida del slide | 0,9 s |
+| Pausa con el QR | `?qr=` (90 s por defecto) |
+
+El texto de cada producto termina de entrar a los ~2,8 s y queda quieto unos 10 s
+antes de la salida. La barra roja y los puntos siguen estos valores.
+
+Para ajustarlos en la tele sin tocar código: `?t=1.5` multiplica todos los tiempos
+(slides, entradas, salidas, escalonado). En producción acepta de 1 a 3 (solo puede
+enlentecer); en desarrollo, de 0,5 a 3. La pausa del QR no se multiplica: se
+ajusta con `?qr=`.
 
 ## Parámetros de la URL
 
@@ -37,9 +53,50 @@ cada producto 10 s, grilla de ofertas 12 s, entrada de cada elemento 1,2 s
 |-----------|----------|---------------|
 | `?qr=90`  | Segundos de la pausa con el QR (10 a 1800, por defecto 90) | Sí |
 | `?fs=0`   | No pide pantalla completa ni muestra el cartel "Presioná OK" | Sí |
-| `?speed=10` | Acelera el bucle (revisión) | Se ignora |
-| `?debug`  | Muestra fase, vuelta y escala arriba a la izquierda | Se ignora |
+| `?t=1.5`  | Multiplica todos los tiempos (por defecto 1) | Sí, de 1 a 3 (en desarrollo de 0,5 a 3) |
+| `?debug`  | Muestra slide, paso, `t`, escala y medidas de la ventana arriba a la izquierda | Se ignora |
 | `?mock=1` | Productos de ejemplo para ver el diseño con la base vacía (fotos reales del Cloudinary del cliente, precios inventados) | Se ignora (ni siquiera está en el build) |
+
+## Probar en la tele por HDMI
+
+1. **Usá el build de producción**, no `npm run dev`: en desarrollo Next muestra su
+   ícono y, ante cualquier error (aunque no sea de `/tv`), un overlay rojo que tapa
+   la pantalla.
+
+   ```
+   npm run build
+   npm start
+   ```
+
+   Con `TV_ENABLED=true` en el entorno local. `npm start` usa el puerto 3000 salvo
+   que indiques otro (`npm start -- -p 3100`); ajustá la URL de abajo al puerto real.
+
+2. Conectá la tele por HDMI y en Windows elegí **Extender** estas pantallas
+   (`Win + P`). En Configuración → Pantalla fijate en qué lado quedó la tele y el
+   ancho en píxeles de la pantalla principal.
+
+3. Abrí Chrome en modo kiosco en la tele (Win + R o una terminal `cmd`):
+
+   ```
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --user-data-dir="%TEMP%\tvkiosk" --window-position=<X>,0 "http://localhost:3100/tv"
+   ```
+
+   - `<X>` es el ancho de la pantalla principal si la tele está a la derecha (por
+     ejemplo `1920`). Si la tele está a la izquierda, usá un número negativo con el
+     ancho de la tele (por ejemplo `-1920`).
+   - `--user-data-dir` hace que se abra **una instancia nueva** de Chrome, separada de
+     la que ya tenés abierta. Sin eso, Chrome abre una ventana común en tu sesión y
+     el `--kiosk` no se aplica.
+   - Para salir: **Alt + F4** (con la ventana de la tele activa).
+   - Agregá `?fs=0` a la URL si no querés ver el cartel "Presioná OK".
+   - Para revisar escala y medidas, agregá `&debug`. Solo funciona en desarrollo:
+     en producción ese parámetro se ignora.
+
+**No verificado sin la tele real:** que la ventana quede exactamente en la tele con
+ese `--window-position`, la resolución que informa la tele por HDMI, el overscan
+(si recorta los bordes) y el escalado de Windows para esa pantalla. Si la tele
+informa 1920x1080 y el escalado de Windows está en 100%, el escenario la llena
+entera, sin bordes.
 
 ## Dejarla fija en la tele
 

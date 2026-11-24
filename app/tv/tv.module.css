@@ -17,6 +17,13 @@
     #141414;
 }
 
+/* Escala por CSS mientras JS todavía no midió la ventana (o si JS falla): mismo
+ * cálculo, min(ancho / 1920, alto / 1080). Si el navegador no soporta dividir
+ * longitudes, la regla se ignora; el contenedor igual tiene overflow: hidden. */
+.stageFallback {
+  transform: translate(-50%, -50%) scale(min(calc(100vw / 1920px), calc(100dvh / 1080px)));
+}
+
 /* Fundido de cada slide: el que sale tarda --tv-exit; el que entra aparece igual
  * de rápido y cada elemento hace después su propia entrada escalonada. */
 .slide {

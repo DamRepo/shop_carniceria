@@ -23,7 +23,8 @@ export const metadata: Metadata = {
 const DEFAULT_QR_SECONDS = 90;
 const MIN_QR_SECONDS = 10;
 const MAX_QR_SECONDS = 1800;
-const MAX_SPEED = 20;
+// ?t= multiplica todos los tiempos. En producción solo puede enlentecer.
+const TIME_SCALE_RANGE = { production: [1, 3], development: [0.5, 3] } as const;
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -37,17 +38,24 @@ function parseQrSeconds(value: string | undefined): number {
   return Math.min(MAX_QR_SECONDS, Math.max(MIN_QR_SECONDS, Math.round(n)));
 }
 
+/** ?t=: 1 por defecto; fuera de rango se ajusta al límite (producción 1–3, desarrollo 0,5–3). */
+function parseTimeScale(value: string | undefined, devTools: boolean): number {
+  const [min, max] = devTools ? TIME_SCALE_RANGE.development : TIME_SCALE_RANGE.production;
+  const n = Number(value?.replace(",", "."));
+  if (!value || !Number.isFinite(n)) return 1;
+  return Math.round(Math.min(max, Math.max(min, n)) * 100) / 100;
+}
+
 export default async function TvPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   if (!isTvEnabled()) notFound();
 
   const params = await searchParams;
   const qrSeconds = parseQrSeconds(firstParam(params.qr));
 
-  // ?speed y ?debug son herramientas de revisión: en producción se ignoran.
+  // ?debug es una herramienta de revisión: en producción se ignora.
   const devTools = process.env.NODE_ENV !== "production";
-  const speedParam = Number(firstParam(params.speed));
-  const speed = devTools && Number.isFinite(speedParam) && speedParam > 1 ? Math.min(MAX_SPEED, speedParam) : 1;
   const debug = devTools && params.debug !== undefined;
+  const timeScale = parseTimeScale(firstParam(params.t), devTools);
   // ?fs=0 desactiva el pedido de pantalla completa (por ejemplo si la tele ya corre en modo kiosco).
   const fullscreen = firstParam(params.fs) !== "0";
 
@@ -81,7 +89,7 @@ export default async function TvPage({ searchParams }: { searchParams: Promise<S
     <TvClient
       initialData={initialData}
       qrSeconds={qrSeconds}
-      speed={speed}
+      timeScale={timeScale}
       debug={debug}
       fullscreen={fullscreen}
       mock={mockData !== null}

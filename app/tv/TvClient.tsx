@@ -19,24 +19,30 @@ const STAGE_H = 1080;
 
 /**
  * TODOS los tiempos de la pantalla, en un solo lugar para ajustarlos fácil.
- * Los segundos de cada slide se dividen por ?speed (solo en desarrollo); las
- * animaciones de entrada y salida no.
+ * ?t= los multiplica (slides, entradas, salidas, escalonado y zoom de fotos) para
+ * ajustarlos en la tele sin tocar código: en producción solo 1 a 3 (enlentecer).
+ *
+ * Regla de lectura: el texto de cada producto termina de entrar a los
+ * 4 × staggerMs + enterMs = 2,8 s y queda quieto hasta que empieza la salida
+ * (14 s − 0,9 s): ~10,3 s completamente visible, más que los 8 s mínimos.
  */
 const TIMING = {
   /** Slide de marca (foto del local + horario). */
-  brandSeconds: 10,
+  brandSeconds: 12,
   /** Cada producto en spotlight: ofertas, destacados y combos. */
-  spotlightSeconds: 10,
+  spotlightSeconds: 14,
   /** Grilla de resumen al final de las ofertas. */
-  summarySeconds: 12,
+  summarySeconds: 16,
   /** Entrada de cada elemento (foto, textos, precio), con easing suave. */
-  enterMs: 1200,
+  enterMs: 1800,
   /** Pausa entre la entrada de un elemento y el siguiente. */
-  staggerMs: 150,
+  staggerMs: 250,
   /** Salida del slide anterior (fundido). */
-  exitMs: 600,
+  exitMs: 900,
   /** Zoom lento de las fotos (más largo que el slide, así nunca se "frena"). */
-  photoZoomMs: 14_000,
+  photoZoomMs: 18_000,
+  /** Red de seguridad de la escala: cada cuánto se vuelve a medir la ventana. */
+  scaleCheckMs: 500,
   /** Cartel "Presioná OK para pantalla completa". */
   fullscreenHintMs: 15_000,
   /** Refresco de datos desde /api/tv/data y su timeout. */
@@ -152,6 +158,12 @@ function stepSeconds(step: Step, data: TvData, qrSeconds: number): number {
   return qrSeconds;
 }
 
+/** Duración real del paso en ms. ?t= multiplica todo salvo la pausa del QR, que ya viene en segundos de ?qr=. */
+function stepMs(step: Step, data: TvData, qrSeconds: number, timeScale: number): number {
+  const seconds = stepSeconds(step, data, qrSeconds);
+  return step.phase === "qr" ? seconds * 1000 : seconds * 1000 * timeScale;
+}
+
 const isVideo = (phase: Phase) => VIDEOS[phase] !== undefined;
 
 /* ─── Validación de la respuesta de /api/tv/data ──────────────────────────── */
@@ -196,12 +208,65 @@ function isTvData(value: unknown): value is TvData {
   );
 }
 
+/* ─── Medidas de la ventana ───────────────────────────────────────────────── */
+
+/**
+ * Escala que corresponde a la ventana actual, sin topes. Usa el área visible del
+ * documento (clientWidth/clientHeight, igual a innerWidth/innerHeight sin barras de
+ * scroll). null si el navegador todavía informa 0 (prerender, pestaña oculta).
+ */
+function measureScale(): number | null {
+  const root = document.documentElement;
+  const width = root.clientWidth || window.innerWidth;
+  const height = root.clientHeight || window.innerHeight;
+  if (!(width > 0 && height > 0)) return null;
+  return Math.min(width / STAGE_W, height / STAGE_H);
+}
+
+type ViewportMetrics = {
+  innerWidth: number;
+  innerHeight: number;
+  clientWidth: number;
+  clientHeight: number;
+  visualWidth: number | null;
+  visualHeight: number | null;
+  dpr: number;
+  computed: number | null;
+  applied: number | null;
+  stageWidth: number;
+  stageHeight: number;
+  stageLeft: number;
+  stageTop: number;
+};
+
+function readViewportMetrics(stage: HTMLDivElement | null): ViewportMetrics {
+  const root = document.documentElement;
+  const rect = stage?.getBoundingClientRect();
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return {
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    clientWidth: root.clientWidth,
+    clientHeight: root.clientHeight,
+    visualWidth: window.visualViewport ? round(window.visualViewport.width) : null,
+    visualHeight: window.visualViewport ? round(window.visualViewport.height) : null,
+    dpr: window.devicePixelRatio,
+    computed: measureScale(),
+    applied: rect ? rect.width / STAGE_W : null,
+    stageWidth: rect ? Math.round(rect.width) : 0,
+    stageHeight: rect ? Math.round(rect.height) : 0,
+    stageLeft: rect ? Math.round(rect.left) : 0,
+    stageTop: rect ? Math.round(rect.top) : 0,
+  };
+}
+
 /* ─── Componente principal ────────────────────────────────────────────────── */
 
 type TvClientProps = {
   initialData: TvData;
   qrSeconds: number;
-  speed: number;
+  /** Multiplicador de todos los tiempos (?t=). 1 = velocidad normal. */
+  timeScale: number;
   debug: boolean;
   /** Pide pantalla completa con el primer click o tecla (?fs=0 lo apaga). */
   fullscreen: boolean;
@@ -209,9 +274,12 @@ type TvClientProps = {
   mock: boolean;
 };
 
-export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, mock }: TvClientProps) {
+export function TvClient({ initialData, qrSeconds, timeScale, debug, fullscreen, mock }: TvClientProps) {
   const [mounted, setMounted] = useState(false);
-  const [scale, setScale] = useState(1);
+  // null = todavía no se pudo medir la ventana (ver measureScale).
+  const [scale, setScale] = useState<number | null>(null);
+  const [metrics, setMetrics] = useState<ViewportMetrics | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<TvData>(initialData);
   const [step, setStep] = useState<Step>({ phase: "brand", page: 0, n: 0, lap: 0 });
   const [leaving, setLeaving] = useState<Step | null>(null);
@@ -231,40 +299,65 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
   }, []);
 
   // Escenario fijo de 1920x1080 escalado para que entre entero (por ancho Y por
-  // alto) y centrado. Se recalcula ante cualquier cambio de tamaño: ventana,
-  // zoom del navegador, herramientas de desarrollo, F11, rotación. Se renderiza
-  // recién en el cliente: depende del tamaño de la ventana y de la hora.
+  // alto) y centrado, sin topes: Math.min(ancho / 1920, alto / 1080).
+  //
+  // Antes la escala arrancaba en 1 y solo se actualizaba si la ventana medía más
+  // de 0. Si Chrome informa 0x0 al montar (página prerenderizada al escribir la
+  // URL, pestaña en segundo plano) y después no llega ningún "resize", quedaba
+  // en 1 para siempre: el escenario de 1920x1080 sin achicar. Ahora:
+  //  - sin medida válida no se aplica ninguna escala de JS (rige la de CSS, ver
+  //    .stageFallback en tv.module.css);
+  //  - además de los eventos, un intervalo compara la escala que corresponde con
+  //    la que tiene aplicada de verdad el escenario y la corrige si difieren.
   const fit = useCallback(() => {
-    const root = document.documentElement;
-    const width = root.clientWidth || window.innerWidth;
-    const height = root.clientHeight || window.innerHeight;
-    if (width > 0 && height > 0) setScale(Math.min(width / STAGE_W, height / STAGE_H));
+    const next = measureScale();
+    if (next === null) return;
+    const stage = stageRef.current;
+    const applied = stage ? stage.getBoundingClientRect().width / STAGE_W : null;
+    if (applied === null || Math.abs(applied - next) > 0.001) setScale(next);
+    else setScale((current) => (current === null || Math.abs(current - next) > 0.001 ? next : current));
   }, []);
 
   useEffect(() => {
     fit();
     setMounted(true);
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(() => fit()) : null;
     observer?.observe(document.documentElement);
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", fit);
-    window.addEventListener("pageshow", fit);
-    document.addEventListener("fullscreenchange", fit);
-    window.visualViewport?.addEventListener("resize", fit);
+    const onWindow = () => fit();
+    window.addEventListener("resize", onWindow);
+    window.addEventListener("orientationchange", onWindow);
+    window.addEventListener("pageshow", onWindow);
+    document.addEventListener("fullscreenchange", onWindow);
+    document.addEventListener("visibilitychange", onWindow);
+    document.addEventListener("prerenderingchange", onWindow);
+    window.visualViewport?.addEventListener("resize", onWindow);
+    const interval = setInterval(fit, TIMING.scaleCheckMs);
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("orientationchange", fit);
-      window.removeEventListener("pageshow", fit);
-      document.removeEventListener("fullscreenchange", fit);
-      window.visualViewport?.removeEventListener("resize", fit);
+      clearInterval(interval);
+      window.removeEventListener("resize", onWindow);
+      window.removeEventListener("orientationchange", onWindow);
+      window.removeEventListener("pageshow", onWindow);
+      document.removeEventListener("fullscreenchange", onWindow);
+      document.removeEventListener("visibilitychange", onWindow);
+      document.removeEventListener("prerenderingchange", onWindow);
+      window.visualViewport?.removeEventListener("resize", onWindow);
     };
   }, [fit]);
 
-  // Red de seguridad: también se recalcula en cada cambio de slide.
+  // Red de seguridad extra: también se recalcula en cada cambio de slide.
   useEffect(() => {
     fit();
   }, [step.n, fit]);
+
+  // ?debug: medidas reales de la ventana, para diagnosticar la escala en la tele.
+  useEffect(() => {
+    if (!debug) return;
+    const update = () => setMetrics(readViewportMetrics(stageRef.current));
+    update();
+    const interval = setInterval(update, TIMING.scaleCheckMs);
+    return () => clearInterval(interval);
+  }, [debug]);
 
   // Pantalla completa: el navegador solo la permite tras un gesto del usuario,
   // así que se pide con el primer click, tecla o botón OK del control remoto.
@@ -295,17 +388,17 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
   // Slides con duración fija (los videos avanzan solos al terminar).
   useEffect(() => {
     if (!mounted || isVideo(step.phase)) return;
-    const ms = (stepSeconds(step, dataRef.current, qrSeconds) * 1000) / speed;
+    const ms = stepMs(step, dataRef.current, qrSeconds, timeScale);
     const timer = setTimeout(() => advanceFrom(step.n), ms);
     return () => clearTimeout(timer);
-  }, [mounted, step, qrSeconds, speed, advanceFrom]);
+  }, [mounted, step, qrSeconds, timeScale, advanceFrom]);
 
   // Saca el slide anterior cuando termina el fundido.
   useEffect(() => {
     if (!leaving) return;
-    const timer = setTimeout(() => setLeaving(null), TIMING.exitMs);
+    const timer = setTimeout(() => setLeaving(null), TIMING.exitMs * timeScale);
     return () => clearTimeout(timer);
-  }, [leaving]);
+  }, [leaving, timeScale]);
 
   // Refresco de datos. Si falla, sigue con el último contenido.
   useEffect(() => {
@@ -362,9 +455,10 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
 
   // Duraciones que usa tv.module.css (las animaciones leen estas variables).
   const animationVars = {
-    "--tv-enter": `${TIMING.enterMs}ms`,
-    "--tv-exit": `${TIMING.exitMs}ms`,
-    "--tv-photo-zoom": `${TIMING.photoZoomMs}ms`,
+    "--tv-enter": `${TIMING.enterMs * timeScale}ms`,
+    "--tv-exit": `${TIMING.exitMs * timeScale}ms`,
+    "--tv-stagger": `${TIMING.staggerMs * timeScale}ms`,
+    "--tv-photo-zoom": `${TIMING.photoZoomMs * timeScale}ms`,
   } as React.CSSProperties;
 
   const showMark = !isVideo(step.phase);
@@ -379,13 +473,15 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
     <div className={cn("fixed inset-0 cursor-none overflow-hidden text-bone", styles.backdrop)} style={animationVars}>
       {mounted && (
         <div
+          ref={stageRef}
           data-tv-stage=""
-          className="absolute left-1/2 top-1/2 overflow-hidden"
+          // Sin escala medida todavía, la calcula el CSS (.stageFallback); nunca queda a 1:1.
+          className={cn("absolute left-1/2 top-1/2 overflow-hidden", scale === null && styles.stageFallback)}
           style={{
             width: STAGE_W,
             height: STAGE_H,
-            transform: `translate(-50%, -50%) scale(${scale})`,
             transformOrigin: "50% 50%",
+            ...(scale !== null && { transform: `translate(-50%, -50%) scale(${scale})` }),
           }}
         >
           {layers.map((s) => (
@@ -395,7 +491,6 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
                 active={s.n === step.n}
                 data={data}
                 qrSeconds={qrSeconds}
-                speed={speed}
                 onDone={advanceFrom}
               />
             </SlideLayer>
@@ -412,12 +507,26 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
             </div>
           )}
 
-          {debug && (
-            <div className="absolute left-2.5 top-2.5 z-50 bg-black/60 px-2.5 py-1.5 font-mono text-xl text-green-400">
-              {step.phase} {step.page + 1}/{pageCount(step.phase, data, step.lap)} · vuelta {step.lap} · paso{" "}
-              {step.n} · x{speed} · {data.offers.length} ofertas · {data.featured.length} destacados ·{" "}
-              {data.combos.length} combos{mock ? " · MOCK" : ""} · escala {scale.toFixed(3)}
-            </div>
+        </div>
+      )}
+
+      {/* ?debug va fuera del escenario (no se achica con la escala) para leerlo en la tele. */}
+      {debug && mounted && (
+        <div className="absolute left-2 top-2 z-50 bg-black/75 px-3 py-2 font-mono text-[13px] leading-snug text-green-400">
+          {step.phase} {step.page + 1}/{pageCount(step.phase, data, step.lap)} · vuelta {step.lap} · paso {step.n} · t ×
+          {timeScale} · {data.offers.length} ofertas · {data.featured.length} destacados · {data.combos.length} combos
+          {mock ? " · MOCK" : ""} · escala {scale === null ? "CSS (sin medir)" : scale.toFixed(3)}
+          {metrics && (
+            <>
+              <br />
+              innerWidth×innerHeight {metrics.innerWidth}×{metrics.innerHeight} · clientWidth×clientHeight{" "}
+              {metrics.clientWidth}×{metrics.clientHeight} · visualViewport {metrics.visualWidth}×
+              {metrics.visualHeight} · devicePixelRatio {metrics.dpr}
+              <br />
+              escala calculada {metrics.computed === null ? "—" : metrics.computed.toFixed(4)} · aplicada{" "}
+              {metrics.applied === null ? "—" : metrics.applied.toFixed(4)} · escenario {metrics.stageWidth}×
+              {metrics.stageHeight} en ({metrics.stageLeft},{metrics.stageTop})
+            </>
           )}
         </div>
       )}
@@ -429,8 +538,8 @@ export function TvClient({ initialData, qrSeconds, speed, debug, fullscreen, moc
           key={step.n}
           className={cn("absolute bottom-0 left-0 z-30 bg-blood", styles.progress)}
           style={{
-            height: Math.max(3, Math.round(8 * scale)),
-            animationDuration: `${(stepSeconds(step, data, qrSeconds) * 1000) / speed}ms`,
+            height: Math.max(3, Math.round(8 * (scale ?? 1))),
+            animationDuration: `${stepMs(step, data, qrSeconds, timeScale)}ms`,
           }}
         />
       )}
@@ -515,11 +624,10 @@ type SlideContentProps = {
   active: boolean;
   data: TvData;
   qrSeconds: number;
-  speed: number;
   onDone: (n: number) => void;
 };
 
-function SlideContent({ step, active, data, qrSeconds, speed, onDone }: SlideContentProps) {
+function SlideContent({ step, active, data, qrSeconds, onDone }: SlideContentProps) {
   switch (step.phase) {
     case "brand":
       return <BrandSlide data={data} />;
@@ -571,17 +679,17 @@ function SlideContent({ step, active, data, qrSeconds, speed, onDone }: SlideCon
       ) : null;
     }
     case "qr":
-      return <QrSlide durationMs={(qrSeconds * 1000) / speed} speed={speed} />;
+      return <QrSlide durationMs={qrSeconds * 1000} />;
     case "video-pedir":
     case "video-talo": {
       const src = VIDEOS[step.phase];
-      return src ? <VideoSlide src={src} active={active} speed={speed} onDone={() => onDone(step.n)} /> : null;
+      return src ? <VideoSlide src={src} active={active} onDone={() => onDone(step.n)} /> : null;
     }
   }
 }
 
-/** Entrada escalonada: el elemento `order` arranca `order × staggerMs` después del primero. */
-const stagger = (order: number) => ({ animationDelay: `${order * TIMING.staggerMs}ms` });
+/** Entrada escalonada: el elemento `order` arranca `order × staggerMs (× ?t)` después del primero. */
+const stagger = (order: number) => ({ animationDelay: `calc(${order} * var(--tv-stagger, ${TIMING.staggerMs}ms))` });
 
 function BrandSlide({ data }: { data: TvData }) {
   const [status, setStatus] = useState<ProcessingStatus>(() => getOrderProcessingStatus(new Date(), data.hours));
@@ -886,7 +994,7 @@ function formatCountdown(totalSeconds: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function QrSlide({ durationMs, speed }: { durationMs: number; speed: number }) {
+function QrSlide({ durationMs }: { durationMs: number }) {
   const [startedAt] = useState(() => Date.now());
   const [now, setNow] = useState(startedAt);
 
@@ -895,8 +1003,7 @@ function QrSlide({ durationMs, speed }: { durationMs: number; speed: number }) {
     return () => clearInterval(interval);
   }, []);
 
-  // En tiempo "real" del bucle (con ?speed el reloj corre más rápido).
-  const secondsLeft = Math.ceil(((durationMs - (now - startedAt)) * speed) / 1000);
+  const secondsLeft = Math.ceil((durationMs - (now - startedAt)) / 1000);
 
   return (
     <>
@@ -940,12 +1047,10 @@ function QrSlide({ durationMs, speed }: { durationMs: number; speed: number }) {
 function VideoSlide({
   src,
   active,
-  speed,
   onDone,
 }: {
   src: string;
   active: boolean;
-  speed: number;
   onDone: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -961,7 +1066,6 @@ function VideoSlide({
 
     let finished = false;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
-    const rate = speed > 1 ? Math.min(speed, 16) : 1;
 
     const done = () => {
       if (finished) return;
@@ -977,7 +1081,7 @@ function VideoSlide({
     const onMetadata = () => {
       if (!Number.isFinite(video.duration)) return;
       clearTimeout(stallTimer);
-      stallTimer = setTimeout(done, (video.duration * 1000) / rate + TIMING.videoStallMarginMs);
+      stallTimer = setTimeout(done, video.duration * 1000 + TIMING.videoStallMarginMs);
     };
     const onTime = () => {
       if (barRef.current && video.duration > 0) {
@@ -992,7 +1096,6 @@ function VideoSlide({
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onMetadata();
 
     video.currentTime = 0;
-    video.playbackRate = rate;
     video.play().catch(done);
 
     return () => {
@@ -1003,7 +1106,7 @@ function VideoSlide({
       video.removeEventListener("loadedmetadata", onMetadata);
       video.removeEventListener("timeupdate", onTime);
     };
-  }, [active, speed]);
+  }, [active]);
 
   return (
     // Sin fondo propio: si la pantalla no es 16:9, alrededor se ve el fondo general.
