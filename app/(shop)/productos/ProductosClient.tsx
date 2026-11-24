@@ -81,8 +81,8 @@ export default function ProductosClient() {
     brand: null,
   });
 
-  const selectedCategory = (searchParams.get("category") || "todos").trim();
-  const searchTerm = (searchParams.get("search") || "").trim();
+  const selectedCategory = (searchParams?.get("category") || "todos").trim();
+  const searchTerm = (searchParams?.get("search") || "").trim();
 
   /* -----------------------
      Cargar categorías

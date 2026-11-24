@@ -16,7 +16,7 @@ export function AdminPagination({ total, currentPage, pageSize }: Props) {
   if (totalPages <= 1) return null;
 
   function goTo(page: number) {
-    const params = new URLSearchParams(sp.toString());
+    const params = new URLSearchParams(sp?.toString());
     params.set("page", String(page));
     router.push(`/admin/productos?${params.toString()}`);
   }

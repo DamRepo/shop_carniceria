@@ -100,11 +100,11 @@ function OrderConfirmedContent({ pointsToEarn }: { pointsToEarn: number }) {
   const paymentMethod = searchParams?.get?.("paymentMethod");
   const totalParam = searchParams?.get?.("total");
 
-  const pickupDate = searchParams?.get?.("pickupDate");
+  const pickupDate = searchParams?.get?.("pickupDate") ?? null;
   const pickupTimeSlot = searchParams?.get?.("pickupTimeSlot");
 
-  const address = searchParams?.get?.("address");
-  const addressDetails = searchParams?.get?.("addressDetails");
+  const address = searchParams?.get?.("address") ?? null;
+  const addressDetails = searchParams?.get?.("addressDetails") ?? null;
 
   const [guestContact, setGuestContact] = useState<{ name: string; email: string; phone: string } | null>(null);
   const { hours: storeHours } = useStoreHours();

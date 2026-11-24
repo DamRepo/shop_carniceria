@@ -29,20 +29,20 @@ export function AdminProductFilters({ categories }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const search = sp.get("search") ?? "";
-  const category = sp.get("category") ?? "";
-  const estado = sp.get("estado") ?? "";
-  const oferta = sp.get("oferta") ?? "";
-  const stock = sp.get("stock") ?? "";
-  const orderBy = sp.get("orderBy") ?? "createdAt";
-  const order = sp.get("order") ?? "desc";
+  const search = sp?.get("search") ?? "";
+  const category = sp?.get("category") ?? "";
+  const estado = sp?.get("estado") ?? "";
+  const oferta = sp?.get("oferta") ?? "";
+  const stock = sp?.get("stock") ?? "";
+  const orderBy = sp?.get("orderBy") ?? "createdAt";
+  const order = sp?.get("order") ?? "desc";
 
   const [inputValue, setInputValue] = useState(search);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync si la URL cambia externamente (chip removal, navegación)
   useEffect(() => {
-    setInputValue(sp.get("search") ?? "");
+    setInputValue(sp?.get("search") ?? "");
   }, [sp]);
 
   function push(params: URLSearchParams) {
@@ -50,7 +50,7 @@ export function AdminProductFilters({ categories }: Props) {
   }
 
   function updateParam(key: string, value: string) {
-    const params = new URLSearchParams(sp.toString());
+    const params = new URLSearchParams(sp?.toString());
     if (value) {
       params.set(key, value);
     } else {
@@ -75,7 +75,7 @@ export function AdminProductFilters({ categories }: Props) {
   function handleOrderChange(v: string) {
     const opt = ORDER_OPTIONS.find((o) => `${o.orderBy}-${o.order}` === v);
     if (!opt) return;
-    const params = new URLSearchParams(sp.toString());
+    const params = new URLSearchParams(sp?.toString());
     params.set("orderBy", opt.orderBy);
     params.set("order", opt.order);
     params.delete("page");

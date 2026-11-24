@@ -102,7 +102,7 @@ function useCountdown(expiresAt: string | null) {
 function TaloPendingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const csId = searchParams.get("csId");
+  const csId = searchParams?.get("csId") ?? null;
 
   const clearCart = useCartStore((s) => s.clearCart);
   const clearCheckout = useCheckoutStore((s) => s.clear);

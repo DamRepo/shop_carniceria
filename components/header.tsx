@@ -15,9 +15,9 @@ function SearchParamsSync({
   setOnSale: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const searchParams = useSearchParams();
-  const category = searchParams.get("category") || "";
-  const section = searchParams.get("section") || "";
-  const onSale = searchParams.get("onSale") === "true";
+  const category = searchParams?.get("category") || "";
+  const section = searchParams?.get("section") || "";
+  const onSale = searchParams?.get("onSale") === "true";
 
   useEffect(() => {
     setCategory(category);
@@ -190,7 +190,7 @@ export function Header() {
       return !activeCategory && !activeSection && !activeOnSale;
     }
 
-    return pathname.startsWith(href);
+    return pathname?.startsWith(href) ?? false;
   };
 
   useEffect(() => {

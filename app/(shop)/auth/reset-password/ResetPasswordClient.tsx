@@ -13,7 +13,7 @@ export default function ResetPasswordClient() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const token = useMemo(() => sp.get("token") ?? "", [sp]);
+  const token = useMemo(() => sp?.get("token") ?? "", [sp]);
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

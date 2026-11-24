@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function ForgotPasswordClient() {
   const sp = useSearchParams();
-  const callbackUrl = sp.get("callbackUrl") || "/auth/login";
+  const callbackUrl = sp?.get("callbackUrl") || "/auth/login";
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
