@@ -80,7 +80,7 @@ type Phase = (typeof PHASES)[number];
 
 const VIDEOS: Partial<Record<Phase, string>> = {
   "video-pedir": "/tv/videos/como-pedir.mp4",
-  "video-talo": "/tv/videos/pago-talo.mp4",
+  "video-talo": "/tv/videos/pago-talo-v4.mp4",
 };
 
 /** `lap` cuenta las vueltas completas: cambia qué productos salen y en qué orden. */
